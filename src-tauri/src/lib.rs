@@ -5,6 +5,7 @@ mod backup;
 mod connectors;
 mod dbfiles;
 mod finder;
+mod host;
 mod doc_roots;
 mod menubar;
 mod network;
@@ -1080,6 +1081,8 @@ pub fn run() {
             menubar::main_ready,
         ])
         .setup(|app| {
+            // First: the demo gates (host.rs) read it.
+            host::init(&app.config().identifier);
             let handle = app.handle();
             // app_data_dir() failing is itself an init error; default to an
             // empty path so the legacy-root fallback is still installable.

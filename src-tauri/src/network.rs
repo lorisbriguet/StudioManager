@@ -173,10 +173,18 @@ fn check_all(targets: Vec<CheckTarget>) -> Vec<CheckResult> {
         .collect()
 }
 
+/// The demo build's checks: every fictional service answers, and no request leaves this Mac.
+pub fn demo_checks(targets: &[CheckTarget]) -> Vec<CheckResult> {
+    targets.iter().map(|t| CheckResult { key: t.key.clone(), state: CheckState::Up, reason: None }).collect()
+}
+
 #[tauri::command]
 pub async fn network_check(app: tauri::AppHandle, targets: Vec<CheckTarget>) -> Result<Vec<CheckResult>, String> {
     if targets.len() > MAX_TARGETS {
         return Err(format!("too many targets: {} (at most {MAX_TARGETS} per call)", targets.len()));
+    }
+    if crate::host::is_demo(&app) {
+        return Ok(demo_checks(&targets));
     }
     if crate::active_org(&app)?.in_mode() {
         return Ok(vec![]);
@@ -274,7 +282,7 @@ pub enum HostReads {
 /// Machine. Decided from the bundle identifier, so the demo frontend can't
 /// reach the real data.
 pub fn host_reads_allowed(identifier: &str, in_mode: bool) -> HostReads {
-    if identifier == crate::agent_access::DEMO_IDENTIFIER {
+    if crate::host::is_demo_identifier(identifier) {
         HostReads::Demo
     } else if in_mode {
         HostReads::None
@@ -499,6 +507,10 @@ fn ensure_live(in_mode: bool) -> Result<(), String> {
 /// database by id, never taken from the page, and passed to `open` as one argument (no shell).
 #[tauri::command]
 pub async fn open_remote_link(app: tauri::AppHandle, target_org: Option<String>, file_id: i64) -> Result<(), String> {
+    // The demo's machines are fictional: there is nothing to open.
+    if crate::host::is_demo(&app) {
+        return Ok(());
+    }
     let org = crate::active_org(&app)?;
     ensure_live(org.in_mode())?;
     tauri::async_runtime::spawn_blocking(move || {
@@ -760,6 +772,15 @@ mod tests {
                "TailscaleIPs": ["100.1.1.4"], "Online": true, "LastSeen": "2026-11-01T00:00:00Z" }
       }
     }"#;
+
+    #[test]
+    fn demo_checks_answer_up_without_a_request() {
+        let t = |key: &str| CheckTarget { key: key.into(), kind: CheckKind::Http, url: "http://192.0.2.1".into(), pin: None };
+        let out = demo_checks(&[t("a"), t("b")]);
+        assert_eq!(out.len(), 2);
+        assert!(out.iter().all(|r| r.state == CheckState::Up && r.reason.is_none()));
+        assert_eq!(out[1].key, "b");
+    }
 
     #[test]
     fn demo_build_never_reads_this_mac() {

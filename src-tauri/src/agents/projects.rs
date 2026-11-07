@@ -268,9 +268,7 @@ pub fn read_trusted(home: &Path) -> Vec<String> {
 pub async fn agents_start_folders(
     state: tauri::State<'_, super::AgentsState>,
 ) -> Result<Vec<StartFolder>, String> {
-    if !super::cli::read_settings(&state.app_dir).enabled {
-        return Err("Agents are switched off".into());
-    }
+    super::actions::switched_on(&state)?;
     let home = std::env::var_os("HOME").map(std::path::PathBuf::from).unwrap_or_default();
     let home_opt = (!home.as_os_str().is_empty()).then_some(home.as_path());
     Ok(start_folders(read_trusted(&home), &load_index(&state.app_dir), home_opt))
@@ -282,9 +280,7 @@ pub async fn agents_trust_folder(
     state: tauri::State<'_, super::AgentsState>,
     folder: String,
 ) -> Result<String, String> {
-    if !super::cli::read_settings(&state.app_dir).enabled {
-        return Err("Agents are switched off".into());
-    }
+    super::actions::switched_on(&state)?;
     let home = std::env::var_os("HOME").map(std::path::PathBuf::from).ok_or("No home folder")?;
     super::pty::blocking(move || trust_folder(&home.join(".claude.json"), &folder)).await
 }

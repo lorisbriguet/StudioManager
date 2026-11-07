@@ -80,10 +80,23 @@ pub fn update_settings<R>(
 }
 
 pub fn read_settings(dir: &Path) -> AgentsSettings {
-    std::fs::read_to_string(dir.join(SETTINGS_FILE))
-        .ok()
-        .and_then(|raw| serde_json::from_str(&raw).ok())
-        .unwrap_or_default()
+    in_build(
+        std::fs::read_to_string(dir.join(SETTINGS_FILE))
+            .ok()
+            .and_then(|raw| serde_json::from_str(&raw).ok())
+            .unwrap_or_default(),
+        crate::host::running_demo(),
+    )
+}
+
+/// The demo build never runs Agents (it would list this Mac's Claude sessions and read
+/// Claude Code's files): the switch, and the menu bar with it, always read off there.
+pub fn in_build(mut s: AgentsSettings, demo: bool) -> AgentsSettings {
+    if demo {
+        s.enabled = false;
+        s.menu_bar = false;
+    }
+    s
 }
 
 pub fn write_settings(dir: &Path, s: &AgentsSettings) -> Result<(), String> {
@@ -360,10 +373,12 @@ fn info(app_dir: &Path, login: &super::pty::LoginCache) -> AgentsInfo {
         enabled: s.enabled,
         menu_bar: s.menu_bar,
         limit_alerts: s.limit_alerts,
-        claude_path: super::pty::fresh_login_env(login)
-            .claude
-            .as_ref()
-            .map(|p| p.display().to_string()),
+        // The demo doesn't look for this Mac's `claude`: the switch stays off and disabled.
+        claude_path: if crate::host::running_demo() {
+            None
+        } else {
+            super::pty::fresh_login_env(login).claude.as_ref().map(|p| p.display().to_string())
+        },
     }
 }
 
@@ -392,6 +407,10 @@ pub async fn agents_set_enabled(
 ) -> Result<AgentsInfo, String> {
     let (app_dir, login, hub) = (state.app_dir.clone(), state.login_cache(), state.hub.clone());
     super::pty::blocking(move || {
+        // The demo: nothing to switch on, the card keeps showing it off.
+        if enabled && crate::host::running_demo() {
+            return Ok(info(&app_dir, &login));
+        }
         if enabled && super::pty::fresh_login_env(&login).claude.is_none() {
             return Err("claude not found".into());
         }
@@ -482,6 +501,15 @@ mod tests {
         assert!(!read_settings(&d).enabled);
         std::fs::write(d.join(SETTINGS_FILE), "not json").unwrap();
         assert!(!read_settings(&d).enabled);
+    }
+
+    #[test]
+    fn demo_build_always_reads_agents_off() {
+        let on = AgentsSettings { enabled: true, menu_bar: true, limit_alerts: true, previous_status_line: None };
+        let demo = in_build(on.clone(), true);
+        assert!(!demo.enabled && !demo.menu_bar);
+        assert!(demo.limit_alerts);
+        assert_eq!(in_build(on.clone(), false), on);
     }
 
     #[test]

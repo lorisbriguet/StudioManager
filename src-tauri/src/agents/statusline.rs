@@ -251,10 +251,21 @@ fn path_text(backup: Option<PathBuf>) -> String {
     backup.map(|p| p.to_string_lossy().to_string()).unwrap_or_default()
 }
 
+/// Claude Code's settings file is this Mac's: the demo never reads or writes it. The card
+/// ignores the refusal while Agents is off, which it always is there.
+fn demo_off() -> Result<(), String> {
+    if crate::host::running_demo() {
+        Err("Agents are switched off".into())
+    } else {
+        Ok(())
+    }
+}
+
 #[tauri::command]
 pub async fn agents_status_line_preview(
     state: tauri::State<'_, super::AgentsState>,
 ) -> Result<StatusLinePreview, String> {
+    demo_off()?;
     let app_dir = state.app_dir.clone();
     super::pty::blocking(move || {
         let saved = read_settings(&app_dir).previous_status_line;
@@ -270,6 +281,7 @@ pub async fn agents_status_line_install(
     state: tauri::State<'_, super::AgentsState>,
     expected: String,
 ) -> Result<String, String> {
+    demo_off()?;
     let app_dir = state.app_dir.clone();
     super::pty::blocking(move || {
         install_at(&settings_path(), &app_dir, &our_command(), &expected, &stamp()).map(path_text)
@@ -283,6 +295,7 @@ pub async fn agents_status_line_remove(
     state: tauri::State<'_, super::AgentsState>,
     expected: String,
 ) -> Result<String, String> {
+    demo_off()?;
     let app_dir = state.app_dir.clone();
     super::pty::blocking(move || {
         remove_at(&settings_path(), &app_dir, &expected, &stamp()).map(path_text)
