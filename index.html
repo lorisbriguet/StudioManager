@@ -7,16 +7,22 @@
   </head>
   <body>
     <script>
-      // Apply theme and language before React loads to prevent white flash
+      // Set dark or light and the language before React loads, so the first paint matches the theme.
       (function() {
         try {
-          var dark = localStorage.getItem('darkMode');
-          var themeId = localStorage.getItem('themeId') || 'default-light';
-          var isDark = dark === 'true' || (dark === null && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          // Each theme's mode, as in src/lib/themes.ts (indexHtmlTheme.test.ts keeps them in step).
+          // No stored theme: follow the Mac, as storedThemeId in src/stores/app-store.ts does.
+          var THEME_MODES = {
+            'default-light': 'light', 'default-dark': 'dark', 'nord': 'dark', 'rose-pine': 'dark',
+            'catppuccin': 'dark', 'sand': 'light', 'tokyo-night': 'dark', 'evergreen': 'dark',
+            'midnight': 'dark', 'lavender': 'light'
+          };
+          var mode = THEME_MODES[localStorage.getItem('themeId')];
+          var isDark = mode ? mode === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
           if (isDark) {
             document.documentElement.classList.add('dark');
-            document.body.style.background = '#111111';
-            document.body.style.color = '#e5e5e5';
+            // Only until the stylesheet and the theme's tokens are in (app-store clears it).
+            document.documentElement.style.backgroundColor = '#111111';
           }
           // Same as applyDocumentLang in src/stores/app-store.ts; set early so the first paint is announced right.
           if (localStorage.getItem('appLanguage') === 'FR') document.documentElement.lang = 'fr';
