@@ -8,6 +8,8 @@ import { applyRenewals, getPendingRenewals, getSubscriptions } from "../../db/qu
 import type { PendingRenewal } from "../../db/queries/subscriptions";
 import { sendNativeNotification } from "../nativeNotification";
 import { getLabels } from "../notify";
+import { buildNotice, type NoticeKeys, type NoticeParams } from "../notificationText";
+import type { UIKey } from "../../i18n/ui";
 import { logWarn } from "../log";
 import { useAppStore } from "../../stores/app-store";
 import { useOrgStore } from "../../stores/org-store";
@@ -30,6 +32,8 @@ export interface PlannedNotice {
   title: string;
   message: string;
   link: string;
+  /** Label keys and values, so the list shows the notice in the current language. */
+  keys: NoticeKeys;
 }
 
 export interface PlanInput {
@@ -61,9 +65,6 @@ function daysUntil(fromISO: string, toISO: string): number {
   );
 }
 
-function fill(tpl: string, vars: Record<string, string | number>): string {
-  return tpl.replace(/\{(\w+)\}/g, (_, k: string) => String(vars[k] ?? ""));
-}
 
 /**
  * Pure: which in-app notices are owed right now. Every notice carries the marker
@@ -71,7 +72,12 @@ function fill(tpl: string, vars: Record<string, string | number>): string {
  * not planned, so a cause fires once (spec §7), never daily.
  */
 export function planNotifications(input: PlanInput): PlannedNotice[] {
-  const t = getLabels();
+  const lang = useAppStore.getState().language;
+  /** Title, message and keys of a notice, in the UI language. */
+  const text = (titleKey: UIKey, messageKey: UIKey, params: NoticeParams) => {
+    const { title, message, ...keys } = buildNotice(lang, titleKey, { messageKey, params });
+    return { title, message, keys };
+  };
   const { todayISO, windows } = input;
   const out: PlannedNotice[] = [];
   const byId = new Map(input.machines.map((m) => [m.id, m]));
@@ -88,8 +94,7 @@ export function planNotifications(input: PlanInput): PlannedNotice[] {
     if (!due || item.overdue_notified_for === due) continue;
     out.push({
       cause: "overdue", refId: item.id, marker: due,
-      title: t.notice_overdue_title,
-      message: fill(t.notice_overdue_msg, { title: item.title, machine: m.name, date: due }),
+      ...text("notice_overdue_title", "notice_overdue_msg", { title: item.title, machine: m.name, date: due }),
       link: `/upkeep/machines/${m.id}`,
     });
   }
@@ -98,8 +103,7 @@ export function planNotifications(input: PlanInput): PlannedNotice[] {
     if (!isLow(c) || c.low_notified) continue;
     out.push({
       cause: "low_stock", refId: c.id, marker: "1",
-      title: t.notice_low_title,
-      message: fill(t.notice_low_msg, { name: c.name, stock: c.stock, unit: c.unit, level: c.reorder_level }),
+      ...text("notice_low_title", "notice_low_msg", { name: c.name, stock: c.stock, unit: c.unit, level: c.reorder_level }),
       link: "/upkeep?tab=consumables",
     });
   }
@@ -112,10 +116,9 @@ export function planNotifications(input: PlanInput): PlannedNotice[] {
     const health: DiskHealth = d.health;
     out.push({
       cause: "disk", refId: d.id, marker: health,
-      title: t.notice_disk_title,
-      message: fill(t.notice_disk_msg, {
+      ...text("notice_disk_title", "notice_disk_msg", {
         slot: d.slot, machine: m.name,
-        health: health === "failing" ? t.notice_health_failing : t.notice_health_warning,
+        health: { label: health === "failing" ? "notice_health_failing" as const : "notice_health_warning" as const },
       }),
       link: `/upkeep/machines/${m.id}`,
     });
@@ -128,8 +131,7 @@ export function planNotifications(input: PlanInput): PlannedNotice[] {
     if (m.warranty_notified_for === m.warranty_until) continue;
     out.push({
       cause: "warranty", refId: m.id, marker: m.warranty_until,
-      title: t.notice_warranty_title,
-      message: fill(t.notice_warranty_msg, { machine: m.name, date: m.warranty_until }),
+      ...text("notice_warranty_title", "notice_warranty_msg", { machine: m.name, date: m.warranty_until }),
       link: `/upkeep/machines/${m.id}`,
     });
   }
@@ -141,8 +143,7 @@ export function planNotifications(input: PlanInput): PlannedNotice[] {
     if (s.coming_notified_for === s.renews_on) continue;
     out.push({
       cause: "renewal_coming", refId: s.id, marker: s.renews_on,
-      title: t.notice_renewal_coming_title,
-      message: fill(t.notice_renewal_coming_msg, { name: s.name, date: s.renews_on }),
+      ...text("notice_renewal_coming_title", "notice_renewal_coming_msg", { name: s.name, date: s.renews_on }),
       link: "/upkeep?tab=subscriptions",
     });
   }
@@ -151,8 +152,7 @@ export function planNotifications(input: PlanInput): PlannedNotice[] {
     if (r.notified) continue;
     out.push({
       cause: "renewal_happened", refId: r.id, marker: "1",
-      title: t.notice_renewal_happened_title,
-      message: fill(t.notice_renewal_happened_msg, {
+      ...text("notice_renewal_happened_title", "notice_renewal_happened_msg", {
         name: r.name, date: r.renewed_on,
         amount: formatMoney(r.amount, r.currency),
       }),
@@ -165,8 +165,7 @@ export function planNotifications(input: PlanInput): PlannedNotice[] {
     if (daysUntil(c.failing_since, todayISO) < CONNECTION_FAILING_DAYS) continue;
     out.push({
       cause: "connection", refId: c.id, marker: "1",
-      title: t.notice_connection_title,
-      message: fill(t.notice_connection_msg, { label: c.label, date: c.failing_since }),
+      ...text("notice_connection_title", "notice_connection_msg", { label: c.label, date: c.failing_since }),
       link: "/upkeep",
     });
   }
@@ -270,8 +269,12 @@ export async function runUpkeepCheck(qc: QueryClient, todayISO: string): Promise
     const lender = EQUIPMENT_CAUSES.has(n.cause) ? equipmentOrgId() : null;
     const batch = new TransactionBatch(org);
     batch.add(
-      "INSERT INTO notifications (type, title, message, read, link) VALUES ($1, $2, $3, 0, $4)",
-      [n.cause === "disk" || n.cause === "connection" ? "error" : "warning", n.title, n.message, n.link]
+      `INSERT INTO notifications (type, title, message, read, link, title_key, message_key, params)
+       VALUES ($1, $2, $3, 0, $4, $5, $6, $7)`,
+      [
+        n.cause === "disk" || n.cause === "connection" ? "error" : "warning", n.title, n.message, n.link,
+        n.keys.title_key, n.keys.message_key, n.keys.params,
+      ]
     );
     const s = markerStatement(n);
     if (!lender) batch.add(s.sql, s.params);
@@ -305,7 +308,7 @@ export async function runUpkeepCheck(qc: QueryClient, todayISO: string): Promise
     const t = getLabels();
     sendNativeNotification(
       t.notice_summary_title,
-      fill(t.notice_summary_msg, { count: written.length })
+      t.notice_summary_msg.replace("{count}", String(written.length))
     );
   } else {
     for (const n of written) sendNativeNotification(n.title, n.message);

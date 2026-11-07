@@ -5,6 +5,7 @@ import { createNotification } from "../db/queries/notifications";
 import { queryClient } from "../lib/queryClient";
 import { logError } from "../lib/log";
 import { getLabels, notify } from "../lib/notify";
+import { noticeKeys } from "../lib/notificationText";
 import { sendNativeNotification } from "../lib/nativeNotification";
 import { modeActive } from "../lib/activeMode";
 import { qk } from "../db/queryKeys";
@@ -76,6 +77,7 @@ export function useAutoBackup() {
               message: fileName,
               read: 0,
               link: backupPath,
+              ...noticeKeys("auto_backup_title"),
             });
             queryClient.invalidateQueries({ queryKey: qk.notifications.all });
             sendNativeNotification(getLabels().auto_backup_title, fileName);

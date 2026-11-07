@@ -99,7 +99,10 @@ describe("runUpkeepCheck", () => {
     expect(stmtsOf(0)).toEqual([
       expect.objectContaining({
         sql: expect.stringContaining("INSERT INTO notifications"),
-        params: ["warning", expect.any(String), expect.any(String), "/upkeep/machines/3"],
+        params: [
+          "warning", expect.any(String), expect.any(String), "/upkeep/machines/3",
+          "notice_overdue_title", "notice_overdue_msg", expect.stringContaining('"machine":"Bambu X1"'),
+        ],
       }),
       expect.objectContaining({ sql: expect.stringContaining("overdue_notified_for"), params: ["2026-10-20", 7] }),
     ]);

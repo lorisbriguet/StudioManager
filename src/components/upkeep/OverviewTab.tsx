@@ -6,10 +6,13 @@ import { useT } from "../../i18n/useT";
 import { machineStatusVariant } from "../../lib/statusColors";
 import { formatDisplayDate } from "../../utils/formatDate";
 import type { Machine } from "../../types/upkeep";
+import { useAppStore } from "../../stores/app-store";
+import { machineKindLabel } from "../../lib/upkeep/templates";
 
 function MachineCard({ machine, nextTitle }: { machine: Machine; nextTitle: string | null }) {
   const t = useT();
-  const sub = [machine.kind, machine.location].filter(Boolean).join(" · ");
+  const lang = useAppStore((s) => s.language);
+  const sub = [machineKindLabel(machine.kind, lang), machine.location].filter(Boolean).join(" · ");
   return (
     <Card interactive="link">
       <div className="flex items-center gap-3">

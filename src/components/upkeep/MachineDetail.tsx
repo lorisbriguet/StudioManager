@@ -12,6 +12,7 @@ import { UpkeepItemForm } from "./UpkeepItemForm";
 import { ReadingsSection } from "./ReadingsSection";
 import { InCalendarSelect } from "./InCalendarSelect";
 import { repeatsLabel } from "./DueList";
+import { machineKindLabel } from "../../lib/upkeep/templates";
 import { useT } from "../../i18n/useT";
 import {
   useArchiveUpkeepItem,
@@ -135,6 +136,7 @@ export function MachineDetail({ machineId, compact = false, onDeleted, onBack }:
   onBack?: () => void;
 }) {
   const t = useT();
+  const lang = useAppStore((s) => s.language);
   const navigate = useNavigate();
   const confirm = useConfirm();
   const h = compact ? "h3" : "h2";
@@ -165,7 +167,7 @@ export function MachineDetail({ machineId, compact = false, onDeleted, onBack }:
   const boughtYear = machine.purchase_date ? Number(machine.purchase_date.slice(0, 4)) : null;
   const replaceYear = boughtYear != null && machine.lifespan_years != null
     ? boughtYear + Math.ceil(machine.lifespan_years) : null;
-  const sub = [machine.kind, machine.location].filter(Boolean).join(" · ");
+  const sub = [machineKindLabel(machine.kind, lang), machine.location].filter(Boolean).join(" · ");
 
   const onStatus = (next: MachineStatus) => {
     setStatus(next);

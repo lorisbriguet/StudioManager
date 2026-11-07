@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { getLabels, notify } from "../lib/notify";
 import { plural } from "../i18n/plural";
+import { noticeKeys } from "../lib/notificationText";
 import { useQueryClient } from "@tanstack/react-query";
 import { markOverdueInvoices } from "../db/queries/invoices";
 import { qk, invalidateMoney } from "../db/queryKeys";
@@ -39,6 +40,8 @@ export function useOverdueCheck() {
           message: refs,
           read: 0,
           link: "/invoices",
+          // English and French agree on the plural form from 1 up.
+          ...noticeKeys(overdue.length === 1 ? "overdue_marked_one" : "overdue_marked_other", null, { count: overdue.length }),
         });
 
         qc.invalidateQueries({ queryKey: qk.notifications.all });

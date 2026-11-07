@@ -45,9 +45,12 @@ export async function createNotification(
 ): Promise<number> {
   const db = await getDb();
   const result = await db.execute(
-    `INSERT INTO notifications (type, title, message, read, link)
-     VALUES ($1, $2, $3, $4, $5)`,
-    [data.type, data.title, data.message, data.read, data.link]
+    `INSERT INTO notifications (type, title, message, read, link, title_key, message_key, params)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+    [
+      data.type, data.title, data.message, data.read, data.link,
+      data.title_key ?? null, data.message_key ?? null, data.params ?? null,
+    ]
   );
   return result.lastInsertId ?? 0;
 }
