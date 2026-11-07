@@ -221,7 +221,7 @@ export function InvoicesPage() {
   };
 
   const settleDraft = (inv: Invoice) =>
-    settleDraftBeforeExport(inv.reference, () => updateInvoice.mutateAsync({ id: inv.id, data: { status: "sent" } }));
+    settleDraftBeforeExport(inv, () => updateInvoice.mutateAsync({ id: inv.id, data: { status: "sent" } }));
 
   const doDownloadPdf = async (inv: Invoice & { client_name: string }) => {
     if (!(await settleDraft(inv))) return;

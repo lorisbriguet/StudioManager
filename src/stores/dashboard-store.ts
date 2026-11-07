@@ -107,9 +107,9 @@ export const WIDGET_CATALOG: WidgetCatalogEntry[] = [
   { type: "recently-completed", labelKey: "recently_completed", category: "productivity", defaultW: 3, defaultH: 3, minW: 3, minH: 3 },
   { type: "stale-projects", labelKey: "stale_projects", category: "productivity", defaultW: 3, defaultH: 3, minW: 3, minH: 3 },
   { type: "weekly-streak", labelKey: "weekly_streak", category: "productivity", defaultW: 2, defaultH: 2, minW: 2, minH: 2 },
-  { type: "busiest-day", labelKey: "busiest_day", category: "productivity", defaultW: 3, defaultH: 2, minW: 3, minH: 2 },
+  { type: "busiest-day", labelKey: "busiest_day", category: "productivity", defaultW: 3, defaultH: 3, minW: 3, minH: 3 },
   // Phase 18 — Utility
-  { type: "quick-create", labelKey: "quick_create", category: "utility", defaultW: 2, defaultH: 2, minW: 2, minH: 2 },
+  { type: "quick-create", labelKey: "quick_create", category: "utility", defaultW: 3, defaultH: 3, minW: 3, minH: 3 },
   { type: "pinned-notes", labelKey: "pinned_notes", category: "utility", defaultW: 3, defaultH: 3, minW: 3, minH: 3 },
   { type: "upkeep", labelKey: "upkeep_widget", category: "utility", defaultW: 3, defaultH: 4, minW: 3, minH: 3 },
   { type: "wiki-recent", labelKey: "wiki_recent_widget", category: "utility", defaultW: 3, defaultH: 3, minW: 3, minH: 3 },
@@ -122,7 +122,7 @@ export const WIDGET_CATALOG: WidgetCatalogEntry[] = [
   { type: "top-time-consumers", labelKey: "top_time_consumers", category: "productivity", defaultW: 3, defaultH: 3, minW: 3, minH: 3 },
   { type: "billable-summary", labelKey: "billable_summary", category: "financial", defaultW: 2, defaultH: 2, minW: 2, minH: 2 },
   { type: "weekly-trend", labelKey: "weekly_trend", category: "productivity", defaultW: 4, defaultH: 4, minW: 3, minH: 3 },
-  { type: "project-time-distribution", labelKey: "project_time_distribution", category: "productivity", defaultW: 3, defaultH: 3, minW: 3, minH: 3 },
+  { type: "project-time-distribution", labelKey: "project_time_distribution", category: "productivity", defaultW: 4, defaultH: 4, minW: 3, minH: 3 },
 ];
 
 const DEFAULT_WIDGETS: DashboardWidget[] = [
@@ -200,10 +200,55 @@ function loadPresetName(): string {
   return localStorage.getItem(PRESET_NAME_KEY()) ?? "";
 }
 
+/**
+ * The first spot, reading top to bottom then left to right, where a w x h
+ * widget fits without covering another one, in the saved 12-column layout.
+ * Below everything when no gap is big enough.
+ */
+export function findFreeSpot(layout: LayoutItem[], w: number, h: number, cols = DASHBOARD_COLS.lg): { x: number; y: number } {
+  const width = Math.min(w, cols);
+  const bottom = layout.reduce((max, l) => Math.max(max, l.y + l.h), 0);
+  const overlaps = (x: number, y: number) =>
+    layout.some((l) => x < l.x + l.w && x + width > l.x && y < l.y + l.h && y + h > l.y);
+  for (let y = 0; y < bottom; y++) {
+    for (let x = 0; x + width <= cols; x++) {
+      if (!overlaps(x, y)) return { x, y };
+    }
+  }
+  return { x: 0, y: bottom };
+}
+
+/**
+ * Brings each widget up to its catalog's minimum size. A saved layout keeps
+ * the minimum the widget had when it was added, so a widget whose minimum
+ * grew (it was too small to show its content) is fixed on load.
+ */
+export function fitLayoutToCatalog(widgets: DashboardWidget[], layout: LayoutItem[]): LayoutItem[] {
+  const typeOf = new Map(widgets.map((w) => [w.id, w.type]));
+  return layout.map((item) => {
+    const entry = WIDGET_CATALOG.find((c) => c.type === typeOf.get(item.i));
+    const minW = entry?.minW ?? 0;
+    const minH = entry?.minH ?? 0;
+    const tooSmall =
+      item.w < minW || item.h < minH ||
+      (item.minW !== undefined && item.minW < minW) ||
+      (item.minH !== undefined && item.minH < minH);
+    if (!tooSmall) return item;
+    return {
+      ...item,
+      minW: Math.max(item.minW ?? 0, minW),
+      minH: Math.max(item.minH ?? 0, minH),
+      w: Math.max(item.w, minW),
+      h: Math.max(item.h, minH),
+    };
+  });
+}
+
 function loadAll() {
+  const widgets = loadWidgets();
   return {
-    widgets: loadWidgets(),
-    layout: loadLayout(),
+    widgets,
+    layout: fitLayoutToCatalog(widgets, loadLayout()),
     pinnedNotes: loadNotes(),
     activePresetId: loadPresetId(),
     activePresetName: loadPresetName(),
@@ -246,11 +291,10 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
     if (!catalog) return;
     const id = `w-${type}-${Date.now()}`;
     const widgets = [...get().widgets, { id, type }];
-    // Place at bottom-left
-    const maxY = get().layout.reduce((max, l) => Math.max(max, l.y + l.h), 0);
+    const { x, y } = findFreeSpot(get().layout, catalog.defaultW, catalog.defaultH);
     const layout = [
       ...get().layout,
-      { i: id, x: 0, y: maxY, w: catalog.defaultW, h: catalog.defaultH, minW: catalog.minW, minH: catalog.minH },
+      { i: id, x, y, w: catalog.defaultW, h: catalog.defaultH, minW: catalog.minW, minH: catalog.minH },
     ];
     localStorage.setItem(WIDGETS_KEY(), JSON.stringify(widgets));
     localStorage.setItem(STORAGE_KEY(), JSON.stringify(layout));
@@ -288,7 +332,8 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
     set({ pinnedNotes: text });
   },
 
-  setActivePreset: (id, name, widgets, layout) => {
+  setActivePreset: (id, name, widgets, presetLayout) => {
+    const layout = fitLayoutToCatalog(widgets, presetLayout);
     localStorage.setItem(WIDGETS_KEY(), JSON.stringify(widgets));
     localStorage.setItem(STORAGE_KEY(), JSON.stringify(layout));
     if (id !== null) {

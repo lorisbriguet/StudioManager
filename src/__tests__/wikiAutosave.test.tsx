@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup, act } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, type ReactElement } from "react";
 import { ArticleEditor } from "../pages/WikiPage";
 import { useAppStore } from "../stores/app-store";
 import { getDb } from "../db";
@@ -27,7 +27,10 @@ interface FakeProseMirrorEditor {
     };
   };
 }
-type FakeOnUpdate = (arg: { editor: FakeProseMirrorEditor }) => void;
+type FakeOnUpdate = (arg: {
+  editor: FakeProseMirrorEditor;
+  transaction: { docChanged: boolean };
+}) => void;
 
 let latestOnUpdate: FakeOnUpdate | null = null;
 
@@ -37,7 +40,11 @@ vi.mock("@tiptap/react", () => ({
     return {
       getHTML: () => "",
       commands: { focus: () => {} },
-      setEditable: () => {},
+      // Like Tiptap 3: setEditable emits an "update" (with an unchanged
+      // document) unless its second argument is false.
+      setEditable: (_editable: boolean, emitUpdate = true) => {
+        if (emitUpdate) latestOnUpdate?.({ editor: typedContent(""), transaction: { docChanged: false } });
+      },
     };
   },
   EditorContent: () => null,
@@ -89,7 +96,7 @@ function Harness({ initialId }: { initialId: number }) {
   );
 }
 
-function renderHarness() {
+function renderHarness(ui: ReactElement = <Harness initialId={1} />) {
   setSelectHandler((sql, params) => {
     const flat = sql.replace(/\s+/g, " ");
     if (flat.includes("FROM wiki_articles a") && flat.includes("WHERE a.id = $1")) {
@@ -101,9 +108,7 @@ function renderHarness() {
   });
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <QueryClientProvider client={qc}>
-      <Harness initialId={1} />
-    </QueryClientProvider>
+    <QueryClientProvider client={qc}>{ui}</QueryClientProvider>
   );
 }
 
@@ -128,7 +133,7 @@ describe("wiki article autosave", () => {
 
     vi.useFakeTimers();
     act(() => {
-      latestOnUpdate!({ editor: typedContent("<p>typed in article 1</p>") });
+      latestOnUpdate!({ editor: typedContent("<p>typed in article 1</p>"), transaction: { docChanged: true } });
     });
 
     fireEvent.click(screen.getByText("switch-to-2"));
@@ -149,7 +154,7 @@ describe("wiki article autosave", () => {
 
     vi.useFakeTimers();
     act(() => {
-      latestOnUpdate!({ editor: typedContent("<p>typed in article 1</p>") });
+      latestOnUpdate!({ editor: typedContent("<p>typed in article 1</p>"), transaction: { docChanged: true } });
     });
 
     await act(async () => {
@@ -159,5 +164,30 @@ describe("wiki article autosave", () => {
     const updates = executedStatements.filter((s) => s.sql.includes("UPDATE wiki_articles"));
     expect(updates.length).toBe(1);
     expect(updates[0].sql).toContain("content");
+  });
+
+  it("opening an article and switching modes never saves it", async () => {
+    const saveStates: string[] = [];
+    function ModeHarness() {
+      const [mode, setMode] = useState<"reading" | "editing">("reading");
+      return (
+        <div>
+          <button onClick={() => setMode(mode === "reading" ? "editing" : "reading")}>toggle-mode</button>
+          <ArticleEditor articleId={1} mode={mode} onSaveStateChange={(s) => saveStates.push(s)} />
+        </div>
+      );
+    }
+    renderHarness(<ModeHarness />);
+    await screen.findByDisplayValue("Article One");
+
+    vi.useFakeTimers();
+    fireEvent.click(screen.getByText("toggle-mode"));
+    fireEvent.click(screen.getByText("toggle-mode"));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+
+    expect(saveStates).not.toContain("saving");
+    expect(executedStatements.filter((s) => s.sql.includes("UPDATE wiki_articles")).length).toBe(0);
   });
 });

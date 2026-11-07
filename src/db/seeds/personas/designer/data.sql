@@ -205,6 +205,7 @@ INSERT INTO time_entries (project_id, task_id, duration_minutes, date, descripti
 -- INVOICES (12 months of history, VAT exempt, cultural discount for C-002)
 -- ═══════════════════════════════════════════════════
 INSERT INTO invoices (id, reference, client_id, project_id, status, language, activity, activity_id, assignment, invoice_date, due_date, payment_terms_days, subtotal, discount_applied, discount_rate, discount_label, total, paid_date, notes, po_number, currency, exchange_rate, chf_equivalent, reminder_count, last_reminder_date, from_quote_id) VALUES
+  (18, '2026-000', 'C-001', NULL, 'paid', 'FR', (SELECT name_fr FROM activities ORDER BY sort_order LIMIT 1), (SELECT id FROM activities ORDER BY sort_order LIMIT 1), 'Retainer design mensuel', date('now', '-12 months'), date('now', '-12 months', '+30 days'), 30, 1920.00, 0, 0.00, NULL, 1920.00, date('now', '-12 months', '+18 days'), 'Retainer mensuel — Atelier Noir', NULL, 'CHF', 1.00, 1920.00, 0, NULL, NULL),
   (1, '2026-001', 'C-002', 8, 'paid', 'FR', (SELECT name_fr FROM activities ORDER BY sort_order LIMIT 1), (SELECT id FROM activities ORDER BY sort_order LIMIT 1), 'Signalétique d''exposition', date('now', '-11 months'), date('now', '-11 months', '+30 days'), 30, 4200.00, 1, 0.10, 'Rabais culturel', 3780.00, date('now', '-10 months', '-5 days'), '', NULL, 'CHF', 1.00, 3780.00, 0, NULL, NULL),
   (2, '2026-002', 'C-003', 3, 'paid', 'EN', (SELECT name_en FROM activities ORDER BY sort_order DESC LIMIT 1), (SELECT id FROM activities ORDER BY sort_order DESC LIMIT 1), 'E-commerce redesign — Phase 1', date('now', '-10 months'), date('now', '-10 months', '+30 days'), 30, 6240.00, 0, 0.00, NULL, 6240.00, date('now', '-10 months', '+22 days'), '', NULL, 'CHF', 1.00, 6240.00, 0, NULL, NULL),
   (3, '2026-003', 'C-001', NULL, 'paid', 'FR', (SELECT name_fr FROM activities ORDER BY sort_order LIMIT 1), (SELECT id FROM activities ORDER BY sort_order LIMIT 1), 'Retainer design mensuel', date('now', '-9 months'), date('now', '-9 months', '+30 days'), 30, 1920.00, 0, 0.00, NULL, 1920.00, date('now', '-9 months', '+18 days'), 'Retainer mensuel — Atelier Noir', NULL, 'CHF', 1.00, 1920.00, 0, NULL, NULL),
@@ -223,6 +224,7 @@ INSERT INTO invoices (id, reference, client_id, project_id, status, language, ac
   (16, '2026-016', 'C-001', 4, 'sent', 'FR', (SELECT name_fr FROM activities ORDER BY sort_order LIMIT 1), (SELECT id FROM activities ORDER BY sort_order LIMIT 1), 'Packaging thé — Phase concept', date('now', '-10 days'), date('now', '+20 days'), 30, 1680.00, 0, 0.00, NULL, 1680.00, NULL, '', NULL, 'CHF', 1.00, 1680.00, 0, NULL, NULL),
   (17, 'DRAFT-presentation-annual-report', 'C-002', 2, 'draft', 'FR', (SELECT name_fr FROM activities ORDER BY sort_order LIMIT 1), (SELECT id FROM activities ORDER BY sort_order LIMIT 1), 'Rapport annuel — Facturation intermédiaire', date('now', '-2 days'), date('now', '+28 days'), 30, 3360.00, 1, 0.10, 'Rabais culturel', 3024.00, NULL, '', NULL, 'CHF', 1.00, 3024.00, 0, NULL, NULL);
 INSERT INTO invoice_line_items (invoice_id, designation, quantity, rate, amount, unit, sort_order) VALUES
+  (18, 'Forfait design mensuel (16 h)', 16, 120.00, 1920.00, 'hours', 0),
   (1, 'Conception signalétique', 20, 120.00, 2400.00, 'hours', 0),
   (1, 'Système d''orientation', 12, 120.00, 1440.00, 'hours', 1),
   (1, 'Suivi de production', 3, 120.00, 360.00, 'hours', 2),
@@ -260,7 +262,7 @@ INSERT INTO quotes (id, reference, client_id, project_id, status, language, acti
   (2, 'D-2026-002', 'C-004', 5, 'accepted', 'FR', (SELECT name_fr FROM activities ORDER BY sort_order DESC LIMIT 1), (SELECT id FROM activities ORDER BY sort_order DESC LIMIT 1), 'Site portfolio', date('now', '-60 days'), date('now', '-30 days'), 7000.00, 0, 0.00, 7000.00, 5, ''),
   (3, 'D-2026-003', 'C-002', 2, 'accepted', 'FR', (SELECT name_fr FROM activities ORDER BY sort_order LIMIT 1), (SELECT id FROM activities ORDER BY sort_order LIMIT 1), 'Rapport annuel', date('now', '-50 days'), date('now', '-20 days'), 7200.00, 1, 0.10, 6480.00, 2, ''),
   (4, 'D-2026-004', 'C-003', 7, 'sent', 'EN', (SELECT name_en FROM activities ORDER BY sort_order DESC LIMIT 1), (SELECT id FROM activities ORDER BY sort_order DESC LIMIT 1), 'Mobile app UI kit', date('now', '-20 days'), date('now', '+10 days'), 17760.00, 0, 0.00, 17760.00, NULL, ''),
-  (5, 'D-2026-005', 'C-001', 1, 'draft', 'FR', (SELECT name_fr FROM activities ORDER BY sort_order LIMIT 1), (SELECT id FROM activities ORDER BY sort_order LIMIT 1), 'Extension charte — templates réseaux sociaux', date('now', '-3 days'), date('now', '+27 days'), 3080.00, 0, 0.00, 3080.00, NULL, '');
+  (5, 'DRAFT-quote-5', 'C-001', 1, 'draft', 'FR', (SELECT name_fr FROM activities ORDER BY sort_order LIMIT 1), (SELECT id FROM activities ORDER BY sort_order LIMIT 1), 'Extension charte — templates réseaux sociaux', date('now', '-3 days'), date('now', '+27 days'), 3080.00, 0, 0.00, 3080.00, NULL, '');
 INSERT INTO quote_line_items (quote_id, designation, quantity, rate, amount, unit, sort_order) VALUES
   (1, 'Calendar concept', 6, 120.00, 720.00, 'hours', 0),
   (1, 'Monthly illustrations', 12, 200.00, 2400.00, 'units', 1),
@@ -466,7 +468,7 @@ INSERT INTO machine_disks (machine_id, slot, model, serial, size_bytes, power_on
 -- row, so renumbering in place fails when a new number is still held by a
 -- row not renumbered yet (rows inserted out of date order).
 UPDATE invoices SET reference = '#' || id WHERE reference NOT LIKE 'DRAFT-%';
-UPDATE quotes SET reference = '#' || id;
+UPDATE quotes SET reference = '#' || id WHERE reference NOT LIKE 'DRAFT-%';
 UPDATE expenses SET reference = '#' || id;
 UPDATE income SET reference = '#' || id;
 UPDATE invoices SET reference = '' || strftime('%Y', invoice_date) || '-' || printf('%03d', (
@@ -477,8 +479,8 @@ UPDATE invoices SET reference = '' || strftime('%Y', invoice_date) || '-' || pri
 UPDATE quotes SET reference = 'D-' || strftime('%Y', quote_date) || '-' || printf('%03d', (
   SELECT COUNT(*) FROM quotes i2
   WHERE strftime('%Y', i2.quote_date) = strftime('%Y', quotes.quote_date)
-    AND (i2.quote_date < quotes.quote_date OR (i2.quote_date = quotes.quote_date AND i2.id <= quotes.id))
-));
+    AND (i2.quote_date < quotes.quote_date OR (i2.quote_date = quotes.quote_date AND i2.id <= quotes.id)) AND i2.reference NOT LIKE 'DRAFT-%'
+)) WHERE reference NOT LIKE 'DRAFT-%';
 UPDATE expenses SET reference = 'F-' || substr(strftime('%Y', invoice_date), 3, 2) || '-' || printf('%03d', (
   SELECT COUNT(*) FROM expenses i2
   WHERE strftime('%Y', i2.invoice_date) = strftime('%Y', expenses.invoice_date)

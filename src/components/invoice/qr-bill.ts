@@ -29,13 +29,26 @@ function isQRIBAN(iban: string): boolean {
  * QR-bill payments are CHF-only, so the payment part renders only for CHF
  * invoices with an IBAN configured and the template's show_qr_bill toggle on.
  * A missing currency defaults to CHF, matching the PDF's display behavior.
+ * A QR-IBAN needs a QR reference, which a draft doesn't have yet: a draft
+ * paid to a QR-IBAN gets no payment part.
  */
 export function shouldRenderQrBill(
-  invoice: Pick<Invoice, "currency">,
-  profile: Pick<BusinessProfile, "iban">,
+  invoice: Pick<Invoice, "currency" | "reference">,
+  profile: Pick<BusinessProfile, "iban" | "qr_iban">,
   showQrBill: boolean
 ): boolean {
-  return (invoice.currency || "CHF") === "CHF" && !!profile.iban && showQrBill;
+  if ((invoice.currency || "CHF") !== "CHF" || !profile.iban || !showQrBill) return false;
+  return !(isDraft(invoice) && isQRIBAN(qrAccount(profile)));
+}
+
+/** A draft's reference is an internal id (DRAFT-<uuid>), never printed. */
+function isDraft(invoice: Pick<Invoice, "reference">): boolean {
+  return invoice.reference.startsWith("DRAFT");
+}
+
+/** The account the bill pays to: the QR-IBAN when there is one. */
+function qrAccount(profile: Pick<BusinessProfile, "iban" | "qr_iban">): string {
+  return (profile.qr_iban?.replace(/\s/g, "") || profile.iban).replace(/\s/g, "");
 }
 
 /**
@@ -54,9 +67,16 @@ export function buildQRBillData(
   // Older clients keep "1000 Lausanne" in address_line2.
   const cityLine = (addr.postal_city || addr.address_line2 || "").trim();
   const hasAddress = !!(addr.address_line1?.trim() || cityLine);
-  const qrIban = profile.qr_iban?.replace(/\s/g, "");
-  const account = (qrIban || profile.iban).replace(/\s/g, "");
+  const account = qrAccount(profile);
   const needsQRRef = isQRIBAN(account);
+  // A draft's message leaves out its internal reference.
+  const message = [
+    isDraft(invoice) ? null : invoice.reference,
+    client.name,
+    invoice.po_number ? `PO ${invoice.po_number}` : null,
+  ]
+    .filter(Boolean)
+    .join(" - ");
 
   return {
     creditor: {
@@ -72,9 +92,7 @@ export function buildQRBillData(
     ...(needsQRRef
       ? { reference: toQRReference(invoice.reference) }
       : {}),
-    message: invoice.po_number
-      ? `${invoice.reference} - ${client.name} - PO ${invoice.po_number}`
-      : `${invoice.reference} - ${client.name}`,
+    message,
     ...(hasAddress
       ? {
           debtor: {

@@ -93,7 +93,7 @@ const ENUMS: Record<string, Record<string, string[]>> = {
 
 const REFERENCE_FORMATS: Record<string, RegExp> = {
   invoices: /^(\d{4}-\d{3}|DRAFT-.+)$/,
-  quotes: /^D-\d{4}-\d{3}$/,
+  quotes: /^(D-\d{4}-\d{3}|DRAFT-.+)$/,
   expenses: /^F-\d{2}-\d{3}$/,
   income: /^R-\d{2}-\d{3}$/,
 };
@@ -269,6 +269,17 @@ for (const [path, seedSql] of Object.entries(DATA_SEEDS)) {
         // Drafts keep their DRAFT- placeholder
         const inv = [...updates].reverse().find((s) => /^UPDATE invoices\s+SET reference/i.test(s))!;
         expect(inv).toMatch(/WHERE reference NOT LIKE 'DRAFT-%'/);
+        const quo = [...updates].reverse().find((s) => /^UPDATE quotes\s+SET reference/i.test(s))!;
+        expect(quo).toMatch(/WHERE reference NOT LIKE 'DRAFT-%'/);
+      });
+
+      it("gives every draft a DRAFT- reference and nothing else one, as the app does", () => {
+        for (const table of ["invoices", "quotes"]) {
+          for (const row of rowsOf(table)) {
+            const draftRef = String(row.reference).startsWith("DRAFT-");
+            expect(draftRef, `${table} ${String(row.reference)} has status ${String(row.status)}`).toBe(row.status === "draft");
+          }
+        }
       });
 
       it("expresses every date relative to today, never as a literal", () => {

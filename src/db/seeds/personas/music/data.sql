@@ -230,6 +230,7 @@ INSERT INTO time_entries (project_id, task_id, duration_minutes, date, descripti
 -- INVOICES (12 months of history, VAT exempt, partner discount for C-003)
 -- ═══════════════════════════════════════════════════
 INSERT INTO invoices (id, reference, client_id, project_id, status, language, activity, activity_id, assignment, invoice_date, due_date, payment_terms_days, subtotal, discount_applied, discount_rate, discount_label, total, paid_date, notes, po_number, currency, exchange_rate, chf_equivalent, reminder_count, last_reminder_date, from_quote_id) VALUES
+  (15, '2026-000', 'C-001', NULL, 'paid', 'FR', (SELECT name_fr FROM activities WHERE name_fr = 'Concert'), (SELECT id FROM activities WHERE name_fr = 'Concert'), 'Concert - La Fonderie', date('now', '-12 months'), date('now', '-12 months', '+30 days'), 30, 1100.00, 0, 0.00, NULL, 1100.00, date('now', '-12 months', '+18 days'), '', NULL, 'CHF', 1.00, 1100.00, 0, NULL, NULL),
   (1, '2026-001', 'C-001', NULL, 'paid', 'FR', (SELECT name_fr FROM activities WHERE name_fr = 'Concert'), (SELECT id FROM activities WHERE name_fr = 'Concert'), 'Concert - La Fonderie', date('now', '-11 months'), date('now', '-11 months', '+30 days'), 30, 1200.00, 0, 0.00, NULL, 1200.00, date('now', '-11 months', '+18 days'), '', NULL, 'CHF', 1.00, 1200.00, 0, NULL, NULL),
   (2, '2026-002', 'C-004', 1, 'paid', 'EN', (SELECT name_en FROM activities WHERE name_fr = 'Production'), (SELECT id FROM activities WHERE name_fr = 'Production'), 'Album advance', date('now', '-10 months'), date('now', '-10 months', '+30 days'), 30, 4000.00, 0, 0.00, NULL, 4000.00, date('now', '-10 months', '+15 days'), 'Signing advance for the Aurore album.', NULL, 'CHF', 1.00, 4000.00, 0, NULL, NULL),
   (3, '2026-003', 'C-002', NULL, 'paid', 'FR', (SELECT name_fr FROM activities WHERE name_fr = 'Concert'), (SELECT id FROM activities WHERE name_fr = 'Concert'), 'Concert - salle Sonar', date('now', '-9 months'), date('now', '-9 months', '+30 days'), 30, 1350.00, 0, 0.00, NULL, 1350.00, date('now', '-9 months', '+20 days'), '', NULL, 'CHF', 1.00, 1350.00, 0, NULL, NULL),
@@ -245,6 +246,7 @@ INSERT INTO invoices (id, reference, client_id, project_id, status, language, ac
   (13, '2026-013', 'C-005', 3, 'sent', 'FR', (SELECT name_fr FROM activities WHERE name_fr = 'Atelier'), (SELECT id FROM activities WHERE name_fr = 'Atelier'), 'Atelier d''écriture mensuel', date('now', '-6 days'), date('now', '-6 days', '+30 days'), 30, 600.00, 0, 0.00, NULL, 600.00, NULL, 'Atelier mensuel — École de musique Riviera', NULL, 'CHF', 1.00, 600.00, 0, NULL, NULL),
   (14, 'DRAFT-1', 'C-002', NULL, 'draft', 'FR', (SELECT name_fr FROM activities WHERE name_fr = 'Concert'), (SELECT id FROM activities WHERE name_fr = 'Concert'), 'Cachet concert (à confirmer) — prochain festival', date('now', '-2 days'), date('now', '-2 days', '+30 days'), 30, 1500.00, 0, 0.00, NULL, 1500.00, NULL, '', NULL, 'CHF', 1.00, 1500.00, 0, NULL, NULL);
 INSERT INTO invoice_line_items (invoice_id, designation, quantity, rate, amount, unit, sort_order) VALUES
+  (15, 'Cachet concert', 1, 1100.00, 1100.00, 'flat', 0),
   (1, 'Cachet concert', 1, 1200.00, 1200.00, 'flat', 0),
   (2, 'Album advance', 1, 4000.00, 4000.00, 'flat', 0),
   (3, 'Cachet concert', 1, 1350.00, 1350.00, 'flat', 0),
@@ -272,7 +274,7 @@ INSERT INTO quotes (id, reference, client_id, project_id, status, language, acti
   (2, 'D-2026-002', 'C-005', NULL, 'accepted', 'FR', (SELECT name_fr FROM activities WHERE name_fr = 'Atelier'), (SELECT id FROM activities WHERE name_fr = 'Atelier'), 'Forfait ateliers écriture', date('now', '-165 days'), date('now', '-140 days'), 3500.00, 0, 0.00, 3500.00, 3, NULL, ''),
   (3, 'D-2026-003', 'C-004', NULL, 'sent', 'EN', (SELECT name_en FROM activities WHERE name_fr = 'Production'), (SELECT id FROM activities WHERE name_fr = 'Production'), 'Showcase acoustique — soirée corporate', date('now', '-20 days'), date('now', '+10 days'), 2500.00, 0, 0.00, 2500.00, NULL, NULL, ''),
   (4, 'D-2026-004', 'C-001', NULL, 'rejected', 'FR', (SELECT name_fr FROM activities WHERE name_fr = 'Concert'), (SELECT id FROM activities WHERE name_fr = 'Concert'), 'Prestation mariage — salle annexe', date('now', '-100 days'), date('now', '-70 days'), 1800.00, 0, 0.00, 1800.00, NULL, NULL, 'Demande transmise par Nadia (La Fonderie loue aussi sa salle annexe pour des événements privés). Refusé — date trop proche d''une date de tournée.'),
-  (5, 'D-2026-005', 'C-001', NULL, 'draft', 'FR', (SELECT name_fr FROM activities WHERE name_fr = 'Concert'), (SELECT id FROM activities WHERE name_fr = 'Concert'), 'Deuxième date à La Fonderie — proposition', date('now', '-5 days'), date('now', '+25 days'), 1000.00, 0, 0.00, 1000.00, NULL, NULL, 'En attente de confirmation de la salle.');
+  (5, 'DRAFT-quote-5', 'C-001', NULL, 'draft', 'FR', (SELECT name_fr FROM activities WHERE name_fr = 'Concert'), (SELECT id FROM activities WHERE name_fr = 'Concert'), 'Deuxième date à La Fonderie — proposition', date('now', '-5 days'), date('now', '+25 days'), 1000.00, 0, 0.00, 1000.00, NULL, NULL, 'En attente de confirmation de la salle.');
 INSERT INTO quote_line_items (quote_id, designation, quantity, rate, amount, unit, sort_order) VALUES
   (1, 'Cachet tête d''affiche', 1, 1200.00, 1200.00, 'flat', 0),
   (1, 'Frais techniques et backline', 4, 75.00, 300.00, 'hours', 1),
@@ -475,7 +477,7 @@ INSERT INTO machine_disks (machine_id, slot, model, serial, size_bytes, power_on
 -- row, so renumbering in place fails when a new number is still held by a
 -- row not renumbered yet (rows inserted out of date order).
 UPDATE invoices SET reference = '#' || id WHERE reference NOT LIKE 'DRAFT-%';
-UPDATE quotes SET reference = '#' || id;
+UPDATE quotes SET reference = '#' || id WHERE reference NOT LIKE 'DRAFT-%';
 UPDATE expenses SET reference = '#' || id;
 UPDATE income SET reference = '#' || id;
 UPDATE invoices SET reference = '' || strftime('%Y', invoice_date) || '-' || printf('%03d', (
@@ -486,8 +488,8 @@ UPDATE invoices SET reference = '' || strftime('%Y', invoice_date) || '-' || pri
 UPDATE quotes SET reference = 'D-' || strftime('%Y', quote_date) || '-' || printf('%03d', (
   SELECT COUNT(*) FROM quotes i2
   WHERE strftime('%Y', i2.quote_date) = strftime('%Y', quotes.quote_date)
-    AND (i2.quote_date < quotes.quote_date OR (i2.quote_date = quotes.quote_date AND i2.id <= quotes.id))
-));
+    AND (i2.quote_date < quotes.quote_date OR (i2.quote_date = quotes.quote_date AND i2.id <= quotes.id)) AND i2.reference NOT LIKE 'DRAFT-%'
+)) WHERE reference NOT LIKE 'DRAFT-%';
 UPDATE expenses SET reference = 'F-' || substr(strftime('%Y', invoice_date), 3, 2) || '-' || printf('%03d', (
   SELECT COUNT(*) FROM expenses i2
   WHERE strftime('%Y', i2.invoice_date) = strftime('%Y', expenses.invoice_date)

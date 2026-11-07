@@ -116,24 +116,47 @@ describe("buildQRBillData", () => {
 
 describe("shouldRenderQrBill", () => {
   it("returns true for a CHF invoice with IBAN and toggle on", () => {
-    expect(shouldRenderQrBill({ currency: "CHF" }, baseProfile, true)).toBe(true);
+    expect(shouldRenderQrBill({ currency: "CHF", reference: "2026-001" }, baseProfile, true)).toBe(true);
   });
 
   it("returns false for EUR, USD and GBP even with IBAN and toggle on", () => {
-    expect(shouldRenderQrBill({ currency: "EUR" }, baseProfile, true)).toBe(false);
-    expect(shouldRenderQrBill({ currency: "USD" }, baseProfile, true)).toBe(false);
-    expect(shouldRenderQrBill({ currency: "GBP" }, baseProfile, true)).toBe(false);
+    expect(shouldRenderQrBill({ currency: "EUR", reference: "2026-001" }, baseProfile, true)).toBe(false);
+    expect(shouldRenderQrBill({ currency: "USD", reference: "2026-001" }, baseProfile, true)).toBe(false);
+    expect(shouldRenderQrBill({ currency: "GBP", reference: "2026-001" }, baseProfile, true)).toBe(false);
   });
 
   it("returns false when IBAN is missing", () => {
-    expect(shouldRenderQrBill({ currency: "CHF" }, { ...baseProfile, iban: "" }, true)).toBe(false);
+    expect(shouldRenderQrBill({ currency: "CHF", reference: "2026-001" }, { ...baseProfile, iban: "" }, true)).toBe(false);
   });
 
   it("returns false when the template toggle is off", () => {
-    expect(shouldRenderQrBill({ currency: "CHF" }, baseProfile, false)).toBe(false);
+    expect(shouldRenderQrBill({ currency: "CHF", reference: "2026-001" }, baseProfile, false)).toBe(false);
   });
 
   it("treats a missing currency as CHF (display default)", () => {
-    expect(shouldRenderQrBill({ currency: "" }, baseProfile, true)).toBe(true);
+    expect(shouldRenderQrBill({ currency: "", reference: "2026-001" }, baseProfile, true)).toBe(true);
+  });
+
+  it("keeps the bill on a draft paid to a normal IBAN", () => {
+    expect(shouldRenderQrBill({ currency: "CHF", reference: "DRAFT-abc" }, baseProfile, true)).toBe(true);
+  });
+
+  it("leaves the bill out of a draft paid to a QR-IBAN (no QR reference yet)", () => {
+    const qrProfile = { ...baseProfile, qr_iban: "CH44 3199 9123 0008 8901 2" };
+    expect(shouldRenderQrBill({ currency: "CHF", reference: "DRAFT-abc" }, qrProfile, true)).toBe(false);
+    expect(shouldRenderQrBill({ currency: "CHF", reference: "2026-001" }, qrProfile, true)).toBe(true);
+  });
+});
+
+describe("QR bill message", () => {
+  it("leaves a draft's internal reference out of the additional information", () => {
+    const draft = { ...baseInvoice, reference: "DRAFT-b934d09d-ff7e" } as Invoice;
+    expect(buildQRBillData(draft, baseClient, baseProfile).message).toBe("Test Client");
+    const withPo = { ...draft, po_number: "PO-7" } as Invoice;
+    expect(buildQRBillData(withPo, baseClient, baseProfile).message).toBe("Test Client - PO PO-7");
+  });
+
+  it("keeps the reference for an issued invoice", () => {
+    expect(buildQRBillData(baseInvoice, baseClient, baseProfile).message).toBe("2026-001 - Test Client");
   });
 });

@@ -4,10 +4,12 @@ import { writeFile } from "@tauri-apps/plugin-fs";
 import { notify } from "./notify";
 import { logError } from "./log";
 import { uniquePdfFileName } from "./pdfFilename";
+import { isDraftDocument } from "./draftDocument";
 
 interface BulkPdfDoc {
   id: number;
   reference: string;
+  status?: string | null;
 }
 
 interface BulkPdfLabels {
@@ -51,7 +53,7 @@ export async function runBulkPdfExport<D extends BulkPdfDoc>(opts: {
     notify.info(t.pdf_generation_busy);
     return;
   }
-  if (docs.some((d) => d.reference.startsWith("DRAFT"))) {
+  if (docs.some(isDraftDocument)) {
     const proceed = await confirm({
       title: t.bulk_export_draft_title,
       message: t.bulk_export_draft_warning,

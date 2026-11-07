@@ -126,7 +126,7 @@ export function QuickCreate() {
             className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg bg-[var(--color-input-bg)] hover:bg-[var(--color-hover-row)] transition-colors"
           >
             <item.icon size={ICON_SIZE.callout} className="text-muted shrink-0" />
-            <span className="truncate">{item.label}</span>
+            <span className="min-w-0 text-left leading-tight">{item.label}</span>
           </button>
         ))}
       </div>

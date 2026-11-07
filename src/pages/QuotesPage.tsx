@@ -93,7 +93,7 @@ export function QuotesPage() {
   };
 
   const settleDraft = (q: Quote) =>
-    settleDraftBeforeExport(q.reference, () => updateQuote.mutateAsync({ id: q.id, data: { status: "sent" } }));
+    settleDraftBeforeExport(q, () => updateQuote.mutateAsync({ id: q.id, data: { status: "sent" } }));
 
   const doDownloadPdf = async (q: Quote & { client_name: string }) => {
     if (!(await settleDraft(q))) return;

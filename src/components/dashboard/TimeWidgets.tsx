@@ -210,39 +210,42 @@ export function ProjectTimeDistribution() {
 
   if (!data?.length) return <TimeWidgetState title={t.project_time_distribution} loading={data === undefined} />;
 
+  const total = data.reduce((sum, d) => sum + d.minutes, 0);
+  // Hash the project name so slices keep their color across ranking changes
   const chartData = data.map((d) => ({
     name: d.project_name,
     value: d.minutes,
+    pct: total > 0 ? Math.round((d.minutes / total) * 100) : 0,
+    color: PIE_COLORS[tagHash(d.project_name) % PIE_COLORS.length],
   }));
 
+  // A legend beside the pie instead of labels around it: labels outside a
+  // small pie were cut off at the widget's edges.
   return (
     <WidgetShell>
       <WidgetTitle>{t.project_time_distribution}</WidgetTitle>
-      <div className="flex-1 min-h-0">
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={chartData}
-              dataKey="value"
-              nameKey="name"
-              cx="50%"
-              cy="50%"
-              outerRadius="70%"
-              label={({ name, percent, x, y, textAnchor }) => {
-                const n = String(name ?? "");
-                const label = `${n.length > 12 ? n.slice(0, 11) + "…" : n} ${((percent ?? 0) * 100).toFixed(0)}%`;
-                return <text x={x} y={y} textAnchor={textAnchor} fill="var(--color-text)" fontSize={12}>{label}</text>;
-              }}
-              labelLine
-            >
-              {/* Hash the project name so slices keep their color across ranking changes */}
-              {chartData.map((d) => (
-                <Cell key={d.name} fill={PIE_COLORS[tagHash(d.name) % PIE_COLORS.length]} />
-              ))}
-            </Pie>
-            <Tooltip formatter={(value) => fmtHours(Number(value ?? 0))} contentStyle={chart.tooltipStyle} itemStyle={chart.pieItemStyle} labelStyle={{ color: "var(--color-text)" }} />
-          </PieChart>
-        </ResponsiveContainer>
+      <div className="flex-1 min-h-0 flex items-center gap-3">
+        <div className="h-full w-2/5 shrink-0 min-w-0">
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie data={chartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius="90%">
+                {chartData.map((d) => (
+                  <Cell key={d.name} fill={d.color} />
+                ))}
+              </Pie>
+              <Tooltip formatter={(value) => fmtHours(Number(value ?? 0))} contentStyle={chart.tooltipStyle} itemStyle={chart.pieItemStyle} labelStyle={{ color: "var(--color-text)" }} />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+        <ul className="flex-1 min-w-0 max-h-full overflow-y-auto space-y-1 text-xs">
+          {chartData.map((d) => (
+            <li key={d.name} className="flex items-center gap-2">
+              <span className="size-2 shrink-0 rounded-full" style={{ background: d.color }} aria-hidden />
+              <span className="truncate flex-1 min-w-0" title={d.name}>{d.name}</span>
+              <span className="text-muted tabular-nums">{d.pct}%</span>
+            </li>
+          ))}
+        </ul>
       </div>
     </WidgetShell>
   );

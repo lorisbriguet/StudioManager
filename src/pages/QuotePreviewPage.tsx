@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ICONS, Button, PageHeader, EmptyState, QueryError, DetailSkeleton } from "../components/ui";
 import { confirmDraftExport } from "../lib/confirmDraftExport";
+import { isDraftDocument } from "../lib/draftDocument";
 import { PDFViewer, pdf } from "@react-pdf/renderer";
 import { useQuote, useUpdateQuote } from "../db/hooks/useQuotes";
 import { getQuote } from "../db/queries/quotes";
@@ -111,7 +112,7 @@ export function QuotePreviewPage() {
   };
 
   const downloadPdf = async () => {
-    if (quote.status !== "draft") return doDownload();
+    if (!isDraftDocument(quote)) return doDownload();
     const choice = await confirmDraftExport();
     if (choice === "draft") await doDownload();
     if (choice === "sent") handleMarkSentAndExport();
