@@ -60,8 +60,8 @@ pub(crate) fn table_exists(conn: &rusqlite::Connection, name: &str) -> Result<bo
 fn ensure_wal(conn: &rusqlite::Connection) {
     match conn.query_row("PRAGMA journal_mode=WAL", [], |r| r.get::<_, String>(0)) {
         Ok(mode) if mode.eq_ignore_ascii_case("wal") => {}
-        Ok(mode) => eprintln!("[migrate] journal_mode is still {mode}; WAL will be retried on next open"),
-        Err(e) => eprintln!("[migrate] could not switch to WAL: {e}"),
+        Ok(mode) => log::warn!("[migrate] journal_mode is still {mode}; WAL will be retried on next open"),
+        Err(e) => log::warn!("[migrate] could not switch to WAL: {e}"),
     }
 }
 
@@ -90,6 +90,17 @@ fn refuse_newer(version: i64) -> Result<(), String> {
         return Err(format!(
             "{DB_NEWER_THAN_APP}it is at schema version {version}, this app knows up to {latest}"
         ));
+    }
+    Ok(())
+}
+
+/// Refuse a file saved by a newer app without writing to it: checked on a
+/// snapshot before it is restored over the live database.
+pub fn refuse_newer_file(path: &Path) -> Result<(), String> {
+    let conn = rusqlite::Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+        .map_err(|e| format!("open {}: {e}", path.display()))?;
+    if table_exists(&conn, "schema_migrations")? {
+        refuse_newer(recorded_version(&conn)?)?;
     }
     Ok(())
 }
