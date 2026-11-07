@@ -21,6 +21,7 @@
         "resizable": true,
         "fullscreen": false,
         "visible": false,
+        "backgroundColor": "#ffffff",
         "acceptFirstMouse": true
       }
     ],

@@ -34,6 +34,7 @@ import { applyFilterConditions, type ConditionLogic } from "../types/saved-filte
 import { projectStatusVariant } from "../lib/statusColors";
 import { pickableClients } from "../types/client";
 import { qk } from "../db/queryKeys";
+import { usePeek } from "../hooks/usePeek";
 
 const statusKeys: Record<ProjectStatus, UIKey> = {
   active: "active",
@@ -65,9 +66,8 @@ export function ProjectsPage() {
   const [activeFilterId, setActiveFilterId] = useState<number | null>(null);
   const [filterConditions, setFilterConditions] = useState<FilterCondition[]>([]);
   const [filterLogic, setFilterLogic] = useState<ConditionLogic>("and");
-  const [peekId, setPeekId] = useState<number | null>(null);
-  // Bumped on each click / Enter, so the peek takes focus again (not on arrow moves).
-  const [peekOpenCount, setPeekOpenCount] = useState(0);
+  // Opened on each click / Enter (the peek takes focus again), moved by the arrows.
+  const { peekId, openKey: peekOpenKey, open: openPeek, move: movePeek, close: closePeek } = usePeek();
   const t = useT();
   const { enabled: agentsOn, start: startAgentOn } = useStartAgentOn();
 
@@ -184,12 +184,11 @@ export function ProjectsPage() {
 
   const handleProjectClick = useCallback((projectId: number) => {
     if (projectOpenMode === "peek") {
-      setPeekId(projectId);
-      setPeekOpenCount((n) => n + 1);
+      openPeek(projectId);
     } else {
       navigate(`/projects/${projectId}`);
     }
-  }, [projectOpenMode, navigate]);
+  }, [projectOpenMode, navigate, openPeek]);
 
   // Keyboard card navigation (flat list, visual/card order; no Left/Right).
   const { focusIdx, setFocusIdx } = useListNavigation({
@@ -201,7 +200,7 @@ export function ProjectsPage() {
       []
     ),
     // While the peek is open, the arrows show the project they land on.
-    onMove: useCallback((p: (typeof filtered)[0]) => { if (peekId !== null) setPeekId(p.id); }, [peekId]),
+    onMove: useCallback((p: (typeof filtered)[0]) => { if (peekId !== null) movePeek(p.id); }, [peekId, movePeek]),
   });
 
   // Closing the peek puts focus back on its project's card, where the arrows carry on.
@@ -382,8 +381,8 @@ export function ProjectsPage() {
       {peekId !== null && (
         <SidePeek
           resizable
-          focusKey={peekOpenCount}
-          onClose={() => setPeekId(null)}
+          focusKey={peekOpenKey}
+          onClose={closePeek}
           onOpenFull={() => navigate(`/projects/${peekId}`)}
           returnFocus={peekCard}
         >

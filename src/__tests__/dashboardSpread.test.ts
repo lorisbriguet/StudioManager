@@ -57,6 +57,22 @@ describe("spreadSqueezedLayout", () => {
     expect(spread.find((i) => i.i === "w-chart-revenue")).toMatchObject({ x: 0, w: 12 });
   });
 
+  it("stretches the squeezed rows when a widget added since reaches column 12", () => {
+    // Added at full width after the upgrade: below the old widgets, and one to the right.
+    const added: LayoutItem[] = [
+      { i: "w-upkeep", x: 0, y: 20, w: 12, h: 4 },
+      { i: "w-overdue-tasks", x: 8, y: 16, w: 4, h: 4 },
+    ];
+    const spread = spreadSqueezedLayout([...SAVED_BY_340_SM, ...added]);
+    expect(spread.find((i) => i.i === "w-kpi-balance")).toMatchObject({ x: 6, w: 6 });
+    expect(spread.find((i) => i.i === "w-chart-revenue")).toMatchObject({ x: 0, w: 12 });
+    // The widgets placed at full width don't move, nor does the old one in their row.
+    expect(spread.find((i) => i.i === "w-upkeep")).toEqual(added[0]);
+    expect(spread.find((i) => i.i === "w-overdue-tasks")).toEqual(added[1]);
+    expect(spread.find((i) => i.i === "w-today-tasks")).toMatchObject({ x: 0, w: 6 });
+    expectNoOverlap(spread);
+  });
+
   it("leaves a full-width layout alone", () => {
     expect(spreadSqueezedLayout(DEFAULT_LAYOUT)).toBe(DEFAULT_LAYOUT);
     expect(spreadSqueezedLayout([])).toEqual([]);
@@ -74,6 +90,14 @@ describe("saved layout on load", () => {
     useOrgStore.setState({ activeId: "o1" }); // the switch reloads the dashboard
     expect(right(useDashboardStore.getState().layout)).toBe(12);
     expect(right(JSON.parse(localStorage.getItem("dashboard-layout:o1") ?? "[]"))).toBe(12);
+  });
+
+  it("is checked again when an earlier build already marked it checked", () => {
+    localStorage.setItem("dashboard-layout:o1", JSON.stringify([...SAVED_BY_340_SM, { i: "w-upkeep", x: 0, y: 20, w: 12, h: 4 }]));
+    localStorage.setItem("dashboard-layout-spread:o1", "1");
+    useOrgStore.setState({ activeId: "o1" });
+    expect(useDashboardStore.getState().layout.find((i) => i.i === "w-chart-revenue")).toMatchObject({ x: 0, w: 12 });
+    expect(localStorage.getItem("dashboard-layout-spread:o1")).toBeNull();
   });
 
   it("is not stretched again once checked (a layout left narrow on purpose)", () => {

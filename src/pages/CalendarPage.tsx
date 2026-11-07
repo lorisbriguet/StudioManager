@@ -39,6 +39,7 @@ import { agentMenuItems, calendarAgentTarget, type AgentTarget } from "../lib/ag
 import type { EventMountArg } from "@fullcalendar/core";
 import { qk } from "../db/queryKeys";
 import { useKeepCurrent } from "../hooks/useKeepCurrent";
+import { usePeek } from "../hooks/usePeek";
 
 function pad2(n: number) { return String(n).padStart(2, "0"); }
 function toDateStr(d: Date) { return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; }
@@ -149,7 +150,8 @@ export function CalendarPage() {
   };
 
   const [quickCreate, setQuickCreate] = useState<QuickCreateState | null>(null);
-  const [peekId, setPeekId] = useState<number | null>(null);
+  const peek = usePeek();
+  const { peekId, open: openPeek } = peek;
   const lastClickRef = useRef<{ time: number; date: string }>({ time: 0, date: "" });
   const calRef = useRef<FullCalendar>(null);
   const [calTitle, setCalTitle] = useState("");
@@ -361,11 +363,11 @@ export function CalendarPage() {
     }
     if (!projectId) return;
     if (projectOpenMode === "peek") {
-      setPeekId(projectId as number);
+      openPeek(projectId as number);
     } else {
       navigate(`/projects/${projectId}`);
     }
-  }, [navigate, projectOpenMode]);
+  }, [navigate, projectOpenMode, openPeek]);
 
   // Right-click on a task, subtask or deadline event: "Open" and "Start work with agent".
   // Events mount once, so the listener reads whether agents are on from a ref.
@@ -620,9 +622,9 @@ export function CalendarPage() {
       {peekId !== null && (
         <SidePeek
           resizable
-          focusKey={peekId}
+          focusKey={peek.openKey}
           className="h-[calc(100vh-6rem)]"
-          onClose={() => setPeekId(null)}
+          onClose={peek.close}
           onOpenFull={() => navigate(`/projects/${peekId}`)}
         >
           <ProjectDetailContent projectId={peekId} compact />

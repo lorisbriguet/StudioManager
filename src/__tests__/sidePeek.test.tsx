@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, fireEvent, cleanup, waitFor, act } from "@testing-library/react";
 import { useState } from "react";
 import { SidePeek } from "../components/layout/SidePeek";
+import { usePeek } from "../hooks/usePeek";
 
 // U4 — the side peek works from the keyboard: Escape, focus in and back, a resizable divider.
 
@@ -113,5 +114,32 @@ describe("SidePeek", () => {
     render(<Harness />);
     fireEvent.click(screen.getByRole("button", { name: "Open peek" }));
     expect(screen.queryByRole("separator")).toBeNull();
+  });
+});
+
+// 2-X3: the Calendar keyed the panel by project id, so reopening the same project
+// while it slid out left it closed. Both pages now key it with usePeek's openKey.
+function PeekPage() {
+  const peek = usePeek();
+  return (
+    <div>
+      <button type="button" onClick={() => peek.open(7)}>Open project</button>
+      {peek.peekId !== null && (
+        <SidePeek focusKey={peek.openKey} onClose={peek.close} onOpenFull={vi.fn()}>
+          <h2>Website Revamp</h2>
+        </SidePeek>
+      )}
+    </div>
+  );
+}
+
+describe("usePeek", () => {
+  it("reopens the same record clicked again while the panel slides out", () => {
+    render(<PeekPage />);
+    fireEvent.click(screen.getByRole("button", { name: "Open project" }));
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open project" }));
+    endExit();
+    expect(screen.getByRole("region", { name: "Side Peek" })).toBeTruthy();
   });
 });
