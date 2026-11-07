@@ -4,7 +4,7 @@ import { WidgetShell, WidgetTitle } from "../dashboard/WidgetShell";
 import { useT } from "../../i18n/useT";
 import type { DueRow } from "../../lib/upkeep/overview";
 
-/** Due and overdue upkeep of the machines on the page: the dashboard widget's rows. */
+/** Due and overdue upkeep of every machine: the same rows as the Upkeep overview and its badge. */
 export function UpkeepDueCard({ rows }: { rows: DueRow[] }) {
   const t = useT();
   return (

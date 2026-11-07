@@ -1,14 +1,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup, waitFor, renderHook, act, fireEvent } from "@testing-library/react";
+import { render, screen, within, cleanup, waitFor, renderHook, act, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { useAppStore } from "../stores/app-store";
-import type { Machine, MachineFile } from "../types/upkeep";
-import type { DueRow } from "../lib/upkeep/overview";
+import type { Machine, MachineFile, UpkeepItem } from "../types/upkeep";
+import { buildUpkeepOverview, type UpkeepOverview } from "../lib/upkeep/overview";
 import type { CheckResult } from "../lib/network/commands";
 
 let machines: Machine[] = [];
 let links: MachineFile[] = [];
-let due: DueRow[] = [];
+const emptyOverview = (): UpkeepOverview => ({ due: [], lowStock: [], endingSoon: [], replacements: [], overdueCount: 0 });
+let overview: UpkeepOverview = emptyOverview();
 let tm: { enabled: boolean; lastBackupAt: string | null; lastResult: number | null; running: boolean } | null = null;
 const networkCheck = vi.fn(async (_t: { key: string }[]): Promise<CheckResult[]> => []);
 const notifySpy = vi.fn();
@@ -18,7 +19,7 @@ const q = <T,>(data: T) => ({ data, isPending: false, isError: false, isFetching
 vi.mock("../db/hooks/useUpkeep", () => ({
   useMachines: () => q(machines),
   useMachineLinks: () => q(links),
-  useUpkeepOverview: () => ({ due, lowStock: [], endingSoon: [], replacements: [], overdueCount: 0 }),
+  useUpkeepOverview: () => overview,
   useActiveUpkeepItems: () => q([]),
   useMarkUpkeepDone: () => ({ mutate: vi.fn() }),
   useSnoozeUpkeep: () => ({ mutate: vi.fn() }),
@@ -42,8 +43,20 @@ import { useNetworkChecks } from "../hooks/useNetworkChecks";
 const m = (id: number, name: string) => ({ id, name, kind: "server", status: "working", connection_id: null }) as Machine;
 const l = (id: number, machine_id: number, label: string, url: string) =>
   ({ id, machine_id, label, kind: "link", path_or_url: url }) as MachineFile;
-const dueRow = (id: number, machine: Machine, title: string) =>
-  ({ item: { id, title, machine_id: machine.id }, machine, due: "2026-10-01", state: "overdue" }) as unknown as DueRow;
+const item = (id: number, machine_id: number, title: string, next_due_on: string) =>
+  ({ id, machine_id, title, schedule: "interval", interval_n: 1, interval_unit: "month", next_due_on, snooze_until: null, archived: 0 }) as UpkeepItem;
+/** The overview the Upkeep page and its sidebar badge read, built by the real code. */
+const overviewOf = (items: UpkeepItem[]) =>
+  buildUpkeepOverview({
+    items,
+    machines,
+    consumables: [],
+    subscriptions: [],
+    todayISO: "2026-11-07",
+    soonDays: 7,
+    warrantyWindowDays: 30,
+    renewalWindowDays: 14,
+  });
 
 const renderPage = () => render(<MemoryRouter><NetworkPage /></MemoryRouter>);
 
@@ -51,7 +64,7 @@ beforeEach(() => {
   useAppStore.setState({ language: "EN", testMode: false, presentationMode: false });
   machines = [m(1, "Server A"), m(2, "Server B")];
   links = [l(1, 1, "Files", "https://files.example.test"), l(2, 1, "Wiki", "https://wiki.example.test"), l(3, 2, "Feeds", "https://feeds.example.test")];
-  due = [];
+  overview = emptyOverview();
   tm = null;
   networkCheck.mockReset();
   networkCheck.mockImplementation(async () => []);
@@ -110,12 +123,47 @@ describe("NetworkPage", () => {
     expect(notifySpy).not.toHaveBeenCalled();
   });
 
-  it("Upkeep due lists only the due items of machines on the page", () => {
-    const other = m(9, "Elsewhere");
-    due = [dueRow(1, machines[0], "Swap the drive"), dueRow(2, other, "Dust the fan")];
-    renderPage();
-    expect(screen.getByText("Swap the drive")).toBeTruthy();
-    expect(screen.queryByText("Dust the fan")).toBeNull();
+  // R4U: the card used to keep only machines with a Network card, so an overdue item on a
+  // machine without links showed "Nothing due" while the Upkeep badge said 1.
+  describe("Upkeep due agrees with the Upkeep badge", () => {
+    const printer = m(3, "Printer");
+    const rowsIn = () => {
+      const card = screen.getByText("Upkeep due").closest("section") as HTMLElement;
+      return { card, overdue: within(card).queryAllByText("Overdue").length, soon: within(card).queryAllByText("Due soon").length };
+    };
+    beforeEach(() => {
+      machines = [...machines, printer];
+    });
+
+    it("overdue: lists the item, even on a machine without a Network card", () => {
+      overview = overviewOf([item(1, printer.id, "Lubricate rods", "2026-11-02")]);
+      renderPage();
+      const { card, overdue, soon } = rowsIn();
+      expect(overview.overdueCount).toBe(1);
+      expect(overdue).toBe(overview.overdueCount);
+      expect(soon).toBe(0);
+      expect(within(card).getByText("Lubricate rods")).toBeTruthy();
+    });
+
+    it("due soon: lists the item, the badge stays at 0", () => {
+      overview = overviewOf([item(1, 1, "Swap the drive", "2026-11-10")]);
+      renderPage();
+      const { card, overdue, soon } = rowsIn();
+      expect(overview.overdueCount).toBe(0);
+      expect(overdue).toBe(0);
+      expect(soon).toBe(1);
+      expect(within(card).getByText("Swap the drive")).toBeTruthy();
+    });
+
+    it("none: says Nothing due when nothing is overdue or due soon", () => {
+      overview = overviewOf([item(1, printer.id, "Dust the fan", "2026-12-31")]);
+      renderPage();
+      const { card, overdue, soon } = rowsIn();
+      expect(overview.overdueCount).toBe(0);
+      expect(overdue + soon).toBe(0);
+      expect(within(card).getByText("Nothing due")).toBeTruthy();
+      expect(within(card).queryByText("Dust the fan")).toBeNull();
+    });
   });
 });
 
