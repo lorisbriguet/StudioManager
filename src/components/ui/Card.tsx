@@ -33,7 +33,8 @@ export type CardTone = "surface" | "inset" | "dashed";
 const PADDING: Record<CardPadding, string> = { none: "", sm: "p-3", md: "p-4" };
 
 const TONE: Record<CardTone, string> = {
-  surface: "bg-[var(--color-surface)]",
+  // The edge shows the card in light themes, where the surface is the page's white.
+  surface: "bg-[var(--color-surface)] border border-[var(--color-border)]",
   inset: "bg-[var(--color-surface)] border border-[var(--color-border-divider)]",
   dashed: "border border-dashed border-[var(--color-input-border)]",
 };
@@ -46,7 +47,8 @@ const INTERACTIVE_LINK = "relative cursor-pointer transition-colors hover:bg-[va
 export const CARD_LINK = "card-link";
 /** On the controls of an interactive="link" card, so they sit above the stretched link. */
 export const CARD_CONTROL = "relative z-10";
-const SELECTED = "bg-[var(--color-hover-row)] outline outline-1 outline-accent";
+// The transparent border keeps a selected card the size of the others.
+const SELECTED = "bg-[var(--color-hover-row)] border border-transparent outline outline-1 outline-accent";
 
 interface CardProps extends HTMLAttributes<HTMLDivElement> {
   children: ReactNode;

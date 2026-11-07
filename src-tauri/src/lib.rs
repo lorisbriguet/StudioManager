@@ -1077,6 +1077,7 @@ pub fn run() {
             agents::routines::routines_open_folder,
             menubar::menubar_open_main,
             menubar::menubar_hide,
+            menubar::main_ready,
         ])
         .setup(|app| {
             let handle = app.handle();
@@ -1093,10 +1094,10 @@ pub fn run() {
             agent_access::start_poller(handle);
             agents::init(handle);
             // The main window is created hidden (no flash at login). Started at login with
-            // the menu bar on: it stays hidden; otherwise show it.
+            // the menu bar on: it stays hidden; otherwise it opens once its page has painted.
             let keep_running = menubar::keep_running(handle);
             if !(menubar::started_hidden() && keep_running) {
-                menubar::show_main(handle);
+                menubar::show_main_when_ready(handle);
             }
             // On the main thread, before any command can run: the lock is free.
             menubar::sync_tray(handle, keep_running, &agents::cli::lock_settings());

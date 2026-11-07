@@ -107,11 +107,13 @@ export function QuickCreate() {
   const navigate = useNavigate();
   const t = useT();
 
+  // Short labels under the "Quick Create" title, so the four fit one line each; the
+  // full "New …" name is the accessible name.
   const items = [
-    { label: t.new_invoice, icon: ICONS.invoice, to: "/invoices/new" },
-    { label: t.new_quote, icon: ICONS.quote, to: "/quotes/new" },
-    { label: t.new_expense, icon: ICONS.expense, to: "/expenses" },
-    { label: t.new_project, icon: ICONS.newProject, to: "/projects" },
+    { label: t.quick_create_invoice, name: t.new_invoice, icon: ICONS.invoice, to: "/invoices/new" },
+    { label: t.quick_create_quote, name: t.new_quote, icon: ICONS.quote, to: "/quotes/new" },
+    { label: t.quick_create_expense, name: t.new_expense, icon: ICONS.expense, to: "/expenses" },
+    { label: t.quick_create_project, name: t.new_project, icon: ICONS.newProject, to: "/projects" },
   ];
 
   return (
@@ -123,10 +125,11 @@ export function QuickCreate() {
             key={item.to}
             type="button"
             onClick={() => navigate(item.to)}
-            className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg bg-[var(--color-input-bg)] hover:bg-[var(--color-hover-row)] transition-colors"
+            aria-label={item.name}
+            className="flex items-center gap-2 min-w-0 px-3 py-2 text-sm rounded-lg bg-[var(--color-input-bg)] hover:bg-[var(--color-hover-row)] transition-colors"
           >
             <item.icon size={ICON_SIZE.callout} className="text-muted shrink-0" />
-            <span className="min-w-0 text-left leading-tight">{item.label}</span>
+            <span className="min-w-0 truncate">{item.label}</span>
           </button>
         ))}
       </div>

@@ -4,7 +4,7 @@ import type { Layout } from "react-grid-layout";
 import { ChevronDown, Lock } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useClients } from "../db/hooks/useClients";
-import { useDashboardStore, WIDGET_CATALOG, DASHBOARD_BREAKPOINTS, DASHBOARD_COLS, isFullWidthLayout, type WidgetType, type DashboardWidget } from "../stores/dashboard-store";
+import { useDashboardStore, WIDGET_CATALOG, DASHBOARD_BREAKPOINTS, DASHBOARD_COLS, isFullWidthLayout, presetJson, presetLayout, type WidgetType, type DashboardWidget } from "../stores/dashboard-store";
 import type { LayoutItem } from "react-grid-layout";
 import { renderWidget } from "../components/dashboard/widgets";
 import { ErrorBoundary } from "react-error-boundary";
@@ -51,15 +51,15 @@ function PresetDropdown() {
 
   const handleLoadPreset = (preset: { id: number; name: string; layout_json: string }) => {
     try {
-      const parsed = JSON.parse(preset.layout_json) as { widgets: DashboardWidget[]; layout: LayoutItem[] };
-      setActivePreset(preset.id, preset.name, parsed.widgets, parsed.layout);
+      const parsed = JSON.parse(preset.layout_json) as { widgets: DashboardWidget[]; layout: LayoutItem[]; cols?: number };
+      setActivePreset(preset.id, preset.name, parsed.widgets, presetLayout(parsed));
     } catch { /* ignore parse errors */ }
     setOpen(false);
     setSaving(false);
   };
 
   const handleSave = async (name: string) => {
-    const layoutJson = JSON.stringify({ widgets, layout });
+    const layoutJson = presetJson(widgets, layout);
     const newId = await createPreset.mutateAsync({ name, layoutJson });
     setActivePreset(newId, name, widgets, layout);
     setSaving(false);
@@ -68,7 +68,7 @@ function PresetDropdown() {
 
   const handleUpdate = async () => {
     if (activePresetId === null) return;
-    const layoutJson = JSON.stringify({ widgets, layout });
+    const layoutJson = presetJson(widgets, layout);
     try {
       await updatePreset.mutateAsync({ id: activePresetId, data: { layout_json: layoutJson } });
     } catch {

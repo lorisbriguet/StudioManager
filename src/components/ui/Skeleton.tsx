@@ -70,7 +70,7 @@ export function CardGridSkeleton({ cards = 6, className = "" }: { cards?: number
   return (
     <div aria-busy="true" className={`grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4 ${className}`}>
       {Array.from({ length: cards }).map((_, i) => (
-        <div key={i} className="rounded-xl bg-[var(--color-surface)] p-4 flex flex-col gap-3">
+        <div key={i} className="rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] p-4 flex flex-col gap-3">
           <Skeleton width={CYCLE[i % CYCLE.length]} height={14} />
           <Skeleton width="40%" height={10} />
           <Skeleton height={6} rounded="full" />

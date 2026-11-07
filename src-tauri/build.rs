@@ -87,6 +87,7 @@ const COMMANDS: &[&str] = &[
     "routines_open_folder",
     "menubar_open_main",
     "menubar_hide",
+    "main_ready",
 ];
 
 fn main() {

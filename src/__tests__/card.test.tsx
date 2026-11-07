@@ -17,9 +17,10 @@ describe("Card", () => {
     expect(screen.getByTestId("c").className).not.toContain("p-5");
   });
 
-  it("tones: surface fill, inset border, dashed transparent", () => {
+  it("tones: surface fill and edge, inset divider border, dashed transparent", () => {
     expect(cardClass()).toContain("bg-[var(--color-surface)]");
-    expect(cardClass()).not.toContain("border");
+    // Every theme: in light ones the surface is the page's white, the edge shows the card.
+    expect(cardClass()).toContain("border-[var(--color-border)]");
     expect(cardClass({ tone: "inset" })).toContain("border-[var(--color-border-divider)]");
     const dashed = cardClass({ tone: "dashed" });
     expect(dashed).toContain("border-dashed");

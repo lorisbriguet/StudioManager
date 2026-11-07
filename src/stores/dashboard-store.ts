@@ -137,7 +137,7 @@ const DEFAULT_WIDGETS: DashboardWidget[] = [
   { id: "w-upkeep", type: "upkeep" },
 ];
 
-const DEFAULT_LAYOUT: LayoutItem[] = [
+export const DEFAULT_LAYOUT: LayoutItem[] = [
   { i: "w-kpi-invoiced", x: 0, y: 0, w: 3, h: 2, minW: 2, minH: 2 },
   { i: "w-kpi-balance", x: 3, y: 0, w: 3, h: 2, minW: 2, minH: 2 },
   { i: "w-kpi-expenses", x: 6, y: 0, w: 3, h: 2, minW: 2, minH: 2 },
@@ -167,11 +167,56 @@ const WIDGETS_KEY = () => orgKey("dashboard-widgets");
 const NOTES_KEY = () => orgKey("dashboard-pinned-notes");
 const PRESET_ID_KEY = () => orgKey("dashboard-preset-id");
 const PRESET_NAME_KEY = () => orgKey("dashboard-preset-name");
+// Set once the saved layout has been checked for a squeezed 3.4.0 copy (no legacy
+// un-namespaced value exists, so it isn't in NAMESPACED_KEYS).
+const SPREAD_KEY = () => orgKey("dashboard-layout-spread");
+
+/** Columns of the saved layout, written into presets so old ones can be told apart. */
+const FULL_COLS = DASHBOARD_COLS.lg;
+
+/**
+ * v3.4.0 saved the copy the grid squeezed into a narrower window (10, 6 or 4
+ * columns) as the 12-column layout, which then filled only the left part of the
+ * dashboard. Stretches such a layout over the 12 columns, keeping each widget's
+ * order and proportion; a layout that reaches column 11 or 12 is returned as is.
+ */
+export function spreadSqueezedLayout(layout: LayoutItem[]): LayoutItem[] {
+  const edge = Math.max(0, ...layout.map((l) => l.x + l.w));
+  if (edge === 0 || edge > DASHBOARD_COLS.md) return layout;
+  const scale = (n: number) => Math.round((n * FULL_COLS) / edge);
+  return layout.map((item) => {
+    const x = scale(item.x);
+    const w = Math.min(FULL_COLS - x, Math.max(scale(item.x + item.w) - x, item.minW ?? 1));
+    return { ...item, x, w };
+  });
+}
+
+/** A preset's layout: presets saved before `cols` was written may be squeezed. */
+export function presetLayout(saved: { layout: LayoutItem[]; cols?: number }): LayoutItem[] {
+  return saved.cols === FULL_COLS ? saved.layout : spreadSqueezedLayout(saved.layout);
+}
+
+/** What a preset stores: widgets, layout and the layout's columns. */
+export function presetJson(widgets: DashboardWidget[], layout: LayoutItem[]): string {
+  return JSON.stringify({ widgets, layout, cols: FULL_COLS });
+}
 
 function loadLayout(): LayoutItem[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY());
-    return raw ? JSON.parse(raw) : DEFAULT_LAYOUT;
+    // Once per organisation: later layouts are saved at full width only, and one left
+    // narrow on purpose must not be stretched.
+    const checked = localStorage.getItem(SPREAD_KEY()) !== null;
+    if (!raw) {
+      if (!checked) localStorage.setItem(SPREAD_KEY(), "1");
+      return DEFAULT_LAYOUT;
+    }
+    const saved = JSON.parse(raw) as LayoutItem[];
+    if (checked) return saved;
+    const spread = spreadSqueezedLayout(saved);
+    if (spread !== saved) localStorage.setItem(STORAGE_KEY(), JSON.stringify(spread));
+    localStorage.setItem(SPREAD_KEY(), "1");
+    return spread;
   } catch {
     return DEFAULT_LAYOUT;
   }

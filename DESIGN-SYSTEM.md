@@ -267,7 +267,7 @@ Four shadows, as variables in `src/index.css` (`:root`, deeper in `.dark`), each
 
 In dark mode a dark shadow alone doesn't show on a dark page, so floating surfaces get a faint light edge.
 
-Cards have no shadow: they separate by their border.
+Cards have no shadow: they separate by their `--color-border` edge (see [Card](#card)).
 
 ---
 
@@ -441,7 +441,7 @@ Import them from the index, `src/components/ui/index.ts` (`from "../components/u
 ```tsx
 import { Card } from "../components/ui";
 
-<Card>Content</Card>                                  // rounded-xl, surface fill, 16px, no border
+<Card>Content</Card>                                  // rounded-xl, surface fill, 1px border edge, 16px
 <Card tone="inset" padding="sm">…</Card>              // a card inside a card
 <Card tone="dashed" padding="sm">…</Card>             // an add / draft box
 <Card interactive selected={open} onClick={…}>…</Card> // a clickable card
@@ -454,7 +454,7 @@ import { Card } from "../components/ui";
 
 - **`padding`:** `md` 16px (default), `sm` 12px (nested and compact cards), `none` (rows that touch the edges bring their own padding: SettingsCard, NamedTable, the dashboard widget frame). There is no 20px card.
 - **`tone`:**
-  - `surface` (default): the surface fill, no border.
+  - `surface` (default): the surface fill and a 1px `--color-border` edge, in every theme (in light themes the surface is the page's white, so the edge is what shows the card). A `selected` card keeps a transparent border, so it stays the same size.
   - `inset`: surface plus a 1px `border-divider` border. A card inside a card is **always** bordered (ClientDetail contacts and addresses, NamedTable in a project block, the link pickers of project blocks).
   - `dashed`: transparent with a dashed `input-border` border, for add and draft boxes (contact and address drafts, "Add block").
 - **`interactive`:** hover tint (`hover-row`), pointer and the accent focus ring. On a div with `onClick` it adds `role="button"`, `tabIndex=0`, and Enter / Space click it (the key stops there, so a page-level list shortcut doesn't act twice). Use `as="button"` when the whole card is one action.
