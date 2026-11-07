@@ -31,3 +31,5 @@ schemars = "1"
 # flock(2) for the change log (std's File::lock needs Rust 1.89). Already in
 # the tree through tokio, mio and getrandom.
 libc = "0.2"
+# For migrate.rs, shared with the app (log::warn!); already in the tree.
+log = "0.4"

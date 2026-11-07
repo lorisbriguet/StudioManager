@@ -529,11 +529,18 @@ fn restore_snapshot_now(app: tauri::AppHandle) -> Result<(), String> {
         return Err("No snapshot found".to_string());
     }
 
+    restore_snapshot_file(&snapshot_db, &prod_db)
+}
+
+/// The snapshot survives updates, so it can be older than the app (migrate it
+/// after the restore) or, after a downgrade, newer (refuse it before).
+fn restore_snapshot_file(snapshot_db: &Path, prod_db: &Path) -> Result<(), String> {
+    migrate::refuse_newer_file(snapshot_db)?;
     // Online backup API: restores INTO the live DB with proper locking, so
     // open plugin connections keep working and see the restored content.
-    dbfiles::restore_db_file(&snapshot_db, &prod_db)
+    dbfiles::restore_db_file(snapshot_db, prod_db)
         .map_err(|e| format!("Failed to restore snapshot: {e}"))?;
-
+    migrate::migrate_db(prod_db)?;
     Ok(())
 }
 
@@ -1087,7 +1094,7 @@ pub fn run() {
             let (active, init_error) = startup_state(&app_dir, init_organisations(handle));
             if let Some(e) = &init_error {
                 // Surface loudly: the frontend cannot open any database without this.
-                eprintln!("[organisations] startup failed: {e}");
+                log::error!("[organisations] startup failed: {e}");
             }
             handle.manage(ActiveOrgState(Mutex::new(active)));
             handle.manage(InitError(Mutex::new(init_error)));
@@ -1537,6 +1544,68 @@ mod tests {
         assert_eq!(org.dir, dir);
         assert_eq!(org.db_path(), dir.join(DB_FILE));
         std::fs::remove_dir_all(&app).unwrap();
+    }
+
+    /// A database as 3.4.0 left it: migrations up to 010, no `meta` table.
+    fn db_at_version(path: &std::path::Path, version: i64) {
+        let conn = rusqlite::Connection::open(path).unwrap();
+        conn.execute_batch("CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL);").unwrap();
+        for m in migrate::MIGRATIONS.iter().filter(|m| m.version <= version) {
+            conn.execute_batch(m.sql).unwrap();
+            conn.execute("INSERT INTO schema_migrations (version, applied_at) VALUES (?1, datetime('now'))", [m.version]).unwrap();
+        }
+    }
+
+    fn schema_version(path: &std::path::Path) -> i64 {
+        rusqlite::Connection::open(path)
+            .unwrap()
+            .query_row("SELECT MAX(version) FROM schema_migrations", [], |r| r.get(0))
+            .unwrap()
+    }
+
+    #[test]
+    fn restoring_a_snapshot_from_3_4_0_migrates_it() {
+        let dir = tmp_dir("restore-old");
+        let (snap, prod) = (dir.join(SNAPSHOT_DB), dir.join(DB_FILE));
+        migrate::migrate_db(&prod).unwrap();
+        db_at_version(&snap, 10);
+
+        restore_snapshot_file(&snap, &prod).unwrap();
+
+        assert_eq!(schema_version(&prod), migrate::LATEST_VERSION);
+        let meta: i64 = rusqlite::Connection::open(&prod)
+            .unwrap()
+            .query_row("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='meta'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(meta, 1, "the restored file is missing the meta table");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_snapshot_from_a_newer_app_is_refused_and_the_database_kept() {
+        let dir = tmp_dir("restore-newer");
+        let (snap, prod) = (dir.join(SNAPSHOT_DB), dir.join(DB_FILE));
+        migrate::migrate_db(&prod).unwrap();
+        db_at_version(&snap, migrate::LATEST_VERSION);
+        rusqlite::Connection::open(&snap)
+            .unwrap()
+            .execute("INSERT INTO schema_migrations (version, applied_at) VALUES (?1, 'x')", [migrate::LATEST_VERSION + 1])
+            .unwrap();
+        rusqlite::Connection::open(&prod)
+            .unwrap()
+            .execute("INSERT INTO clients (id, name) VALUES ('c1', 'kept')", [])
+            .unwrap();
+
+        let err = restore_snapshot_file(&snap, &prod).unwrap_err();
+
+        assert!(err.contains(migrate::DB_NEWER_THAN_APP), "{err}");
+        assert_eq!(schema_version(&prod), migrate::LATEST_VERSION);
+        let kept: i64 = rusqlite::Connection::open(&prod)
+            .unwrap()
+            .query_row("SELECT COUNT(*) FROM clients WHERE name = 'kept'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(kept, 1, "the live database was overwritten");
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
