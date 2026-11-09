@@ -4,13 +4,15 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 // startup error until retry_init runs the startup again, so Retry must ask for
 // that before it reloads, or the same error comes back forever.
 const calls: string[] = [];
-let retryResult: Promise<unknown> = Promise.resolve(null);
+// A function, so a rejected result is only created when retry_init is called:
+// a Promise.reject made up front counts as an unhandled rejection until then.
+let retryResult: () => Promise<unknown> = () => Promise.resolve(null);
 const exit = vi.fn();
 // api/core and plugin-process share one stub file in vitest.config.ts, so one mock serves both.
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn((cmd: string) => {
     calls.push(cmd);
-    return cmd === "retry_init" ? retryResult : Promise.resolve(null);
+    return cmd === "retry_init" ? retryResult() : Promise.resolve(null);
   }),
   exit: (code: number) => exit(code),
 }));
@@ -31,7 +33,7 @@ async function show(err: unknown) {
 
 beforeEach(() => {
   calls.length = 0;
-  retryResult = Promise.resolve(null);
+  retryResult = () => Promise.resolve(null);
   exit.mockReset();
   reload = vi.fn(() => calls.push("reload"));
   vi.spyOn(window, "location", "get").mockReturnValue({ ...window.location, reload } as Location);
@@ -51,7 +53,7 @@ describe("fatal overlay", () => {
   });
 
   it("still reloads when retry_init itself fails", async () => {
-    retryResult = Promise.reject(new Error("Lock error"));
+    retryResult = () => Promise.reject(new Error("Lock error"));
     const { button } = await show(new Error("database is locked"));
     button("Retry").click();
     await vi.waitFor(() => expect(reload).toHaveBeenCalledTimes(1));
