@@ -14,7 +14,7 @@ One line for the updater: what this release is about.
 ### Under the hood
 ```
 
-## 3.5.0 (2026-11-07)
+## 3.5.0 (2026-11-09)
 
 Archive clients, foreign-currency expenses, per-document language, safer backups and a new updater key: install this update before the next one.
 
