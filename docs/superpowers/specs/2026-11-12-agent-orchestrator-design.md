@@ -1,6 +1,6 @@
 # Agent orchestrator — design
 
-Date: 2026-11-12 · Status: **reviewed by Loris on 2026-11-12; two points still open** (see
+Date: 2026-11-12 · Status: **reviewed by Loris on 2026-11-12; one point still open** (see
 [Decisions and open questions](#open-questions)). No implementation plan yet.
 Mockups: [the four screens](../mockups/2026-11-12-agent-orchestrator.html) (open the file in a browser).
 
@@ -78,6 +78,7 @@ They are built in this order. Each is useful without the next.
 - The same field sits at the top of the menu bar panel's Agents tab *[call]*.
 - Captures are stored in the active organisation's database (new `captures` table) and listed in an **Inbox** tab
   of the Agents page.
+- From the phone: a reminder added to the inbox list in Apple Reminders becomes a capture (source `reminders`).
 - An agent can capture too, through a new `capture` tool, so "note this for later" works from any session.
 - The hotkey works only while the app is running (it already has to be, for the menu bar panel).
 
@@ -268,7 +269,7 @@ the hub's content staying where it is.
 
 New migration (numbered after the latest), per organisation database:
 
-- `captures`: id, text, created_at, source (`hotkey`, `menubar`, `agent`), status (`new`, `filed`, `dismissed`),
+- `captures`: id, text, created_at, source (`hotkey`, `menubar`, `agent`, `reminders`), status (`new`, `filed`, `dismissed`),
   task_id.
 - `tasks` and `subtasks`: `stage` (null, `briefed`, `ready`, `running`, `to_check`), `brief`, `result`.
 - `task_agents`: id, task_id or subtask_id, session_id, short_id, name, model, branch, pr_url, started_at,
@@ -318,24 +319,21 @@ Decided by Loris on 2026-11-12:
 - Agents on a second machine are out of this design. That machine is for agents that take control of the screen
   and for large renders, to keep the load off the main Mac; listing them gets its own design later.
 
+- Capture from the phone goes through **Apple Reminders**: a list named for the inbox. The app reads new
+  reminders from that list into the inbox and marks them completed, so the list stays empty. It works from the
+  phone, the watch, Siri and the share sheet, and syncs by itself. It needs the Reminders permission and arrives
+  only while the Mac is on and the app is open. Considered and set aside: a Shortcut writing to an iCloud Drive
+  file, a dedicated mail address, a small endpoint on the home server.
+
 Still open:
 
-1. **Capture from the phone.** Wanted. Four ways, none needing a new app:
-
-   | Way | How it works | For | Against |
-   |---|---|---|---|
-   | A reminders list *(recommended)* | A list named for the inbox in Apple Reminders. The app reads new reminders into the inbox and marks them completed. | Works from the phone, the watch, Siri and the share sheet; syncs by itself; the app already talks to the same system framework for the calendar | Needs the Reminders permission; arrives only when the Mac is on |
-   | A shortcut writing to a file | A Shortcut on the phone appends a line to a file in iCloud Drive that the app watches | One tap or one phrase; no permission beyond the folder | A shortcut to set up and keep working; sync delay |
-   | A mail address | A dedicated address the app checks | Works from any device and any person | A mail password to store; polling; spam |
-   | A small web endpoint on the home server | The phone posts to it over the private network; the app collects | Immediate, and can queue while the Mac is off | The most parts to keep running |
-
-2. **A hub's project and merging alone.** Left out until part 4 by the designer's call. Confirm, or allow it from
+1. **A hub's project and merging alone.** Left out until part 4 by the designer's call. Confirm, or allow it from
    the start.
 
 ## Build order
 
 1. Capture and briefing: `captures`, the hotkey and field, the Inbox tab, the brief session, Briefs entries.
-   Capture from the phone follows once its way is chosen.
+   Then capture from the phone through a Reminders list.
 2. A task carries its agent: `stage`, `task_agents`, brief and result, the chips and the open-task view.
 3. The watcher, the lead and "Needs you": the cap, the check command, question and check sessions, the leeway
    rules, the budget rule, the Stop hook, the end-of-day list of what the lead decided.
