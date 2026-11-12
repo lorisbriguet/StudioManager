@@ -80,6 +80,15 @@ The app checks when Agents start and then every hour. Days left are counted from
 
 A sign-in with no end date shows nothing: an API key, or a token from `claude setup-token` in `CLAUDE_CODE_OAUTH_TOKEN`. The studio Mac mini signs in that second way (its SSH sessions read the token from `~/.config/claude-oauth.env`), and for it `claude auth status` gives `loginExpiresAt: null`, so the app cannot show its end. These tokens last about a year. The renewal is tracked as an Upkeep item in StudioManager instead.
 
+## Capture from Reminders
+
+Turn on **Capture from Reminders** in Settings › Agents and name a list (**Inbox** by default). Every 2 minutes, and right after the Mac wakes, StudioManager reads the open reminders of that list, saves each as a capture (the title, then the notes), and ticks it in Reminders. A reminder added on your iPhone or Watch shows in the Inbox within a few minutes. It only works while StudioManager is open, and it waits while the organisation is in test or presentation mode.
+
+- The list must already exist in your **default** Reminders account, the one your phone shows. StudioManager never creates a list; if it is missing, Settings says so and names the account.
+- The first time, macOS asks to allow StudioManager to control Reminders (System Settings › Privacy & Security › Automation).
+- If Reminders is slow, StudioManager says "Reminders did not answer" and tries again on the next pass. A reminder is never captured twice, even when ticking it failed or you changed organisation in between.
+- Not in the demo build. Plan: [orchestrator part 1](superpowers/plans/2026-11-12-agent-orchestrator-1-capture.md).
+
 ## Morning brief comments
 
 The personal morning brief (the page the Start of day routine opens) lets you select a passage, write a note and **Send** it to the morning agent, which answers in its chat. StudioManager receives those comments, as AgentBar did before it:

@@ -58,6 +58,7 @@ permissions = [
   "allow-agents-set-menu-bar",
   "allow-agents-set-limit-alerts",
   "allow-agents-set-briefing",
+  "allow-agents-set-reminders",
   "allow-agents-briefing-folder",
   "allow-briefing-status",
   "allow-agents-status-line-preview",

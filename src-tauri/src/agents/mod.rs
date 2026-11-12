@@ -7,6 +7,7 @@ pub mod login;
 pub mod model;
 pub mod poller;
 pub mod projects;
+pub mod reminders;
 pub mod prompt;
 pub mod pty;
 pub mod routines;
@@ -69,6 +70,7 @@ pub fn init(handle: &tauri::AppHandle) {
     poller::start(handle);
     routines::schedule::start(handle);
     briefing::start(handle);
+    reminders::start(handle);
     // The morning brief's comments (see brief.rs); started by the Agents switch otherwise.
     if cli::read_settings(&handle.state::<AgentsState>().app_dir).enabled {
         brief::start(handle);

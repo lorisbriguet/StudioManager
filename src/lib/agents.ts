@@ -6,6 +6,10 @@ export interface AgentsInfo {
   limitAlerts: boolean;
   /** The brief session switch (Settings › Agents). */
   briefing: boolean;
+  /** Capture from an Apple Reminders list (Settings › Agents). */
+  reminders: boolean;
+  /** The list of the default Reminders account that is read. */
+  remindersList: string;
   claudePath: string | null;
 }
 
@@ -31,6 +35,45 @@ export function setAgentsMenuBar(on: boolean): Promise<AgentsInfo> {
 /** Turns the brief session on or off; the folder must be trusted before it is turned on. */
 export function setAgentsBriefing(on: boolean): Promise<AgentsInfo> {
   return invoke<AgentsInfo>("agents_set_briefing", { on });
+}
+
+/** What went wrong on the import that switching Reminders on ran at once. */
+export interface RemindersProblem {
+  kind: "not_found" | "denied" | "timeout" | "other";
+  list: string;
+  /** The default Reminders account's name (not_found only). */
+  account: string;
+  message: string;
+}
+
+export interface RemindersSet {
+  info: AgentsInfo;
+  problem: RemindersProblem | null;
+}
+
+/**
+ * Switches the Reminders capture on or off and saves the list. On: one import runs at once, so
+ * macOS asks to allow StudioManager to control Reminders while the person is looking.
+ */
+export function setAgentsReminders(on: boolean, list: string): Promise<RemindersSet> {
+  return invoke<RemindersSet>("agents_set_reminders", { on, list });
+}
+
+/** The text under the Reminders switch for a problem; the list and the account are named. */
+export function remindersProblemText(
+  p: RemindersProblem,
+  t: Record<"reminders_not_found" | "reminders_denied" | "reminders_timeout", string>,
+): string {
+  switch (p.kind) {
+    case "not_found":
+      return t.reminders_not_found.replace("{list}", p.list).replace("{account}", p.account);
+    case "denied":
+      return t.reminders_denied;
+    case "timeout":
+      return t.reminders_timeout;
+    default:
+      return p.message;
+  }
 }
 
 /** Makes the brief session's folder (its files included) and returns its path. */

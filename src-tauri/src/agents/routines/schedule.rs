@@ -168,7 +168,7 @@ fn check(app: &AppHandle, mem: &Arc<Mutex<Memory>>) {
 }
 
 /// Whether the wall clock moved on so much more than one slice that the Mac must have slept.
-fn woke(last_wall: i64, wall: i64) -> bool {
+pub(crate) fn woke(last_wall: i64, wall: i64) -> bool {
     wall - last_wall > (SLICE + WAKE_JUMP).as_millis() as i64
 }
 

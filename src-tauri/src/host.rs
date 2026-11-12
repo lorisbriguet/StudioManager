@@ -96,10 +96,10 @@ mod tests {
             let apple = f.ends_with("apple.rs");
             let lib = f.ends_with("lib.rs");
             for (name, body) in commands(&src) {
-                // apple.rs: only the calendar touches this Mac's data; the rest acts on a
+                // apple.rs: only the calendar and Reminders touch this Mac's data; the rest acts on a
                 // file the person picked. lib.rs: only the openers (Finder) leave the app;
                 // the rest works on the app's own data folder.
-                if (apple && !name.starts_with("calendar_")) || (lib && !name.starts_with("open_")) {
+                if (apple && !name.starts_with("calendar_") && !name.starts_with("reminders_")) || (lib && !name.starts_with("open_")) {
                     continue;
                 }
                 seen += 1;
@@ -139,6 +139,29 @@ mod tests {
             assert!(body[gate..script].contains("return Ok("), "{name}: the demo gate must return");
         }
         assert!(src.contains("pub(crate) const DEMO_CALENDAR: &str = \"Studio\";"));
+    }
+
+    /// Reminders: `reminders_open` and `reminders_complete` in apple.rs are plain functions, not
+    /// commands (the scan above would otherwise hold them to the gate), and both of their callers
+    /// check the demo before any of them runs: the loop's `check` first, the switch's command
+    /// before it saves or imports anything.
+    #[test]
+    fn demo_reminders_never_reach_osascript() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let apple = std::fs::read_to_string(root.join("apple.rs")).unwrap();
+        assert!(commands(&apple).iter().all(|(n, _)| !n.starts_with("reminders_")));
+        let loop_src = std::fs::read_to_string(root.join("agents/reminders.rs")).unwrap();
+        let check = &loop_src[loop_src.find("fn check(").unwrap()..];
+        assert!(check.find("is_demo(").unwrap() < check.find("run_now(").unwrap());
+        let cli = std::fs::read_to_string(root.join("agents/cli.rs")).unwrap();
+        let cmd = &cli[cli.find("pub async fn agents_set_reminders").unwrap()..];
+        let gate = cmd.find("is_demo(&app)").unwrap();
+        assert!(gate < cmd.find(" set_reminders(&app_dir").unwrap() && gate < cmd.find("run_now(").unwrap());
+        // Only the loop and the switch's command call the scripts.
+        for (file, src) in [("agents/cli.rs", &cli), ("agents/reminders.rs", &loop_src)] {
+            let n = src.matches("apple::reminders_").count();
+            assert_eq!(n, if file.ends_with("reminders.rs") { 2 } else { 0 }, "{file}");
+        }
     }
 
     /// The Finder opener is one of the scanned commands, so the scan above covers it.

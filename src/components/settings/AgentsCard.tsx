@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { SettingRow, SettingsCard } from "../ui/Settings";
 import { Toggle } from "../ui/Toggle";
 import { Button } from "../ui/Button";
+import { Input } from "../ui/Input";
 import { FormActions } from "../ui/Form";
 import { useConfirm } from "../../lib/confirm";
 import { useAppStore } from "../../stores/app-store";
@@ -24,6 +25,9 @@ import {
   setAgentsEnabled,
   setAgentsLimitAlerts,
   setAgentsMenuBar,
+  setAgentsReminders,
+  remindersProblemText,
+  type RemindersProblem,
   statusLinePreview,
   type AgentsInfo,
   type StatusLinePreview,
@@ -37,6 +41,9 @@ export function AgentsCard() {
   const setStoreEnabled = useAppStore((s) => s.setAgentsEnabled);
   const [info, setInfo] = useState<AgentsInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // The list field, saved when it loses focus; the problem of the last import under the switch.
+  const [remindersList, setRemindersList] = useState("Inbox");
+  const [remindersProblem, setRemindersProblem] = useState<RemindersProblem | null>(null);
   // Plan-limits status line: the latest preview, which change is shown for confirmation.
   const [line, setLine] = useState<StatusLinePreview | null>(null);
   const [lineMode, setLineMode] = useState<"install" | "remove" | null>(null);
@@ -46,7 +53,7 @@ export function AgentsCard() {
   useEffect(() => {
     let cancelled = false;
     getAgentsSettings()
-      .then((i) => { if (!cancelled) { setInfo(i); setStoreEnabled(i.enabled); } })
+      .then((i) => { if (!cancelled) { setInfo(i); setRemindersList(i.remindersList); setStoreEnabled(i.enabled); } })
       .catch((e) => { if (!cancelled) setError(msg(e)); });
     return () => { cancelled = true; };
   }, [setStoreEnabled]);
@@ -165,6 +172,20 @@ export function AgentsCard() {
     }
   };
 
+  /** Switch on or off, or save another list; switching on imports at once (the permission question). */
+  const saveReminders = async (on: boolean, list: string) => {
+    setError(null);
+    setRemindersProblem(null);
+    try {
+      const res = await setAgentsReminders(on, list);
+      setInfo(res.info);
+      setRemindersList(res.info.remindersList);
+      setRemindersProblem(res.problem);
+    } catch (e) {
+      setError(msg(e));
+    }
+  };
+
   const toggleMenuBar = async (on: boolean) => {
     if (!(await run(() => setAgentsMenuBar(on))) || on) return;
     await offerRemoval();
@@ -217,6 +238,30 @@ export function AgentsCard() {
       {briefingLines(briefing, t, now).map((l) => (
         <p key={l.text} className={`text-xs py-1 ${l.warn ? "text-warning-text" : "text-muted"}`}>{l.text}</p>
       ))}
+      <SettingRow label={t.reminders_switch} desc={t.reminders_desc}>
+        <Toggle
+          checked={!demo && (info?.reminders ?? false)}
+          disabled={!info || !info.enabled}
+          ariaLabel={t.reminders_switch}
+          onChange={(on) => void saveReminders(on, remindersList)}
+        />
+      </SettingRow>
+      <SettingRow label={t.reminders_list}>
+        <Input
+          value={remindersList}
+          disabled={!info || !info.enabled}
+          aria-label={t.reminders_list}
+          onChange={(e) => setRemindersList(e.target.value)}
+          onBlur={() => {
+            if (info && remindersList.trim() !== info.remindersList) {
+              void saveReminders(info.reminders, remindersList);
+            }
+          }}
+        />
+      </SettingRow>
+      {remindersProblem && (
+        <p role="alert" className="text-xs text-warning-text py-1">{remindersProblemText(remindersProblem, t)}</p>
+      )}
       {showLine && (
         <SettingRow label={t.agents_status_line} desc={t.agents_status_line_desc}>
           <div className="flex gap-2">
