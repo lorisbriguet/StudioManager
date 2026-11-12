@@ -8,7 +8,7 @@
 
 use crate::guard::{self, AccessConfig, Org};
 use crate::orgs::Registry;
-use crate::write::{ProjectChanges, SubtaskChanges, TaskChanges};
+use crate::write::{Filing, ProjectChanges, SubtaskChanges, TaskChanges};
 use crate::upkeep::{ConsumableFields, MachineFields, SubscriptionChanges};
 use crate::{money, read, upkeep, write};
 use chrono::{Datelike, Local};
@@ -539,6 +539,57 @@ pub struct UpdateSubscriptionInput {
     pub notes: Option<String>,
 }
 
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CaptureInput {
+    /// Organisation id or name. Default: the active organisation.
+    pub org: Option<String>,
+    /// The thought, in the user's words.
+    pub text: String,
+    /// Project name or id, as a hint only.
+    pub project: Option<String>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ListCapturesInput {
+    /// Organisation id or name. Default: the active organisation.
+    pub org: Option<String>,
+    /// new (default), filed or dismissed.
+    pub status: Option<String>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct FileCaptureInput {
+    /// Organisation id or name. Default: the active organisation.
+    pub org: Option<String>,
+    pub capture_id: i64,
+    /// Project name or id. Leave it out to keep the capture in the inbox (then reason is required).
+    pub project: Option<String>,
+    /// Id of an open task of that project: the capture becomes a subtask of it. Leave it out for a new task.
+    pub task: Option<i64>,
+    /// Title of the new task or subtask (required with project).
+    pub title: Option<String>,
+    /// What to do, what done looks like, what is unclear (required with project).
+    pub brief: Option<String>,
+    /// note, needs_word or ready (required with project).
+    pub outcome: Option<String>,
+    /// Why no project fits (required without project).
+    pub reason: Option<String>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SetBriefInput {
+    /// Organisation id or name. Default: the active organisation.
+    pub org: Option<String>,
+    /// Exactly one of task_id and subtask_id.
+    pub task_id: Option<i64>,
+    pub subtask_id: Option<i64>,
+    pub brief: String,
+}
+
 // ── Plumbing ─────────────────────────────────────────────────
 
 fn ok(v: Value) -> CallToolResult {
@@ -937,6 +988,60 @@ impl Server {
             };
             write_in(d, p.org.as_deref(), |d, o| {
                 write::update_subtask(d, o, p.subtask_id, &changes)
+            })
+        })
+        .await
+    }
+
+    #[tool(
+        description = "Save a thought for later in the StudioManager inbox, without choosing where it goes. Use when the user says to note something for later."
+    )]
+    async fn capture(&self, Parameters(p): Parameters<CaptureInput>) -> CallToolResult {
+        self.run(move |d| {
+            write_in(d, p.org.as_deref(), |d, o| {
+                write::capture(d, o, &p.text, p.project.as_deref())
+            })
+        })
+        .await
+    }
+
+    #[tool(description = "List captures in the inbox (new by default).")]
+    async fn list_captures(&self, Parameters(p): Parameters<ListCapturesInput>) -> CallToolResult {
+        self.run(move |d| {
+            read_in(d, p.org.as_deref(), |c| {
+                read::list_captures(c, p.status.as_deref())
+            })
+        })
+        .await
+    }
+
+    #[tool(
+        description = "File a new capture under a project as a task or a subtask with a brief, or leave it in the inbox with a reason when no project fits."
+    )]
+    async fn file_capture(&self, Parameters(p): Parameters<FileCaptureInput>) -> CallToolResult {
+        self.run(move |d| {
+            let filing = Filing {
+                project: p.project,
+                task: p.task,
+                title: p.title,
+                brief: p.brief,
+                outcome: p.outcome,
+                reason: p.reason,
+            };
+            write_in(d, p.org.as_deref(), |d, o| {
+                write::file_capture(d, o, p.capture_id, &filing)
+            })
+        })
+        .await
+    }
+
+    #[tool(
+        description = "Write the brief of a task or subtask: what to do, what done looks like, what is unclear."
+    )]
+    async fn set_brief(&self, Parameters(p): Parameters<SetBriefInput>) -> CallToolResult {
+        self.run(move |d| {
+            write_in(d, p.org.as_deref(), |d, o| {
+                write::set_brief(d, o, p.task_id, p.subtask_id, &p.brief)
             })
         })
         .await
@@ -1391,13 +1496,13 @@ mod tests {
         let dir = crate::test_support::ready_dir("org-a", "Studio A");
         assert_eq!(
             Server::new(Ok(dir.clone())).tool_router.list_all().len(),
-            35
+            39
         );
         crate::test_support::allow_listed(&dir, true, &[]);
-        assert_eq!(Server::new(Ok(dir)).tool_router.list_all().len(), 40);
+        assert_eq!(Server::new(Ok(dir)).tool_router.list_all().len(), 44);
         assert_eq!(
             Server::new(Err("x".into())).tool_router.list_all().len(),
-            35
+            39
         );
     }
 

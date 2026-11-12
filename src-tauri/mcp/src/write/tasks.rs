@@ -1,6 +1,6 @@
 use super::*;
 
-fn task_result(conn: &Connection, org: &Org, id: i64) -> R<TaskResult> {
+pub(super) fn task_result(conn: &Connection, org: &Org, id: i64) -> R<TaskResult> {
     db(conn
         .query_row(
             "SELECT t.id, t.title, t.status, t.priority, t.due_date, t.project_id, p.name \
@@ -23,7 +23,7 @@ fn task_result(conn: &Connection, org: &Org, id: i64) -> R<TaskResult> {
     .ok_or_else(|| format!("No task with id {id}."))
 }
 
-fn subtask_result(conn: &Connection, org: &Org, id: i64) -> R<SubtaskResult> {
+pub(super) fn subtask_result(conn: &Connection, org: &Org, id: i64) -> R<SubtaskResult> {
     db(conn
         .query_row(
             "SELECT s.id, s.title, s.status, s.due_date, s.task_id, t.title \

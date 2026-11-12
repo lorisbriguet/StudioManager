@@ -101,7 +101,7 @@ pub fn get_project(conn: &Connection, project: &str) -> R<ProjectDetail> {
     ))?;
 
     let mut tstmt = db(conn.prepare(
-        "SELECT id, title, status, priority, due_date FROM tasks WHERE project_id = ?1 \
+        "SELECT id, title, status, priority, due_date, brief, stage FROM tasks WHERE project_id = ?1 \
          ORDER BY sort_order ASC, id ASC",
     ))?;
     let mut tasks: Vec<Task> = db(tstmt
@@ -112,12 +112,14 @@ pub fn get_project(conn: &Connection, project: &str) -> R<ProjectDetail> {
                 status: r.get(2)?,
                 priority: r.get(3)?,
                 due_date: r.get(4)?,
+                brief: r.get(5)?,
+                stage: r.get(6)?,
                 subtasks: Vec::new(),
             })
         })
         .and_then(|rows| rows.collect::<rusqlite::Result<Vec<_>>>()))?;
     let mut sstmt = db(conn.prepare(
-        "SELECT id, title, status, due_date FROM subtasks WHERE task_id = ?1 \
+        "SELECT id, title, status, due_date, brief, stage FROM subtasks WHERE task_id = ?1 \
          ORDER BY sort_order ASC, id ASC",
     ))?;
     for t in &mut tasks {
@@ -128,6 +130,8 @@ pub fn get_project(conn: &Connection, project: &str) -> R<ProjectDetail> {
                     title: r.get(1)?,
                     status: r.get(2)?,
                     due_date: r.get(3)?,
+                    brief: r.get(4)?,
+                    stage: r.get(5)?,
                 })
             })
             .and_then(|rows| rows.collect::<rusqlite::Result<Vec<_>>>()))?;

@@ -12,7 +12,7 @@ pub fn list_tasks(
         None => None,
     };
     let mut stmt = db(conn.prepare(
-        "SELECT t.id, t.title, t.status, t.priority, t.due_date, p.id, p.name, c.name \
+        "SELECT t.id, t.title, t.status, t.priority, t.due_date, p.id, p.name, c.name, t.brief, t.stage \
          FROM tasks t JOIN projects p ON p.id = t.project_id JOIN clients c ON c.id = p.client_id \
          WHERE (?1 IS NULL OR t.project_id = ?1) \
            AND (?2 IS NULL OR t.status = ?2) \
@@ -30,6 +30,8 @@ pub fn list_tasks(
                 project_id: r.get(5)?,
                 project: r.get(6)?,
                 client: r.get(7)?,
+                brief: r.get(8)?,
+                stage: r.get(9)?,
             })
         })
         .and_then(|rows| rows.collect::<rusqlite::Result<Vec<_>>>()))?;

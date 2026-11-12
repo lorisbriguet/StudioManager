@@ -30,6 +30,10 @@ pub struct Subtask {
     pub title: String,
     pub status: String,
     pub due_date: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub brief: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stage: Option<String>,
 }
 
 #[derive(Serialize, Debug, Clone, PartialEq)]
@@ -39,6 +43,10 @@ pub struct Task {
     pub status: String,
     pub priority: Option<String>,
     pub due_date: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub brief: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stage: Option<String>,
     pub subtasks: Vec<Subtask>,
 }
 
@@ -75,6 +83,10 @@ pub struct TaskRow {
     pub project_id: i64,
     pub project: String,
     pub client: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub brief: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stage: Option<String>,
 }
 
 #[derive(Serialize, Debug, Clone, PartialEq)]
@@ -297,12 +309,14 @@ fn all_projects(conn: &Connection) -> R<Vec<ProjectRef>> {
     Ok(rows)
 }
 
+mod captures;
 mod clients;
 mod due;
 mod projects;
 mod tasks;
 mod wiki;
 
+pub use captures::list_captures;
 pub use clients::{get_client, list_clients};
 pub use due::{list_machines, whats_due};
 pub use projects::{find_project_for_folder, get_project, list_projects};
