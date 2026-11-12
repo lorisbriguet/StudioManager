@@ -13,6 +13,7 @@ import { TerminalPanel } from "../components/agents/TerminalPanel";
 import { StartAgentForm } from "../components/agents/StartAgentForm";
 import { LoginNotice } from "../components/agents/LoginNotice";
 import { InboxTab } from "../components/agents/InboxTab";
+import { NeedsYouTab } from "../components/agents/NeedsYouTab";
 
 const TABS = ["needs-you", "inbox", "all"] as const;
 type Tab = (typeof TABS)[number];
@@ -118,8 +119,11 @@ export function AgentsPage() {
               );
             })}
           </TabList>
-          {/* Task 6 fills the Needs you panel. */}
-          {tab === "needs-you" && <div role="tabpanel" id={panel.panel} aria-labelledby={panel.tab} className="flex-1 min-h-0" />}
+          {tab === "needs-you" && (
+            <div role="tabpanel" id={panel.panel} aria-labelledby={panel.tab} className="flex flex-1 min-h-0">
+              <NeedsYouTab />
+            </div>
+          )}
           {tab === "inbox" && (
             <div role="tabpanel" id={panel.panel} aria-labelledby={panel.tab} className="flex flex-1 min-h-0">
               <InboxTab />

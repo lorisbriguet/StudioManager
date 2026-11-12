@@ -33,6 +33,12 @@ vi.mock("../db/hooks/useCaptures", () => ({
   useRestoreCapture: () => ({ mutate: vi.fn() }),
   useBriefAgain: () => ({ mutate: vi.fn() }),
   useFileCaptureByHand: () => ({ mutate: vi.fn(), isPending: false }),
+  useKeepAsTask: () => ({ mutate: vi.fn() }),
+  useMarkStarted: () => ({ mutate: vi.fn() }),
+  useSetBrief: () => ({ mutate: vi.fn() }),
+}));
+vi.mock("../hooks/useStartAgentOn", () => ({
+  useStartAgentOn: () => ({ enabled: true, start: vi.fn(async () => false) }),
 }));
 vi.mock("../db/hooks/useProjects", () => ({ useProjects: () => ({ data: [] }) }));
 vi.mock("../db/hooks/useTasks", () => ({ useTasksByProject: () => ({ data: [] }) }));
@@ -164,10 +170,10 @@ describe("AgentsPage", () => {
     expect(screen.getByRole("tab", { name: "Inbox" })).toHaveAttribute("aria-selected", "true");
   });
 
-  it("shows an empty Needs you panel for ?tab=needs-you", async () => {
+  it("shows the Needs you panel for ?tab=needs-you", async () => {
     tabsSetup("/agents?tab=needs-you");
     const panel = await screen.findByRole("tabpanel");
-    expect(panel).toBeEmptyDOMElement();
+    expect(panel).toHaveTextContent("Nothing waits for you.");
     expect(screen.getByRole("tab", { name: "Needs you" })).toHaveAttribute("aria-selected", "true");
   });
 
