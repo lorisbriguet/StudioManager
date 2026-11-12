@@ -1,4 +1,5 @@
 pub mod actions;
+pub mod briefing;
 pub mod brief;
 pub mod capture;
 pub mod cli;
@@ -67,6 +68,7 @@ pub fn init(handle: &tauri::AppHandle) {
     handle.manage(AgentsState::new(app_dir));
     poller::start(handle);
     routines::schedule::start(handle);
+    briefing::start(handle);
     // The morning brief's comments (see brief.rs); started by the Agents switch otherwise.
     if cli::read_settings(&handle.state::<AgentsState>().app_dir).enabled {
         brief::start(handle);

@@ -4,6 +4,7 @@ import { MemoryRouter } from "react-router-dom";
 import { InboxTab } from "../components/agents/InboxTab";
 import { useAppStore } from "../stores/app-store";
 import type { CaptureRow } from "../db/queries/captures";
+import { setInvokeHandler } from "../__mocks__/tauri-api";
 
 const hooks = vi.hoisted(() => ({
   captures: { new: [] as unknown[], filed: [] as unknown[], dismissed: [] as unknown[] } as Record<string, unknown[]>,
@@ -79,6 +80,31 @@ describe("InboxTab", () => {
     hooks.restore.mockReset();
     hooks.briefAgain.mockReset();
     hooks.fileByHand.mockReset();
+  });
+
+  it("shows when the next brief session runs, or why it waits", async () => {
+    setInvokeHandler((cmd) =>
+      cmd === "briefing_status"
+        ? { paused: "too_soon", percent: null, nextAt: Date.now() + 4 * 60_000 - 1000, running: false, last: null }
+        : null,
+    );
+    setup();
+    expect(await screen.findByText("Next brief session in 4 min")).toBeInTheDocument();
+    setInvokeHandler(null);
+  });
+
+  it("says the briefs wait when agent access is off", async () => {
+    setInvokeHandler((cmd) =>
+      cmd === "briefing_status" ? { paused: "access_off", percent: null, nextAt: null, running: false, last: null } : null,
+    );
+    setup();
+    expect(await screen.findByText("Briefs wait: Agent access is off for this organisation")).toBeInTheDocument();
+    setInvokeHandler(null);
+  });
+
+  it("shows no line without a status", () => {
+    setup();
+    expect(screen.queryByText(/brief session/i)).toBeNull();
   });
 
   it("lists new captures with their source", () => {

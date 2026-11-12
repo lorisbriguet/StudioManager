@@ -8,8 +8,17 @@ import { useAppStore } from "../../stores/app-store";
 import { useT } from "../../i18n/useT";
 import { isDemoBuild } from "../../lib/demoBuild";
 import { captureHotkeyStatus } from "../../lib/captures";
+import { confirmTrust } from "../../lib/agentStart";
+import { useNow } from "../../hooks/useNow";
+import { useBriefingStatus } from "../../hooks/useBriefingStatus";
 import {
+  briefingFolder,
+  briefingLines,
   getAgentsSettings,
+  isInside,
+  setAgentsBriefing,
+  startFolders,
+  trustFolder,
   installStatusLine,
   removeStatusLine,
   setAgentsEnabled,
@@ -43,6 +52,8 @@ export function AgentsCard() {
   }, [setStoreEnabled]);
 
   const enabled = info?.enabled ?? false;
+  const now = useNow();
+  const briefing = useBriefingStatus(enabled && (info?.briefing ?? false));
   // Why Control-Option-Space is not registered (null: it is). Read again after each switch.
   const [hotkeyError, setHotkeyError] = useState<string | null>(null);
   useEffect(() => {
@@ -134,6 +145,26 @@ export function AgentsCard() {
     }
   };
 
+  /** On: make the folder, ask to trust it when Claude Code doesn't yet, then switch on. */
+  const toggleBriefing = async (on: boolean) => {
+    if (!on) {
+      await run(() => setAgentsBriefing(false));
+      return;
+    }
+    setError(null);
+    try {
+      const folder = await briefingFolder();
+      const folders = await startFolders();
+      if (!folders.some((f) => f.trusted && isInside(folder, f.path))) {
+        if (!(await confirmTrust(folder, false))) return;
+        await trustFolder(folder);
+      }
+      setInfo(await setAgentsBriefing(true));
+    } catch (e) {
+      setError(msg(e));
+    }
+  };
+
   const toggleMenuBar = async (on: boolean) => {
     if (!(await run(() => setAgentsMenuBar(on))) || on) return;
     await offerRemoval();
@@ -175,6 +206,17 @@ export function AgentsCard() {
           onChange={(on) => void run(() => setAgentsLimitAlerts(on))}
         />
       </SettingRow>
+      <SettingRow label={t.briefing_switch} desc={t.briefing_desc}>
+        <Toggle
+          checked={!demo && (info?.briefing ?? false)}
+          disabled={!info || !info.enabled}
+          ariaLabel={t.briefing_switch}
+          onChange={(on) => void toggleBriefing(on)}
+        />
+      </SettingRow>
+      {briefingLines(briefing, t, now).map((l) => (
+        <p key={l.text} className={`text-xs py-1 ${l.warn ? "text-warning-text" : "text-muted"}`}>{l.text}</p>
+      ))}
       {showLine && (
         <SettingRow label={t.agents_status_line} desc={t.agents_status_line_desc}>
           <div className="flex gap-2">

@@ -235,6 +235,24 @@ pub fn start(
     model: &str,
     name: &str,
 ) -> Result<String, String> {
+    start_with(cli, trusted, folder, task, model, name, &[])
+}
+
+/// `start` with extra `claude` arguments (flags and their values) placed after `--name` and
+/// before `--`. A lone `--` among them is refused: it would end the options early and turn
+/// what follows into the task.
+pub fn start_with(
+    cli: &dyn Cli,
+    trusted: &[String],
+    folder: &str,
+    task: &str,
+    model: &str,
+    name: &str,
+    extra: &[String],
+) -> Result<String, String> {
+    if extra.iter().any(|a| a == "--") {
+        return Err("Invalid extra argument".into());
+    }
     if !valid_model(model) {
         return Err("Unknown model".into());
     }
@@ -249,7 +267,9 @@ pub fn start(
     }
     let since = now_ms();
     // `--` ends the options: the task is never read as a flag.
-    let argv = args(&["--bg", "--model", model, "--name", name, "--", task]);
+    let mut argv = args(&["--bg", "--model", model, "--name", name]);
+    argv.extend(extra.iter().cloned());
+    argv.extend(args(&["--", task]));
     let out = cli.run_start(&argv, Path::new(folder));
     backgrounded(cli, &out, (name, folder), since, None, "Failed to start the agent")
 }
@@ -513,6 +533,28 @@ mod tests {
         assert_eq!(calls.len(), 1);
         assert_eq!(calls[0].0, args(&["--bg", "--model", "opus", "--name", "job", "--", "do it"]));
         assert_eq!(calls[0].1, PathBuf::from("/work/proj/"));
+    }
+
+    #[test]
+    fn start_with_puts_extra_arguments_before_the_double_dash() {
+        let cli = FakeCli::new(vec![ok("backgrounded · 0a1b2c3d\n")]);
+        let extra = args(&["--mcp-config", "/x/mcp.json", "--allowedTools", "a", "b"]);
+        start_with(&cli, &trusted(), "/work/proj", "do it", "opus", "job", &extra).unwrap();
+        assert_eq!(
+            cli.calls()[0].0,
+            args(&[
+                "--bg", "--model", "opus", "--name", "job", "--mcp-config", "/x/mcp.json",
+                "--allowedTools", "a", "b", "--", "do it"
+            ])
+        );
+    }
+
+    #[test]
+    fn start_with_refuses_a_lone_double_dash_in_the_extra_arguments() {
+        let cli = FakeCli::new(vec![]);
+        let extra = args(&["--strict-mcp-config", "--", "oops"]);
+        assert!(start_with(&cli, &trusted(), "/work/proj", "t", "opus", "job", &extra).is_err());
+        assert!(cli.calls().is_empty());
     }
 
     #[test]

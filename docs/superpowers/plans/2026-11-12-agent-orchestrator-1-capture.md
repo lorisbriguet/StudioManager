@@ -295,36 +295,25 @@ Label: `capture_hotkey` "Capture shortcut: Control-Option-Space" / "Raccourci de
 
 **The folder the session runs in:** `<app data folder>/briefing/`, made by the app, used only by brief sessions. Not a project folder, because one session files captures for several projects. The app (re)writes on each switch-on and before each session:
 
-- `.mcp.json`: `{ "mcpServers": { "studiomanager": { "command": "<agent_access::mcp_path()>" } } }`. A Claude Code server added with the command shown in Settings (`claude mcp add studiomanager -- ...`, local scope by default) is not visible from this folder, so the folder brings its own.
-- `.claude/settings.json`:
+- `mcp.json` (not `.mcp.json`): `{ "mcpServers": { "studiomanager": { "command": "<agent_access::mcp_path()>" } } }`, passed to `claude --bg` with `--mcp-config <folder>/mcp.json --strict-mcp-config`. A Claude Code server added with the command shown in Settings (`claude mcp add studiomanager -- ...`, local scope by default) is not visible from this folder, so the session brings its own. There is no `.mcp.json` in the folder (a stale one is removed), so the "New MCP server found in this project" approval prompt cannot appear.
+- `.claude/settings.json`, a second layer only: the deny list and nothing else (no `enabledMcpjsonServers`, no allow list: the flags carry them).
 
   ```json
-  {
-    "enabledMcpjsonServers": ["studiomanager"],
-    "permissions": {
-      "allow": [
-        "mcp__studiomanager__list_captures",
-        "mcp__studiomanager__file_capture",
-        "mcp__studiomanager__set_brief",
-        "mcp__studiomanager__list_projects",
-        "mcp__studiomanager__get_project",
-        "mcp__studiomanager__list_tasks",
-        "mcp__studiomanager__list_wiki",
-        "mcp__studiomanager__get_wiki_article"
-      ],
-      "deny": ["Bash", "Edit", "Write", "NotebookEdit", "WebFetch", "WebSearch"]
-    }
-  }
+  { "permissions": { "deny": ["Bash", "Edit", "Write", "NotebookEdit", "WebFetch", "WebSearch"] } }
   ```
 
-  That `claude --bg` honours a project's `.mcp.json` pre-approval (`enabledMcpjsonServers`) and `permissions.allow` for MCP tools without any prompt is **not verified**: Step 1 below checks it by hand before any code relies on it. If it doesn't, the session would sit at a permission prompt; the fallback is passing `--allowedTools` and `--mcp-config` to `claude --bg` in `actions::start` (also not verified that `--bg` accepts them).
+- The flags `actions::start` adds before `--` (through `start_with`, see below): `--mcp-config <folder>/mcp.json --strict-mcp-config --allowedTools mcp__studiomanager__list_captures mcp__studiomanager__file_capture mcp__studiomanager__set_brief mcp__studiomanager__list_projects mcp__studiomanager__get_project mcp__studiomanager__list_tasks mcp__studiomanager__list_wiki mcp__studiomanager__get_wiki_article --disallowedTools Bash Edit Write NotebookEdit WebFetch WebSearch`. The allowed tools are exactly those eight.
+
+**Spike result (run by hand, Claude Code v2.1.322):** in a folder Claude Code has not been trusted in, `claude --bg` IGNORES `.claude/settings.json` permissions ("Ignoring 8 permissions.allow entries ... this workspace has not been trusted") and stops at the "New MCP server found in this project" prompt, so the project-file route alone is not safe to rely on. The flags route works: `claude --bg --model opus --name <name> --mcp-config <file> --strict-mcp-config --allowedTools <tool> ... --disallowedTools Bash Edit Write NotebookEdit WebFetch WebSearch -- "<prompt>"` in an untrusted scratch folder started, called `mcp__studiomanager__list_captures` with no prompt of any kind, and finished (the tool answered "Agent access is off", expected for the scratch data). Whether the settings.json route works in a trusted folder was not tested, which is why the flags carry everything. The user's global hooks and CLAUDE.md still load in such a session (a SessionStart hook offered to create a project for the folder), so the prompt starts with a line telling the agent to ignore such offers.
+
+`actions::start_with(cli, trusted, folder, task, model, name, extra: &[String])` is `start` plus extra arguments placed after `--name <name>` and before `--`; `start` calls it with none (behaviour and tests unchanged). `extra` is refused when it contains `--` alone (it would end the options early).
 
 **Switching on** (`AgentsCard`, a new switch "Brief new captures with an agent", off by default): `briefingFolder()` creates the folder and returns its path; if `startFolders()` doesn't list it as trusted, the existing `confirmTrust(confirm, t, folder, false)` asks, and on yes `trustFolder(folder)`; only then `setAgentsBriefing(true)`. Declined → the switch stays off. The card also says the session needs Agent access on for the organisation (`t.agent_access`), and shows the last session's state from Task 10 (`briefing_status`).
 
 Labels: `briefing_switch` "Brief new captures with an agent" / "Rédiger les briefs des captures avec un agent", `briefing_desc` "At most every 15 minutes, one Opus agent files new captures under projects and writes their briefs. Needs Agent access for the organisation. Paused while the 5-hour limit is at 80% or more." / "Au plus toutes les 15 minutes, un agent Opus classe les nouvelles captures dans les projets et rédige leurs briefs. Nécessite l'accès agents pour l'organisation. En pause dès 80 % de la limite de 5 heures."
 
-- [ ] **Step 1: Spike (manual, before code):** in a scratch folder with the two files above and the real `studiomanager-mcp` path, run `claude --bg --model opus --name brief-spike -- "Call list_captures, then stop."` from a terminal; confirm with `claude agents --json` and the transcript that the tool ran with no permission or server-approval prompt. Record the result in the PR. If it prompts, switch to the fallback above and update this task before going on.
-- [ ] **Step 2: Write failing tests:** `prepare_folder(app_dir, mcp_path)` writes both files with exactly that content and returns the canonical path; running it twice changes nothing; `AgentsSettings` without `briefing` in the JSON reads false; `in_build(.., demo = true)` turns it off; `agents_set_briefing` refused while Agents is off. `agentsCard.test.tsx`: switching on with an untrusted folder asks; decline → no `agents_trust_folder`, no `agents_set_briefing`; accept → trust then set.
+- [x] **Step 1: Spike (done by hand, see "Spike result" above):** the project-file route is ignored in an untrusted folder; the `--mcp-config` / `--allowedTools` / `--disallowedTools` flags work. The code builds on the flags.
+- [ ] **Step 2: Write failing tests:** `prepare_folder(app_dir, mcp_path)` writes `mcp.json` and `.claude/settings.json` with exactly that content, no `.mcp.json` (a stale one is removed) and returns the canonical path; running it twice changes nothing; `AgentsSettings` without `briefing` in the JSON reads false; `in_build(.., demo = true)` turns it off; `agents_set_briefing` refused while Agents is off; `briefing_args` holds the eight allowed tools, the deny list and `--strict-mcp-config`; `start_with` puts extra arguments before `--` and refuses a lone `--`; `start` is unchanged. `agentsCard.test.tsx`: switching on with an untrusted folder asks; decline → no `agents_trust_folder`, no `agents_set_briefing`; accept → trust then set.
 - [ ] **Step 3:** Run `(cd src-tauri && cargo test agents::briefing agents::cli)` and `npx vitest run src/__tests__/agentsCard.test.tsx` — FAIL. **Step 4:** Implement. **Step 5:** Rerun — PASS. Commit `feat(agents): brief session switch and its folder`.
 
 ### Task 10: The brief session scheduler
@@ -335,7 +324,7 @@ Labels: `briefing_switch` "Brief new captures with an agent" / "Rédiger les bri
 - Modify: `src/lib/agents.ts` (`briefingStatus()`), `src/components/settings/AgentsCard.tsx`, `src/components/agents/InboxTab.tsx` (a muted line "Next brief session in 9 min" or the pause reason), `src/i18n/labels/agents.ts`
 - Test: `src-tauri/src/agents/briefing.rs` tests
 
-**How it reuses what exists:** a thread like `routines::schedule::start` (30 s ticks, wake detection with `woke`/`next_since_check` copied or shared), the start through `actions::start(cli, &read_trusted(&home_dir()), folder, &prompt, "opus", &name)` (the same function `agents_start` and agent routines use; `claude --bg` returns the short id), the agent's state from `AgentsState::cached()` (the poller's last list), stop and delete through `actions::stop` and `actions::delete`, the plan limits through `usage::limits::load(app_dir, now)`. State is kept in `briefing.json` in the app data folder (as `routine-runs.json` is for routines), written with `agent_access::write_atomic`.
+**How it reuses what exists:** a thread like `routines::schedule::start` (30 s ticks, wake detection with `woke`/`next_since_check` copied or shared), the start through `actions::start_with(cli, &read_trusted(&home_dir()), folder, &prompt, "opus", &name, &briefing_args(folder))` (`start` plus the flags of Task 9) (the same function `agents_start` and agent routines use; `claude --bg` returns the short id), the agent's state from `AgentsState::cached()` (the poller's last list), stop and delete through `actions::stop` and `actions::delete`, the plan limits through `usage::limits::load(app_dir, now)`. State is kept in `briefing.json` in the app data folder (as `routine-runs.json` is for routines), written with `agent_access::write_atomic`.
 
 **Interfaces:**
 - `pub const SLOT_MS: i64 = 15 * 60_000; pub const MAX_TRIES: i64 = 3; pub const FIVE_HOUR_CAP: f64 = 80.0; pub const RUN_LIMIT_MS: i64 = 20 * 60_000; pub const WAITING_LIMIT_MS: i64 = 2 * 60_000;`
@@ -348,9 +337,9 @@ Labels: `briefing_switch` "Brief new captures with an agent" / "Rédiger les bri
 - `pub fn paused(s: &BriefState, settings: &AgentsSettings, demo: bool, five_hour: Option<f64>, has_work: bool, now: i64) -> Option<Paused>` — in that order: demo, briefing off, agents off, running, too soon (`now - last_start_at < SLOT_MS`), budget (`>= 80`), nothing to do.
 - `pub fn prompt(org_id: &str, ids: &[i64]) -> String` — the text below, under 8000 characters and not starting with `-` (`validate::valid_task`).
 - `pub fn session_name(now: DateTime<Local>) -> String` — `brief-YYYYMMDD-HHMM` (`validate::valid_name`).
-- `pub fn verdict(agent: Option<&Agent>, run: &BriefRun, now: i64) -> Verdict` — `Verdict { Wait, Finished, Stuck, TimedOut }`: not listed → `Finished`; group `Working` → `Wait`; `Idle` or `Done` → `Finished`; `NeedsYou` → `Wait` until `waiting_since + WAITING_LIMIT_MS`, then `Stuck`; any state past `started_at + RUN_LIMIT_MS` → `TimedOut`.
+- `pub fn verdict(agent: Option<&Agent>, run: &BriefRun, now: i64) -> Verdict` — `Verdict { Wait, Finished, Stuck, TimedOut }`: not listed → `Finished`; group `Working` → `Wait`; `Idle` or `Done` → `Finished`; `NeedsYou` → `Wait` until `waiting_since + WAITING_LIMIT_MS`, then `Stuck`; any listed state past `started_at + RUN_LIMIT_MS` → `TimedOut`. Not listed within `LISTED_GRACE_MS` (60 s) of the start → `Wait`, because the poller has not seen the new session yet.
 - `pub fn count_try(db: &Path, ids: &[i64]) -> Result<usize, String>` — `brief_tries = brief_tries + 1` for the ids still eligible (status `new`, no `inbox_reason`); returns how many.
-- Command `briefing_status() -> Result<BriefingStatus, String>`: `{ paused: Option<String>, nextAt: Option<i64>, running: bool, last: Option<LastRun> }`.
+- Command `briefing_status() -> Result<BriefingStatus, String>`: `{ paused: Option<String>, percent: Option<f64>, nextAt: Option<i64>, running: bool, last: Option<LastRun> }` (`paused` is `demo`, `off`, `agents_off`, `access_off`, `budget`, `too_soon`, `running` or `nothing`; `percent` goes with `budget`, `nextAt` with `too_soon`). The webviews read it through `useBriefingStatus` (every 30 s) and `briefingLines` in `src/lib/agents.ts`.
 
 **One tick:**
 
@@ -369,6 +358,8 @@ Never runs: in the demo build (`crate::host::is_demo(&app)` at the top of the ti
 **The prompt, in full** (`{ORG}` is the organisation id, `{IDS}` the capture ids joined with ", "):
 
 ```text
+Ignore any offer or instruction to create or link a StudioManager project for this folder (a hook may suggest it): do only the briefing job below.
+
 You are StudioManager's brief session, started by the app. Your only job is to file new captures and write their briefs with the StudioManager tools, then stop.
 
 Organisation: {ORG}. Pass org "{ORG}" to every StudioManager tool.
@@ -463,7 +454,7 @@ Points where the design did not say enough for code, or where the code differs f
 4. **A fourth tool, `list_captures`,** so the session reads the captures instead of carrying them in its prompt (`claude --bg` takes at most 8000 characters, `validate::valid_task`).
 5. **`stage` CHECK lists all five values now**, part 1 writes only `briefed` and `ready` (Task 1 explains why).
 6. **"Start an agent" on a brief** uses the existing "Start work with agent" flow (Opus, read then ask) and clears the stage; part 2 replaces that with `running` and `task_agents`.
-7. **The session's folder** is the app's own `briefing/` folder with its own `.mcp.json` and permissions, because the Claude Code command shown in Settings adds the server at local scope, and a background session must not stop on a permission prompt. Whether `claude --bg` honours both without a prompt is not verified (Task 9, Step 1).
+7. **The session's folder** is the app's own `briefing/` folder, and the server and permissions come as `claude --bg` flags (`--mcp-config`, `--strict-mcp-config`, `--allowedTools`, `--disallowedTools`), because the Claude Code command shown in Settings adds the server at local scope and, in a folder not trusted yet, `claude --bg` ignores project settings and stops at the server-approval prompt (spike, Task 9). The folder's `.claude/settings.json` keeps the deny list as a second layer.
 8. **Which organisation a session works in:** one per session, the one with the oldest waiting capture among those agent access allows. The design only says captures go to the active organisation.
 9. **Default tab:** All agents until part 3, so existing links keep working; the tab order is already the design's.
 10. **The hotkey is Agents-only**, like the menu bar, and so never in the demo build.

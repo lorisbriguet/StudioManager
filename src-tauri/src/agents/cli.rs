@@ -36,6 +36,9 @@ pub struct AgentsSettings {
     pub menu_bar: bool,
     /// Notifications when a usage window nears its limit.
     pub limit_alerts: bool,
+    /// The brief session: every 15 minutes at most, one Opus agent files new captures (see
+    /// briefing.rs). Needs `enabled`; off by default.
+    pub briefing: bool,
     /// Claude Code's `statusLine` before StudioManager's replaced it, restored on removal.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub previous_status_line: Option<serde_json::Value>,
@@ -43,7 +46,7 @@ pub struct AgentsSettings {
 
 impl Default for AgentsSettings {
     fn default() -> Self {
-        Self { enabled: false, menu_bar: false, limit_alerts: true, previous_status_line: None }
+        Self { enabled: false, menu_bar: false, limit_alerts: true, briefing: false, previous_status_line: None }
     }
 }
 
@@ -95,8 +98,20 @@ pub fn in_build(mut s: AgentsSettings, demo: bool) -> AgentsSettings {
     if demo {
         s.enabled = false;
         s.menu_bar = false;
+        s.briefing = false;
     }
     s
+}
+
+/// The brief session switch. Turning it on needs Agents on; turning it off never does.
+pub fn set_briefing(dir: &Path, on: bool) -> Result<(), String> {
+    update_settings(dir, |s| {
+        if on && !s.enabled {
+            return Err("Turn the Agents page on first".into());
+        }
+        s.briefing = on;
+        Ok(())
+    })
 }
 
 pub fn write_settings(dir: &Path, s: &AgentsSettings) -> Result<(), String> {
@@ -354,6 +369,7 @@ pub struct AgentsInfo {
     pub enabled: bool,
     pub menu_bar: bool,
     pub limit_alerts: bool,
+    pub briefing: bool,
     pub claude_path: Option<String>,
 }
 
@@ -373,6 +389,7 @@ fn info(app_dir: &Path, login: &super::pty::LoginCache) -> AgentsInfo {
         enabled: s.enabled,
         menu_bar: s.menu_bar,
         limit_alerts: s.limit_alerts,
+        briefing: s.briefing,
         // The demo doesn't look for this Mac's `claude`: the switch stays off and disabled.
         claude_path: if crate::host::running_demo() {
             None
@@ -419,6 +436,7 @@ pub async fn agents_set_enabled(
             let mut s = read_settings(&app_dir);
             s.enabled = enabled;
             if !enabled {
+                s.briefing = false;
                 // The menu bar is part of Agents: it goes off with it, and so does start at login.
                 s.menu_bar = false;
                 // Disabling never fails (best effort).
@@ -486,6 +504,24 @@ pub async fn agents_set_limit_alerts(
     .await
 }
 
+/// The brief session switch (Settings › Agents). The card asks for the folder's trust first.
+#[tauri::command]
+pub async fn agents_set_briefing(
+    state: tauri::State<'_, super::AgentsState>,
+    on: bool,
+) -> Result<AgentsInfo, String> {
+    super::actions::switched_on(&state)?;
+    let (app_dir, login) = (state.app_dir.clone(), state.login_cache());
+    super::pty::blocking(move || {
+        if on {
+            super::briefing::prepare_folder(&app_dir, &crate::agent_access::mcp_path())?;
+        }
+        set_briefing(&app_dir, on)?;
+        Ok(info(&app_dir, &login))
+    })
+    .await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -507,11 +543,36 @@ mod tests {
 
     #[test]
     fn demo_build_always_reads_agents_off() {
-        let on = AgentsSettings { enabled: true, menu_bar: true, limit_alerts: true, previous_status_line: None };
+        let on = AgentsSettings { enabled: true, menu_bar: true, limit_alerts: true, briefing: true, previous_status_line: None };
         let demo = in_build(on.clone(), true);
-        assert!(!demo.enabled && !demo.menu_bar);
+        assert!(!demo.enabled && !demo.menu_bar && !demo.briefing);
         assert!(demo.limit_alerts);
         assert_eq!(in_build(on.clone(), false), on);
+    }
+
+    #[test]
+    fn briefing_reads_off_when_missing_and_off_in_the_demo() {
+        let none: AgentsSettings = serde_json::from_str(r#"{"enabled":true}"#).unwrap();
+        assert!(!none.briefing);
+        let on = AgentsSettings { enabled: true, briefing: true, ..Default::default() };
+        assert!(!in_build(on.clone(), true).briefing);
+        assert!(in_build(on, false).briefing);
+    }
+
+    #[test]
+    fn set_briefing_is_refused_while_agents_is_off() {
+        let d = tmp("briefing-off");
+        assert!(set_briefing(&d, true).is_err());
+        assert!(!read_settings(&d).briefing);
+        write_settings(&d, &AgentsSettings { enabled: true, ..Default::default() }).unwrap();
+        set_briefing(&d, true).unwrap();
+        assert!(read_settings(&d).briefing);
+        set_briefing(&d, false).unwrap();
+        assert!(!read_settings(&d).briefing);
+        // Switching it off never needs Agents on.
+        write_settings(&d, &AgentsSettings { enabled: false, briefing: true, ..Default::default() }).unwrap();
+        set_briefing(&d, false).unwrap();
+        assert!(!read_settings(&d).briefing);
     }
 
     #[test]

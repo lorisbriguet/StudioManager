@@ -46,7 +46,7 @@ pub struct CaptureProject {
     pub client: String,
 }
 
-fn open(db: &Path) -> Result<Connection, String> {
+pub(super) fn open(db: &Path) -> Result<Connection, String> {
     let conn = Connection::open(db).map_err(|e| format!("Failed to open DB: {e}"))?;
     conn.pragma_update(None, "foreign_keys", true)
         .map_err(|e| format!("Failed to enable foreign_keys: {e}"))?;

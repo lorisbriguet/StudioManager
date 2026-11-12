@@ -6,6 +6,9 @@ import { useBriefAgain, useCaptures, useDismissCapture, useRestoreCapture } from
 import type { CaptureRow } from "../../db/queries/captures";
 import type { CaptureSource, CaptureStatus } from "../../types/capture";
 import { formatDisplayDateTime } from "../../utils/formatDate";
+import { briefingLines } from "../../lib/agents";
+import { useNow } from "../../hooks/useNow";
+import { useBriefingStatus } from "../../hooks/useBriefingStatus";
 import { Badge, Button, EmptyState, ICONS, SegmentedControl } from "../ui";
 import { FileCaptureForm } from "./FileCaptureForm";
 
@@ -32,6 +35,8 @@ export function InboxTab() {
   const dismiss = useDismissCapture();
   const restore = useRestoreCapture();
   const briefAgain = useBriefAgain();
+  const now = useNow();
+  const lines = briefingLines(useBriefingStatus(true), t, now);
   const filingRow = status === "new" ? rows.find((r) => r.id === filing) : undefined;
 
   return (
@@ -52,6 +57,9 @@ export function InboxTab() {
             ]}
           />
         </div>
+        {lines.map((l) => (
+          <p key={l.text} className={`text-xs mb-2 ${l.warn ? "text-warning-text" : "text-muted"}`}>{l.text}</p>
+        ))}
         {rows.length === 0 ? (
           <EmptyState icon={ICONS.inbox} message={status === "new" ? t.capture_inbox_empty : t.capture_none} />
         ) : (
