@@ -380,6 +380,7 @@ One icon per concept, so the same thing always looks the same. Use the `ICONS` k
 | Sort | `sortAsc` · `sortDesc` · `sortNone` | `ArrowUp` · `ArrowDown` · `ArrowUpDown` | |
 | Collapse / expand sidebar | `collapseSidebar` · `expandSidebar` | `PanelLeftClose` · `PanelLeftOpen` | |
 | Agents | `agents` | `Bot` | Agents page, Settings → Agents |
+| Inbox (captured thoughts) | `inbox` | `Inbox` | Agents page, Inbox tab |
 | Network | `network` | `Network` | Network page (opt-in, Settings → Behaviour) |
 | Studio upkeep | `upkeep` | `Wrench` | Upkeep page, Settings → Upkeep |
 | Graph | `graph` | `Waypoints` | The wiki graph, a link map |

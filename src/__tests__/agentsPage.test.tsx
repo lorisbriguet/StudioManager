@@ -24,6 +24,19 @@ import { logError } from "../lib/log";
 
 vi.mock("../lib/log", () => ({ logError: vi.fn(() => Promise.resolve()) }));
 
+// The Inbox and Needs you tabs read the database through these hooks.
+const capturesMock = vi.hoisted(() => ({ newCaptures: [] as unknown[], briefs: [] as unknown[] }));
+vi.mock("../db/hooks/useCaptures", () => ({
+  useCaptures: () => ({ data: capturesMock.newCaptures, isLoading: false }),
+  useBriefEntries: () => ({ data: capturesMock.briefs, isLoading: false }),
+  useDismissCapture: () => ({ mutate: vi.fn() }),
+  useRestoreCapture: () => ({ mutate: vi.fn() }),
+  useBriefAgain: () => ({ mutate: vi.fn() }),
+  useFileCaptureByHand: () => ({ mutate: vi.fn(), isPending: false }),
+}));
+vi.mock("../db/hooks/useProjects", () => ({ useProjects: () => ({ data: [] }) }));
+vi.mock("../db/hooks/useTasks", () => ({ useTasksByProject: () => ({ data: [] }) }));
+
 const label = {
   orgId: "o1",
   orgName: "Org",
@@ -58,6 +71,8 @@ describe("AgentsPage", () => {
   beforeEach(() => {
     clearInvokedCommands();
     useAppStore.setState({ agentsEnabled: true });
+    capturesMock.newCaptures = [];
+    capturesMock.briefs = [];
   });
 
   it("lists groups in order and shows the project label", async () => {
@@ -119,6 +134,84 @@ describe("AgentsPage", () => {
     await waitFor(() => expect(screen.getByTestId("location")).toHaveTextContent("?agent=sess-working"));
   });
 
+  const tabsSetup = (url: string, list: Agent[] = [agent("idle")]) => {
+    setInvokeHandler((cmd) => (cmd === "agents_list" ? list : []));
+    render(
+      <MemoryRouter initialEntries={[url]}>
+        <AgentsPage />
+        <LocationProbe />
+      </MemoryRouter>,
+    );
+  };
+
+  it("has the tabs Needs you, Inbox, All agents, in that order", async () => {
+    tabsSetup("/agents");
+    await screen.findByText("agent-idle");
+    expect(screen.getAllByRole("tab").map((x) => x.textContent)).toEqual(["Needs you", "Inbox", "All agents"]);
+  });
+
+  it("shows All agents without a tab parameter", async () => {
+    tabsSetup("/agents");
+    await screen.findByText("agent-idle");
+    expect(screen.getByRole("tab", { name: "All agents" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByText("Select an agent to see its conversation.")).toBeInTheDocument();
+  });
+
+  it("shows the Inbox for ?tab=inbox", async () => {
+    tabsSetup("/agents?tab=inbox");
+    expect(await screen.findByText(/Nothing captured/)).toBeInTheDocument();
+    expect(screen.queryByText("agent-idle")).not.toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Inbox" })).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("shows an empty Needs you panel for ?tab=needs-you", async () => {
+    tabsSetup("/agents?tab=needs-you");
+    const panel = await screen.findByRole("tabpanel");
+    expect(panel).toBeEmptyDOMElement();
+    expect(screen.getByRole("tab", { name: "Needs you" })).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("?agent= wins over ?tab=inbox", async () => {
+    tabsSetup("/agents?agent=sess-idle&tab=inbox");
+    await screen.findByRole("heading", { level: 2, name: /Idle/ });
+    expect(screen.getByRole("tab", { name: "All agents" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.queryByText(/Nothing captured/)).not.toBeInTheDocument();
+  });
+
+  it("?new=1 wins over ?tab=inbox and opens the start form", async () => {
+    tabsSetup("/agents?new=1&tab=inbox");
+    expect(await screen.findByRole("heading", { level: 2, name: /Idle/ })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "All agents" })).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("clicking a tab sets ?tab= with replace; All agents clears it", async () => {
+    tabsSetup("/agents");
+    await screen.findByText("agent-idle");
+    fireEvent.click(screen.getByRole("tab", { name: "Inbox" }));
+    expect(screen.getByTestId("location")).toHaveTextContent("?tab=inbox");
+    fireEvent.click(screen.getByRole("tab", { name: "Needs you" }));
+    expect(screen.getByTestId("location")).toHaveTextContent("?tab=needs-you");
+    fireEvent.click(screen.getByRole("tab", { name: "All agents" }));
+    expect(screen.getByTestId("location").textContent).toBe("");
+  });
+
+  it("shows plain counts on the Needs you and Inbox tabs", async () => {
+    capturesMock.newCaptures = [{ id: 1 }, { id: 2 }];
+    capturesMock.briefs = [{ capture_id: 3 }];
+    tabsSetup("/agents");
+    await screen.findByText("agent-idle");
+    expect(screen.getByRole("tab", { name: "Needs you 1" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Inbox 2" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "All agents" })).toBeInTheDocument();
+  });
+
+  it("New agent from another tab goes to All agents and opens the form", async () => {
+    tabsSetup("/agents?tab=inbox");
+    fireEvent.click(await screen.findByRole("button", { name: "New agent" }));
+    expect(screen.getByRole("tab", { name: "All agents" })).toHaveAttribute("aria-selected", "true");
+    expect(await screen.findByText("Folder")).toBeInTheDocument();
+  });
+
   it("says agents are off when the switch is off", () => {
     useAppStore.setState({ agentsEnabled: false });
     setInvokeHandler(() => {
@@ -133,6 +226,7 @@ describe("AgentsPage", () => {
     // The same shell as when it is on: the page title and the (disabled) New agent button.
     expect(screen.getByRole("heading", { level: 1, name: "Agents" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "New agent" })).toBeDisabled();
+    expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
   });
 });
 

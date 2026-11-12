@@ -25,6 +25,11 @@ vi.mock("@tauri-apps/plugin-dialog", async (orig) => ({
 }));
 const mutateAsync = vi.hoisted(() => vi.fn(async () => {}));
 vi.mock("../db/hooks/useProjects", () => ({ useUpdateProject: () => ({ mutateAsync }) }));
+// The Agents page counts captures on its tabs; this test is about ?started=.
+vi.mock("../db/hooks/useCaptures", () => ({
+  useCaptures: () => ({ data: [] }),
+  useBriefEntries: () => ({ data: [] }),
+}));
 
 import { useStartAgentOn } from "../hooks/useStartAgentOn";
 import { notify } from "../lib/notify";
