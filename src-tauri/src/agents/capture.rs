@@ -247,21 +247,26 @@ mod tests {
     fn a_locked_database_fails_after_the_busy_timeout() {
         let db = migrated(&tmp("busy"), "studiomanager.db");
         let (tx, rx) = std::sync::mpsc::channel();
+        let (done_tx, done_rx) = std::sync::mpsc::channel::<()>();
         let held = db.clone();
         let holder = std::thread::spawn(move || {
             let conn = Connection::open(&held).unwrap();
             conn.execute_batch("BEGIN IMMEDIATE").unwrap();
             tx.send(()).unwrap();
-            std::thread::sleep(Duration::from_secs(6));
+            // hold the lock until the capture has given up: a fixed sleep raced
+            // the busy timeout on a slow machine
+            done_rx.recv().unwrap();
             conn.execute_batch("ROLLBACK").unwrap();
         });
         rx.recv().unwrap();
         let started = std::time::Instant::now();
-        let err = add(&db, "idea", Source::Hotkey, None, None).unwrap_err();
+        let res = add(&db, "idea", Source::Hotkey, None, None);
         let waited = started.elapsed();
-        assert!(err.contains("Failed to save the capture"), "{err}");
-        assert!(waited >= Duration::from_secs(4) && waited < Duration::from_secs(6), "{waited:?}");
+        done_tx.send(()).unwrap();
         holder.join().unwrap();
+        let err = res.unwrap_err();
+        assert!(err.contains("Failed to save the capture"), "{err}");
+        assert!(waited >= Duration::from_secs(4), "{waited:?}");
         assert_eq!(count(&db), 0);
     }
 
