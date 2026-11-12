@@ -225,7 +225,7 @@ Follow-ups:
 
 ## Agent orchestrator (design draft, 2026-11-12)
 
-Design: [specs/2026-11-12-agent-orchestrator-design.md](docs/superpowers/specs/2026-11-12-agent-orchestrator-design.md), mockups: [the four screens](docs/superpowers/mockups/2026-11-12-agent-orchestrator.html). Reviewed 2026-11-12, one point open; each part gets its own plan.
+Design: [specs/2026-11-12-agent-orchestrator-design.md](docs/superpowers/specs/2026-11-12-agent-orchestrator-design.md), mockups: [the four screens](docs/superpowers/mockups/2026-11-12-agent-orchestrator.html). Approved 2026-11-12; each part gets its own plan.
 
 - [ ] Capture and briefing: a hotkey field, an inbox, briefs written from the project's wiki ([plan](docs/superpowers/plans/2026-11-12-agent-orchestrator-1-capture.md))
 - [ ] A task carries its agent: stage, linked agents, brief and result

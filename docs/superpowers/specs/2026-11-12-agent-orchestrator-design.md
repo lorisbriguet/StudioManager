@@ -1,7 +1,7 @@
 # Agent orchestrator — design
 
-Date: 2026-11-12 · Status: **reviewed by Loris on 2026-11-12; one point still open** (see
-[Decisions and open questions](#open-questions)). No implementation plan yet.
+Date: 2026-11-12 · Status: **reviewed and approved by Loris on 2026-11-12** (see
+[Decisions](#open-questions)). No implementation plan yet.
 Implementation plans: [part 1, capture and briefing](../plans/2026-11-12-agent-orchestrator-1-capture.md).
 Mockups: [the four screens](../mockups/2026-11-12-agent-orchestrator.html) (open the file in a browser).
 
@@ -15,7 +15,7 @@ and wrap up.
 
 Decisions marked *[call]* were made by the designer from the conversation and the code; Loris can overturn any.
 Everything else was said by Loris. What he decided in review and what is still open is in
-[Decisions and open questions](#open-questions).
+[Decisions](#open-questions).
 
 ## Why
 
@@ -56,7 +56,7 @@ agents followed at once, and what helps is agents that propose and stop, with th
 - The hub's content doesn't move into StudioManager's database. This repo is public; a hub is client material.
 - No change to agents started by hand in a terminal: they stay listed and readable only.
 - Agent time still doesn't become time entries.
-- No phone app. Capture from the phone is in [Decisions and open questions](#open-questions).
+- No phone app. Capture from the phone is in [Decisions](#open-questions).
 
 ## Anti-goals
 
@@ -195,7 +195,7 @@ instead, so nothing is listed twice.
 | Answer a worker from what is written, naming the source | Anything a client will see |
 | Restart a stuck agent; wrap up an idle one | Money (invoices, quotes, expenses) |
 | Send work back to a worker once | Deleting files, branches or data |
-| Merge a pull request when all of these hold: the check command passes, the change is under 100 changed lines, and nothing in the right column is touched. Allowed in every organisation, personal and studio work alike. A project that belongs to a connected hub is left out until part 4 *[call]* | Security and machine settings |
+| Merge a pull request when all of these hold: the check command passes, the change is under 100 changed lines, and nothing in the right column is touched. Allowed in every organisation, personal and studio work alike. A project that belongs to a connected hub is always left out | Security and machine settings |
 | | New dependencies; database migrations |
 
 Everything the lead decided alone is recorded with its reason and listed in the end-of-day brief, where Loris can
@@ -311,7 +311,7 @@ refuse in test and presentation mode; money tools are untouched.
 - What the lead sessions add per week is not known yet. The first week it runs, the Usage tab's numbers are the
   measure; the cap and the 85% line are then adjusted.
 
-## Decisions and open questions
+## Decisions
 
 <a id="open-questions"></a>
 
@@ -332,10 +332,8 @@ Decided by Loris on 2026-11-12:
   only while the Mac is on and the app is open. Considered and set aside: a Shortcut writing to an iCloud Drive
   file, a dedicated mail address, a small endpoint on the home server.
 
-Still open:
-
-1. **A hub's project and merging alone.** Left out until part 4 by the designer's call. Confirm, or allow it from
-   the start.
+- A project that belongs to a connected hub is never merged by the lead alone: its results always come to Loris
+  under Check.
 
 ## Build order
 
