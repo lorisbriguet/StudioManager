@@ -2,6 +2,7 @@
 
 Date: 2026-11-12 · Status: **reviewed by Loris on 2026-11-12; one point still open** (see
 [Decisions and open questions](#open-questions)). No implementation plan yet.
+Implementation plans: [part 1, capture and briefing](../plans/2026-11-12-agent-orchestrator-1-capture.md).
 Mockups: [the four screens](../mockups/2026-11-12-agent-orchestrator.html) (open the file in a browser).
 
 Built on [DESIGN-SYSTEM.md](../../../DESIGN-SYSTEM.md). Extends the Agents page
@@ -266,6 +267,12 @@ the hub's content staying where it is.
 - The layer is built with or after the planned move to FullCalendar 7, so it is not built twice.
 
 ## Data and tools *[call]*
+
+Part 1's plan checked this section against the code and changed it where it didn't hold; the plan's last section,
+"Design gaps and decisions taken in this plan", lists each change. The main ones: `captures` needs more columns
+than listed here (project, subtask, outcome, a reason for staying in the inbox, a try count, the reminder's id);
+`file_capture` also takes a title and a reason and its project is optional; a `list_captures` tool is added; and
+reminders are read with AppleScript like the existing calendar sync, since the app has no EventKit code.
 
 New migration (numbered after the latest), per organisation database:
 
