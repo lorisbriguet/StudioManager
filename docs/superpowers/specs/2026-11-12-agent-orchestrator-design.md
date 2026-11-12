@@ -1,6 +1,7 @@
 # Agent orchestrator — design
 
-Date: 2026-11-12 · Status: **draft, waiting for Loris's review**. No implementation plan yet.
+Date: 2026-11-12 · Status: **reviewed by Loris on 2026-11-12; two points still open** (see
+[Decisions and open questions](#open-questions)). No implementation plan yet.
 Mockups: [the four screens](../mockups/2026-11-12-agent-orchestrator.html) (open the file in a browser).
 
 Built on [DESIGN-SYSTEM.md](../../../DESIGN-SYSTEM.md). Extends the Agents page
@@ -12,8 +13,8 @@ form, three things dropped in [the AgentBar retirement](../../retire-agentbar.md
 and wrap up.
 
 Decisions marked *[call]* were made by the designer from the conversation and the code; Loris can overturn any.
-Everything else was said by Loris. The calls that most need his word are gathered in
-[Open questions](#open-questions).
+Everything else was said by Loris. What he decided in review and what is still open is in
+[Decisions and open questions](#open-questions).
 
 ## Why
 
@@ -54,7 +55,7 @@ agents followed at once, and what helps is agents that propose and stop, with th
 - The hub's content doesn't move into StudioManager's database. This repo is public; a hub is client material.
 - No change to agents started by hand in a terminal: they stay listed and readable only.
 - Agent time still doesn't become time entries.
-- No phone app. See [Open questions](#open-questions) for capture from the phone.
+- No phone app. Capture from the phone is in [Decisions and open questions](#open-questions).
 
 ## Anti-goals
 
@@ -71,7 +72,7 @@ They are built in this order. Each is useful without the next.
 
 **Capture** (mockup, screen 1)
 
-- A global hotkey opens a small field over whatever is on screen. Typing and Enter saves the text and closes the
+- A global hotkey (Control-Option-Space, the one the retired launcher used) opens a small field over whatever is on screen. Typing and Enter saves the text and closes the
   field. Esc closes it.
 - Tab opens an optional project picker *[call]*. Without it, the capture has no project.
 - The same field sits at the top of the menu bar panel's Agents tab *[call]*.
@@ -92,8 +93,8 @@ They are built in this order. Each is useful without the next.
 - A capture is never started as an agent directly. "Ready for an agent" is set by the brief session only when the
   brief has no unclear point and the work is inside [what the lead may do alone](#leeway) *[call]*; otherwise
   Loris sets it with one click from the Briefs entry.
-- Captures are briefed in batches *[call]*: at most once every 15 minutes, all new captures in one session, to
-  keep the cost low.
+- Captures are briefed in batches: at most once every 15 minutes, all new captures in one session. Loris chose
+  the less costly way over briefing each capture at once.
 - The original words of the capture are kept on the task.
 
 ### 2. A task carries its agent
@@ -156,17 +157,18 @@ agent once; a second failure goes to "Needs you".
 **The lead** is not a session that runs all day. It is a short, fresh session started by the watcher for one
 event, with only that event's context:
 
-| Event | What the session does | Model *[call]* |
+| Event | What the session does | Model |
 |---|---|---|
-| New captures | Files them and writes briefs | Sonnet |
-| A worker's question | Answers it if the answer is written in the brief, the wiki or the decisions, and says where; otherwise writes the question for Loris with a recommendation | Sonnet |
+| New captures | Files them and writes briefs | Opus |
+| A worker's question | Answers it if the answer is written in the brief, the wiki or the decisions, and says where; otherwise writes the question for Loris with a recommendation | Opus |
 | A finished worker | Reads the diff when the check command passed; accepts, sends back once, or hands to Loris with a summary | Opus |
 
-- Filing a capture under a project may run on a smaller or local model later; not in the first version *[call]*.
+- Opus everywhere is Loris's choice: he trusts it more than Sonnet. Batching, short sessions and the budget rule
+  are what keep the cost down, not a smaller model.
 - Every lead session ends by writing its outcome through the tools below and stops. Nothing is kept in a session
   between events: the state is in the database.
 
-**Needs you** (mockup, screen 2) becomes the first tab of the Agents page *[call]*, with three groups:
+**Needs you** (mockup, screen 2) becomes the first tab of the Agents page, with three groups:
 
 - **Decide**: questions from workers the lead could not answer. Each has the question, the recommendation and its
   reason, one button per option, and "Answer in words". The answer is typed into the waiting agent (the existing
@@ -191,7 +193,7 @@ instead, so nothing is listed twice.
 | Answer a worker from what is written, naming the source | Anything a client will see |
 | Restart a stuck agent; wrap up an idle one | Money (invoices, quotes, expenses) |
 | Send work back to a worker once | Deleting files, branches or data |
-| Merge a pull request when all of these hold *[call]*: the check command passes, the change is under 100 changed lines, the project is in an organisation marked "the lead may merge", and nothing in the right column is touched | Security and machine settings |
+| Merge a pull request when all of these hold: the check command passes, the change is under 100 changed lines, and nothing in the right column is touched. Allowed in every organisation, personal and studio work alike. A project that belongs to a connected hub is left out until part 4 *[call]* | Security and machine settings |
 | | New dependencies; database migrations |
 
 Everything the lead decided alone is recorded with its reason and listed in the end-of-day brief, where Loris can
@@ -205,7 +207,7 @@ The app already records the plan's five-hour and weekly percentages. Before star
 the watcher checks:
 
 - the weekly percentage is not ahead of the straight line from 0% at the reset to **85%** at the next reset
-  *[call]* (the last 15% is kept for work Loris starts himself);
+  (the last 15% is kept for work Loris starts himself);
 - the five-hour percentage is under **80%** *[call]*.
 
 When either fails, Ready tasks wait and the Agents page says why ("Paused: ahead of the week's pace"). Questions
@@ -295,32 +297,45 @@ refuse in test and presentation mode; money tools are untouched.
 
 - The watcher, the check command, the budget rule and the hub connector use no model.
 - A lead session is short and starts with one event's context, not a day's.
-- Workers default to Sonnet *[call]*; Opus is used for the check of finished work and when Loris starts an agent
-  from a task by hand (as today).
+- Workers and lead sessions run on Opus. This costs more per session than a smaller model would, which makes the
+  cap and the budget rule the main protection for the week's limit.
 - The cap and the budget rule spread a large batch over several days instead of two.
 - What the lead sessions add per week is not known yet. The first week it runs, the Usage tab's numbers are the
   measure; the cap and the 85% line are then adjusted.
 
-## Open questions
+## Decisions and open questions
 
 <a id="open-questions"></a>
 
-1. **Capture from the phone.** Not designed. The simplest route that needs no new app is a note sent to a
-   watched place (a mail address or a shared note) that the app reads into the inbox. Wanted, and if so which?
-2. **The hotkey.** Proposed: Control-Option-Space, the one the retired launcher used.
-3. **Where "Needs you" lives.** Proposed: the first tab of the Agents page. The alternative is its own sidebar
-   entry.
-4. **The merge rule.** Is "under 100 changed lines, check passes, organisation allowed" the right line for
-   merging alone, and which organisations are allowed?
-5. **The budget line.** Is 85% of the week the right ceiling for work the app starts by itself?
-6. **Batching captures every 15 minutes**, or brief each one at once (faster, costs more)?
-7. **Workers on Sonnet by default**, or Opus as "Start work with agent" uses today?
-8. **A second machine.** Agents on another Mac are not listed by the Agents page today. Out of this design;
-   worth its own.
+Decided by Loris on 2026-11-12:
+
+- The hotkey is Control-Option-Space.
+- "Needs you" is the first tab of the Agents page.
+- The lead may merge alone under the rule in [Leeway](#leeway), in every organisation.
+- The app starts work by itself only under 85% of the week's pace.
+- Captures are briefed in batches (the less costly way).
+- Workers and lead sessions run on Opus.
+- Agents on a second machine are out of this design. That machine is for agents that take control of the screen
+  and for large renders, to keep the load off the main Mac; listing them gets its own design later.
+
+Still open:
+
+1. **Capture from the phone.** Wanted. Four ways, none needing a new app:
+
+   | Way | How it works | For | Against |
+   |---|---|---|---|
+   | A reminders list *(recommended)* | A list named for the inbox in Apple Reminders. The app reads new reminders into the inbox and marks them completed. | Works from the phone, the watch, Siri and the share sheet; syncs by itself; the app already talks to the same system framework for the calendar | Needs the Reminders permission; arrives only when the Mac is on |
+   | A shortcut writing to a file | A Shortcut on the phone appends a line to a file in iCloud Drive that the app watches | One tap or one phrase; no permission beyond the folder | A shortcut to set up and keep working; sync delay |
+   | A mail address | A dedicated address the app checks | Works from any device and any person | A mail password to store; polling; spam |
+   | A small web endpoint on the home server | The phone posts to it over the private network; the app collects | Immediate, and can queue while the Mac is off | The most parts to keep running |
+
+2. **A hub's project and merging alone.** Left out until part 4 by the designer's call. Confirm, or allow it from
+   the start.
 
 ## Build order
 
 1. Capture and briefing: `captures`, the hotkey and field, the Inbox tab, the brief session, Briefs entries.
+   Capture from the phone follows once its way is chosen.
 2. A task carries its agent: `stage`, `task_agents`, brief and result, the chips and the open-task view.
 3. The watcher, the lead and "Needs you": the cap, the check command, question and check sessions, the leeway
    rules, the budget rule, the Stop hook, the end-of-day list of what the lead decided.
