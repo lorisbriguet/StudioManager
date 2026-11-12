@@ -93,6 +93,8 @@ permissions = [
   "allow-routines-open-folder",
   "allow-menubar-open-main",
   "allow-menubar-hide",
+  "allow-capture-hide",
+  "allow-capture-hotkey-status",
   "allow-main-ready",
   "allow-quit-ready",
 ]
@@ -119,4 +121,13 @@ permissions = [
   "allow-capture-projects",
   "allow-menubar-open-main",
   "allow-menubar-hide",
+]
+
+[[set]]
+identifier = "capture-window"
+description = "The capture panel (Control-Option-Space): save a thought, pick a project, close the panel. No database, files, settings, agents or terminals."
+permissions = [
+  "allow-capture-add",
+  "allow-capture-projects",
+  "allow-capture-hide",
 ]

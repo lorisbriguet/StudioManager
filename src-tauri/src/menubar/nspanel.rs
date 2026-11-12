@@ -23,6 +23,16 @@ tauri_nspanel::tauri_panel! {
             hides_on_deactivate: false
         }
     })
+
+    // The capture field: same behaviour, its own type (tauri-nspanel keeps one per window).
+    panel!(CapturePanel {
+        config: {
+            can_become_key_window: true,
+            can_become_main_window: false,
+            is_floating_panel: true,
+            hides_on_deactivate: false
+        }
+    })
 }
 
 /// Above other apps' windows and the menu bar itself, under pop-up menus and system alerts.
@@ -44,6 +54,17 @@ pub fn collection_behavior() -> NSWindowCollectionBehavior {
 /// arrives when the panel resigns key.
 pub fn convert(window: &WebviewWindow) -> Result<(), String> {
     let panel = window.to_panel::<MenuBarPanel>().map_err(|e| e.to_string())?;
+    panel.set_level(LEVEL.value());
+    panel
+        .add_style_mask(StyleMask::empty().nonactivating_panel().into())
+        .map_err(|e| e.to_string())?;
+    panel.set_collection_behavior(collection_behavior());
+    Ok(())
+}
+
+/// The same conversion for the capture panel window.
+pub fn convert_capture(window: &WebviewWindow) -> Result<(), String> {
+    let panel = window.to_panel::<CapturePanel>().map_err(|e| e.to_string())?;
     panel.set_level(LEVEL.value());
     panel
         .add_style_mask(StyleMask::empty().nonactivating_panel().into())

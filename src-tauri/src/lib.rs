@@ -1003,10 +1003,12 @@ pub fn run() {
                     tauri_plugin_window_state::StateFlags::all()
                         - tauri_plugin_window_state::StateFlags::VISIBLE,
                 )
-                .with_denylist(&[menubar::PANEL_LABEL])
+                .with_denylist(&[menubar::PANEL_LABEL, menubar::capture::CAPTURE_LABEL])
                 .build(),
         )
         .plugin(tauri_plugin_notification::init())
+        // The capture shortcut is registered from Rust only (`menubar::capture`).
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             Some(vec![menubar::STARTUP_ARG]),
@@ -1099,6 +1101,8 @@ pub fn run() {
             agents::routines::routines_open_folder,
             menubar::menubar_open_main,
             menubar::menubar_hide,
+            menubar::capture::capture_hide,
+            menubar::capture::capture_hotkey_status,
             menubar::main_ready,
             quit::quit_ready,
         ])
@@ -1141,6 +1145,9 @@ pub fn run() {
             }
             // On the main thread, before any command can run: the lock is free.
             menubar::sync_tray(handle, keep_running, &agents::cli::lock_settings());
+            // Control-Option-Space follows the Agents switch; a failure is logged and shown in
+            // Settings, never fatal.
+            menubar::capture::init_hotkey(handle, agents::cli::read_settings(&app_dir).enabled);
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -1239,6 +1246,15 @@ mod tests {
         for never in ["execute_batch", "routines_save", "agents_term_write", "agents_send", "agents_start", "set_agent_access", "connection_save_secret"] {
             assert!(!panel.contains(&allow(never)), "the panel must not call {never}");
         }
+
+        // The capture panel: its three commands and nothing else.
+        let mut capture = quoted_after(sets, "identifier = \"capture-window\"");
+        capture.retain(|p| p.starts_with("allow-"));
+        capture.sort();
+        assert_eq!(capture, ["allow-capture-add", "allow-capture-hide", "allow-capture-projects"]);
+        for never in ["execute_batch", "agents_start", "routines_run", "agents_list", "capture_hotkey_status"] {
+            assert!(!capture.contains(&allow(never)), "the capture panel must not call {never}");
+        }
     }
 
     /// Tauri's own check, with the real capabilities: the panel is refused a command outside
@@ -1274,6 +1290,13 @@ mod tests {
         }
         for cmd in ["agents_list", "agents_watch", "routines_run", "menubar_open_main", "menubar_hide", "capture_add", "capture_projects"] {
             assert!(!refused(&call("menubar", cmd)), "panel {cmd}: {}", call("menubar", cmd));
+        }
+        // The capture panel (its own window, its own set).
+        for cmd in ["execute_batch", "agents_list", "agents_start", "routines_run", "menubar_open_main", "capture_hotkey_status"] {
+            assert!(refused(&call("capture", cmd)), "capture {cmd}: {}", call("capture", cmd));
+        }
+        for cmd in ["capture_add", "capture_projects", "capture_hide"] {
+            assert!(!refused(&call("capture", cmd)), "capture {cmd}: {}", call("capture", cmd));
         }
     }
 

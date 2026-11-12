@@ -89,6 +89,8 @@ const COMMANDS: &[&str] = &[
     "routines_open_folder",
     "menubar_open_main",
     "menubar_hide",
+    "capture_hide",
+    "capture_hotkey_status",
     "main_ready",
     "quit_ready",
 ];

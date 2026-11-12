@@ -16,3 +16,16 @@ export function addCapture(text: string, source: "hotkey" | "menubar", projectId
 export function captureProjects(): Promise<CaptureProject[]> {
   return invoke<CaptureProject[]>("capture_projects");
 }
+
+/** From the capture panel: hide it (after saving, or Escape). */
+export function hideCapturePanel(): Promise<void> {
+  return invoke<void>("capture_hide");
+}
+
+/** Sent to the capture panel's page each time Control-Option-Space shows it. */
+export const CAPTURE_SHOWN = "capture:shown";
+
+/** For Settings: null while Control-Option-Space is registered, else why it is not. */
+export function captureHotkeyStatus(): Promise<string | null> {
+  return invoke<string | null>("capture_hotkey_status");
+}

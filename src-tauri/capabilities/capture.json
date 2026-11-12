@@ -1,0 +1,12 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "capture",
+  "description": "Capture panel (Control-Option-Space). Plugins: core:default only, so no file, SQL, dialog, shell or notification plugin calls. App commands: the capture-window set (permissions/windows.toml), which saves a capture, lists projects and hides the panel; everything else is refused.",
+  "windows": [
+    "capture"
+  ],
+  "permissions": [
+    "capture-window",
+    "core:default"
+  ]
+}

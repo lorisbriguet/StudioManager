@@ -429,6 +429,8 @@ pub async fn agents_set_enabled(
                 crate::menubar::sync_tray(&app, false, &held);
             }
         }
+        // Control-Option-Space follows the switch (never in the demo build).
+        crate::menubar::capture::sync_hotkey(&app, enabled);
         if !enabled {
             // Each panel still gets `agents:term-exit` from its reader thread.
             hub.close_all();

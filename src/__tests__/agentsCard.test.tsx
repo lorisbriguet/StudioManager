@@ -4,9 +4,11 @@ import { AgentsCard } from "../components/settings/AgentsCard";
 import { useAppStore } from "../stores/app-store";
 import { setInvokeHandler, invokedCommands, clearInvokedCommands } from "../__mocks__/tauri-api";
 
+let hotkeyError: string | null = null;
 let info: { enabled: boolean; claudePath: string | null; menuBar: boolean; limitAlerts: boolean };
 
 beforeEach(() => {
+  hotkeyError = null;
   clearInvokedCommands();
   useAppStore.setState({ language: "EN", agentsEnabled: false });
   setInvokeHandler((cmd, args) => {
@@ -15,6 +17,7 @@ beforeEach(() => {
       info = { ...info, enabled: args.enabled as boolean };
       return info;
     }
+    if (cmd === "capture_hotkey_status") return hotkeyError;
     if (cmd === "agents_set_menu_bar") {
       info = { ...info, menuBar: args.on as boolean };
       return info;
@@ -87,5 +90,28 @@ describe("AgentsCard", () => {
     await waitFor(() =>
       expect(invokedCommands.find((c) => c.cmd === "agents_set_menu_bar")?.args).toEqual({ on: true }),
     );
+  });
+
+  it("shows the capture shortcut while Agents is on", async () => {
+    info = { enabled: true, claudePath: "/bin/claude", menuBar: false, limitAlerts: true };
+    render(<AgentsCard />);
+    await screen.findByText("Capture shortcut: Control-Option-Space");
+    expect(screen.queryByText(/is used by another app/)).toBeNull();
+  });
+
+  it("says the shortcut is taken when registration failed", async () => {
+    hotkeyError = "already registered";
+    info = { enabled: true, claudePath: "/bin/claude", menuBar: false, limitAlerts: true };
+    render(<AgentsCard />);
+    const alert = await screen.findByText(/Control-Option-Space is used by another app or by macOS/);
+    expect(alert).toHaveTextContent("already registered");
+    expect(screen.queryByText("Capture shortcut: Control-Option-Space")).toBeNull();
+  });
+
+  it("says nothing about the shortcut while Agents is off", async () => {
+    info = { enabled: false, claudePath: "/bin/claude", menuBar: false, limitAlerts: true };
+    render(<AgentsCard />);
+    await screen.findByText("/bin/claude");
+    expect(screen.queryByText(/Capture shortcut/)).toBeNull();
   });
 });

@@ -7,6 +7,7 @@ import { useConfirm } from "../../lib/confirm";
 import { useAppStore } from "../../stores/app-store";
 import { useT } from "../../i18n/useT";
 import { isDemoBuild } from "../../lib/demoBuild";
+import { captureHotkeyStatus } from "../../lib/captures";
 import {
   getAgentsSettings,
   installStatusLine,
@@ -42,6 +43,16 @@ export function AgentsCard() {
   }, [setStoreEnabled]);
 
   const enabled = info?.enabled ?? false;
+  // Why Control-Option-Space is not registered (null: it is). Read again after each switch.
+  const [hotkeyError, setHotkeyError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!enabled) return;
+    let cancelled = false;
+    captureHotkeyStatus()
+      .then((s) => { if (!cancelled) setHotkeyError(s); })
+      .catch(() => { if (!cancelled) setHotkeyError(null); });
+    return () => { cancelled = true; };
+  }, [enabled]);
   // Read even while Agents is off: a StudioManager status line left behind can still be removed.
   useEffect(() => {
     let cancelled = false;
@@ -204,6 +215,15 @@ export function AgentsCard() {
             <span className="text-xs text-danger-text">{t.agents_claude_missing}</span>
           )}
         </SettingRow>
+      )}
+      {enabled && !demo && (
+        hotkeyError ? (
+          <p role="alert" className="text-xs text-warning-text py-1">
+            {t.capture_hotkey_taken} <span className="font-mono">{hotkeyError}</span>
+          </p>
+        ) : (
+          <p className="text-xs text-muted py-1">{t.capture_hotkey}</p>
+        )
       )}
       <p className="text-xs text-muted py-2.5">{t.agents_trust_hint}</p>
     </SettingsCard>
