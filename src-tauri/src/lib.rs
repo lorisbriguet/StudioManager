@@ -1232,7 +1232,7 @@ mod tests {
 
         let mut panel = quoted_after(sets, "identifier = \"menubar-window\"");
         panel.retain(|p| p.starts_with("allow-"));
-        assert_eq!(panel.len(), 16, "{panel:?}");
+        assert_eq!(panel.len(), 18, "{panel:?}");
         for p in &panel {
             assert!(every.contains(p), "{p} is not a command");
         }
@@ -1272,7 +1272,7 @@ mod tests {
             assert!(refused(&call("menubar", cmd)), "panel {cmd}: {}", call("menubar", cmd));
             assert!(!refused(&call("main", cmd)), "main {cmd}: {}", call("main", cmd));
         }
-        for cmd in ["agents_list", "agents_watch", "routines_run", "menubar_open_main", "menubar_hide"] {
+        for cmd in ["agents_list", "agents_watch", "routines_run", "menubar_open_main", "menubar_hide", "capture_add", "capture_projects"] {
             assert!(!refused(&call("menubar", cmd)), "panel {cmd}: {}", call("menubar", cmd));
         }
     }

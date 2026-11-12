@@ -3,6 +3,7 @@ import { EmptyState, ICONS } from "../components/ui";
 import { AgentList } from "../components/agents/AgentList";
 import { PromptAnswer } from "../components/agents/PromptAnswer";
 import { useAgents } from "../components/agents/useAgents";
+import { CaptureField } from "../components/agents/CaptureField";
 import { LoginNotice } from "../components/agents/LoginNotice";
 import { useT } from "../i18n/useT";
 import { openMainWindow } from "../lib/agents";
@@ -18,10 +19,13 @@ export function AgentsTab() {
 
   // The sign-in warning sits above the list (nothing while more than 10 days are left).
   const notice = <LoginNotice className="m-2 mb-0" />;
+  // The capture field sits above the notice and the list, empty state included.
+  const field = <CaptureField source="menubar" />;
 
   if (agents.length === 0) {
     return (
       <>
+        {field}
         {notice}
         <EmptyState icon={ICONS.agents} message={t.agents_empty} />
       </>
@@ -32,6 +36,7 @@ export function AgentsTab() {
 
   return (
     <>
+      {field}
       {notice}
       <AgentList
         compact

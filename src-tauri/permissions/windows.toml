@@ -99,7 +99,7 @@ permissions = [
 
 [[set]]
 identifier = "menubar-window"
-description = "The menu bar panel: list agents and answer their prompts, the Claude sign-in, plan usage, the day's routines, and opening the main window. No database, files, settings, terminals or routine editing."
+description = "The menu bar panel: list agents and answer their prompts, the Claude sign-in, plan usage, the day's routines, noting a capture, and opening the main window. No database, files, settings, terminals or routine editing."
 permissions = [
   "allow-agents-list",
   "allow-agents-watch",
@@ -115,6 +115,8 @@ permissions = [
   "allow-routines-open-result",
   "allow-routines-open-folder",
   "allow-routines-open-link",
+  "allow-capture-add",
+  "allow-capture-projects",
   "allow-menubar-open-main",
   "allow-menubar-hide",
 ]

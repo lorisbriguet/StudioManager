@@ -47,7 +47,7 @@ The last run of each routine is kept in `routine-runs.json` in the app data fold
 
 ## What the panel can do
 
-The panel is a separate window, and it may call only the 14 app commands it needs: list agents and answer their prompts, check the Claude sign-in, read plan usage, read, run and open the day's routines, and open the main window. Everything else, such as changing your data, saving routines, typing into an agent's terminal or changing settings, is refused for the panel by Tauri itself. The main window keeps every command. So even if something hostile ever ran inside the panel, it couldn't reach your database.
+The panel is a separate window, and it may call only the 16 app commands it needs: list agents and answer their prompts, save a captured thought and list projects to file it under, check the Claude sign-in, read plan usage, read, run and open the day's routines, and open the main window. Everything else, such as changing your data, saving routines, typing into an agent's terminal or changing settings, is refused for the panel by Tauri itself. The main window keeps every command. So even if something hostile ever ran inside the panel, it couldn't reach your database.
 
 The lists are in `src-tauri/permissions/windows.toml`; developers adding a command follow the note in the [README](../README.md).
 
