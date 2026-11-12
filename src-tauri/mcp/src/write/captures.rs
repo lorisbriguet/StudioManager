@@ -111,11 +111,7 @@ pub fn file_capture(dir: &Path, org: &Org, capture_id: i64, filing: &Filing) -> 
             if title.chars().count() > MAX_TITLE {
                 return Err(format!("Title too long (over {MAX_TITLE} characters)."));
             }
-            let brief = capped(
-                filing.brief.as_deref().ok_or("Brief is required.")?,
-                "Brief",
-            )?
-            .to_string();
+            let brief = required(filing.brief.as_deref().unwrap_or(""), "Brief")?;
             let outcome = outcome.ok_or(OUTCOME)?;
             Some((title, brief, outcome))
         }
@@ -158,6 +154,7 @@ pub fn file_capture(dir: &Path, org: &Org, capture_id: i64, filing: &Filing) -> 
             ("status", Value::Text("filed".into())),
             ("project_id", Value::Integer(pid)),
             ("outcome", Value::Text(outcome.to_string())),
+            ("inbox_reason", Value::Null),
         ];
         let (kind, id, project_name) = match filing.task {
             Some(task_id) => {
@@ -441,7 +438,9 @@ mod tests {
         assert_eq!(file_capture(&dir, &org, c.id, &f).unwrap_err(), "Title can't be empty.");
         let mut f = filing("1", "note");
         f.brief = None;
-        assert_eq!(file_capture(&dir, &org, c.id, &f).unwrap_err(), "Brief is required.");
+        assert_eq!(file_capture(&dir, &org, c.id, &f).unwrap_err(), "Brief can't be empty.");
+        f.brief = Some("  ".into());
+        assert_eq!(file_capture(&dir, &org, c.id, &f).unwrap_err(), "Brief can't be empty.");
         let status: String = one(&conn, &format!("SELECT status FROM captures WHERE id = {}", c.id));
         assert_eq!(status, "new");
     }

@@ -92,8 +92,13 @@ function BriefItem({ entry: e }: { entry: BriefEntry }) {
           variant="secondary"
           aria-expanded={open}
           onClick={() => {
-            // Closing saves too, and the field starts from what was last saved.
+            // Closing saves too. Opening starts from the brief as it is now: an agent
+            // may have rewritten it since the entry was first shown.
             if (open) save();
+            else {
+              setDraft(e.brief ?? "");
+              setSaved(e.brief ?? "");
+            }
             setOpen(!open);
           }}
         >

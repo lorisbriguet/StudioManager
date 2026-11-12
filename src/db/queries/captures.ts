@@ -7,7 +7,7 @@ export type CaptureRow = Capture & {
   subtask_title: string | null;
 };
 
-/** A filed capture waiting for Loris's word, with the item it was filed as. */
+/** A filed capture waiting for the user's word, with the item it was filed as. */
 export interface BriefEntry {
   capture_id: number;
   capture_text: string;
@@ -35,7 +35,7 @@ export async function getCaptures(status: CaptureStatus): Promise<CaptureRow[]> 
   );
 }
 
-/** Filed captures with outcome needs_word whose task or subtask still exists. */
+/** Filed captures with outcome needs_word whose task or subtask still exists and is not done. */
 export async function getBriefEntries(): Promise<BriefEntry[]> {
   const db = await getDb();
   return db.select<BriefEntry[]>(
@@ -51,6 +51,7 @@ export async function getBriefEntries(): Promise<BriefEntry[]> {
      JOIN projects p ON p.id = t.project_id
      WHERE c.status = 'filed' AND c.outcome = 'needs_word'
        AND (c.subtask_id IS NULL OR s.id IS NOT NULL)
+       AND COALESCE(s.status, t.status) <> 'done'
      ORDER BY c.created_at, c.id`,
   );
 }
@@ -75,8 +76,9 @@ export async function restoreCapture(id: number): Promise<void> {
 /**
  * File a new capture as a task (notes = the words) or, with `taskId`, as a
  * subtask of it. One batch: the first statement claims the capture and makes
- * the whole transaction fail (NOT NULL on `status`) if it is no longer new, so
- * a capture filed by an agent in between writes nothing.
+ * the whole transaction fail (NOT NULL on `status`) if it is no longer new, or
+ * if `taskId` is not an open task of the project, so a capture filed by an
+ * agent in between, or a task finished meanwhile, writes nothing.
  */
 export async function fileCaptureByHand(data: {
   captureId: number;
@@ -95,11 +97,15 @@ export async function fileCaptureByHand(data: {
 
   const kind = data.taskId ? "subtask" : "task";
   const batch = new TransactionBatch();
-  // The guard: a capture that is not new gets status NULL, which aborts the batch.
+  // The guard: a capture that is not new, or a task that is not an open task of
+  // the project, gives status NULL, which aborts the batch.
   batch.add(
-    `UPDATE captures SET status = CASE WHEN status = 'new' THEN 'filed' ELSE NULL END,
-       outcome = 'note', project_id = $2, updated_at = datetime('now') WHERE id = $1`,
-    [data.captureId, data.projectId],
+    `UPDATE captures SET status = CASE
+         WHEN status = 'new' AND ($3 IS NULL OR EXISTS
+           (SELECT 1 FROM tasks WHERE id = $3 AND project_id = $2 AND status <> 'done'))
+         THEN 'filed' ELSE NULL END,
+       outcome = 'note', project_id = $2, inbox_reason = NULL, updated_at = datetime('now') WHERE id = $1`,
+    [data.captureId, data.projectId, data.taskId ?? null],
   );
   if (data.taskId) {
     batch.add(
@@ -124,12 +130,16 @@ export async function fileCaptureByHand(data: {
     return { kind, id: lastInsertId };
   } catch (e) {
     const now = await db.select<{ status: CaptureStatus }[]>("SELECT status FROM captures WHERE id = $1", [data.captureId]);
-    if (now[0] && now[0].status !== "new") {
-      const err = new Error(`Capture ${data.captureId} is no longer new.`);
-      (err as Error & { cause?: unknown }).cause = e;
-      throw err;
-    }
-    throw e;
+    const why =
+      now[0] && now[0].status !== "new"
+        ? `Capture ${data.captureId} is no longer new.`
+        : data.taskId
+          ? `Task ${data.taskId} is not an open task of that project.`
+          : null;
+    if (!why) throw e;
+    const err = new Error(why);
+    (err as Error & { cause?: unknown }).cause = e;
+    throw err;
   }
 }
 

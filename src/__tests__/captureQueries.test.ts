@@ -9,7 +9,8 @@ vi.mock("@tauri-apps/api/core", async (orig) => ({
 }));
 vi.mock("../db/seeds/user-guide", () => ({ seedUserGuide: async () => {} }));
 
-import { freshRealDb, rawDb } from "./fixtures/realSqlite";
+import { freshRealDb, rawDb, RealDatabase } from "./fixtures/realSqlite";
+import { deleteSubtask } from "../db/queries/tasks";
 import {
   getCaptures,
   getBriefEntries,
@@ -112,14 +113,35 @@ describe("fileCaptureByHand", () => {
 
   it("closes the race inside the batch: a capture filed after the check still writes nothing", async () => {
     const id = capture("raced late");
-    // The batch alone (no prior SELECT) must refuse a capture that is not new.
-    const { TransactionBatch } = await import("../db");
-    prep("UPDATE captures SET status = 'dismissed' WHERE id = $1").run(id);
-    const b = new TransactionBatch();
-    b.add("UPDATE captures SET status = CASE WHEN status = 'new' THEN 'filed' ELSE NULL END WHERE id = $1", [id]);
-    b.add("INSERT INTO tasks (project_id, title) VALUES ($1, 'ghost')", [projectId]);
-    await expect(b.commit()).rejects.toThrow();
-    expect(one("SELECT id FROM tasks WHERE title = 'ghost'")).toBeUndefined();
+    // The check sees a new capture; an agent files it before the batch runs.
+    const select = RealDatabase.prototype.select;
+    const spy = vi.spyOn(RealDatabase.prototype, "select").mockImplementationOnce(async function (this: RealDatabase, sql: string, params?: unknown[]) {
+      const rows = await select.call(this, sql, params);
+      prep("UPDATE captures SET status = 'filed' WHERE id = $1").run(id);
+      return rows;
+    });
+    const tasks = count("tasks");
+    await expect(fileCaptureByHand({ captureId: id, projectId, taskId: null, title: "ghost" })).rejects.toThrow(/no longer new/);
+    spy.mockRestore();
+    expect(count("tasks")).toBe(tasks);
+    expect(one("SELECT task_id, outcome FROM captures WHERE id = $1", id)).toMatchObject({ task_id: null, outcome: null });
+  });
+
+  it("refuses a task of another project or a done one and writes nothing", async () => {
+    const other = Number(prep("INSERT INTO projects (client_id, name) VALUES ('c1', 'Poster tool')").run().lastInsertRowid);
+    const id = capture("misfiled");
+    await expect(fileCaptureByHand({ captureId: id, projectId: other, taskId, title: "x" })).rejects.toThrow(/not an open task/);
+    prep("UPDATE tasks SET status = 'done' WHERE id = $1").run(taskId);
+    await expect(fileCaptureByHand({ captureId: id, projectId, taskId, title: "x" })).rejects.toThrow(/not an open task/);
+    expect(count("subtasks")).toBe(0);
+    expect(one("SELECT status, project_id FROM captures WHERE id = $1", id)).toMatchObject({ status: "new", project_id: null });
+  });
+
+  it("clears the inbox reason when filing", async () => {
+    const id = capture("placed after all");
+    prep("UPDATE captures SET inbox_reason = 'No project fits' WHERE id = $1").run(id);
+    await fileCaptureByHand({ captureId: id, projectId, taskId: null, title: "x" });
+    expect(one("SELECT inbox_reason FROM captures WHERE id = $1", id)?.inbox_reason).toBeNull();
   });
 
   it("refuses a dismissed capture and an unknown one", async () => {
@@ -153,6 +175,21 @@ describe("getBriefEntries", () => {
   it("skips an entry whose task no longer exists", async () => {
     capture("orphan", { status: "filed", project_id: projectId, task_id: taskId, outcome: "needs_word" });
     prep("DELETE FROM tasks WHERE id = $1").run(taskId);
+    expect(await getBriefEntries()).toEqual([]);
+  });
+  it("drops the entry of a deleted subtask and leaves its parent task alone", async () => {
+    const subId = Number(prep("INSERT INTO subtasks (task_id, title, brief) VALUES ($1, 'Grid', 'Check A4')").run(taskId).lastInsertRowid);
+    const id = capture("sub", { status: "filed", project_id: projectId, task_id: taskId, subtask_id: subId, outcome: "needs_word" });
+    await deleteSubtask(subId);
+    expect(await getBriefEntries()).toEqual([]);
+    expect(one("SELECT task_id, subtask_id FROM captures WHERE id = $1", id)).toMatchObject({ task_id: null, subtask_id: null });
+    await keepAsTask(id);
+    expect(one("SELECT stage FROM tasks WHERE id = $1", taskId)?.stage).toBe("briefed");
+  });
+
+  it("skips an entry whose task or subtask is done", async () => {
+    capture("done", { status: "filed", project_id: projectId, task_id: taskId, outcome: "needs_word" });
+    prep("UPDATE tasks SET status = 'done' WHERE id = $1").run(taskId);
     expect(await getBriefEntries()).toEqual([]);
   });
 });

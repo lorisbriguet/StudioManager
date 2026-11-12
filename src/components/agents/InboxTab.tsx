@@ -53,7 +53,7 @@ export function InboxTab() {
           />
         </div>
         {rows.length === 0 ? (
-          <EmptyState icon={ICONS.inbox} message={t.capture_inbox_empty} />
+          <EmptyState icon={ICONS.inbox} message={status === "new" ? t.capture_inbox_empty : t.capture_none} />
         ) : (
           <ul className="flex-1 min-h-0 overflow-y-auto border-t border-[var(--color-border)]">
             {rows.map((c) => (
