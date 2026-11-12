@@ -223,6 +223,15 @@ Follow-ups:
 - [ ] Follow-up: the Tasks "+" button and subtask creation share the double-submit pattern that was fixed elsewhere
 - [ ] Follow-up: `NamedTable` has no optimistic cell update - a cell only reflects an edit once the row query refetches (surfaced by the characterisation tests, pre-existing)
 
+## Agent orchestrator (design draft, 2026-11-12)
+
+Design: [specs/2026-11-12-agent-orchestrator-design.md](docs/superpowers/specs/2026-11-12-agent-orchestrator-design.md), mockups: [the four screens](docs/superpowers/mockups/2026-11-12-agent-orchestrator.html). Waiting for review; each part gets its own plan.
+
+- [ ] Capture and briefing: a hotkey field, an inbox, briefs written from the project's wiki
+- [ ] A task carries its agent: stage, linked agents, brief and result
+- [ ] The watcher, the lead and "Needs you": worker cap, check command, budget rule
+- [ ] Hubs: a connector for another store of work, its count in "Needs you", its timeline in the calendar
+
 ## VAT and rounding (studio review D16, 2026-11-06)
 
 Exchange rates now follow the invoice or expense date, and the dashboard warns a VAT-exempt profile from 80% of the CHF 100,000 threshold (calendar-year invoiced turnover). Left for when the studio registers for VAT:

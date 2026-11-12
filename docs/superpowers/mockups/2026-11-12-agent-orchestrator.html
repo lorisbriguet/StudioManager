@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Agent orchestrator</title>
+<style>
+:root{--bg:#111;--surface:#161616;--surface2:#1c1c1c;--border:#2a2a2a;--text:#e5e5e5;--sec:#d4d4d4;--muted:#b0b0b0;--faint:#6f6f6f;--accent:#3b82f6;--accent-light:#172554;--accent-text:#9db8f0;--success:#22c55e;--warning:#f59e0b;--danger:#ef4444;--hub:#a78bfa;--hub-bg:#221a3a}
+*{box-sizing:border-box}
+body{margin:0;background:#0b0b0b;color:var(--text);font:14px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;padding:28px;max-width:1240px}
+h1.q{font-size:20px;margin:0 0 4px}.sub{color:var(--muted);margin:0 0 24px;font-size:13px;max-width:780px;line-height:1.5}
+.screen{margin-bottom:36px}
+.shead{display:flex;gap:10px;align-items:baseline;margin:0 4px 12px}.num{background:var(--accent);color:#fff;border-radius:999px;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;font-weight:600;font-size:13px;flex:none}
+.shead b{font-size:15px}.shead span.d{color:var(--muted);font-size:13px}
+.app{display:flex;border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--bg);position:relative}
+.side{width:170px;border-right:1px solid var(--border);padding:16px 10px;flex:none}
+.logo{font-weight:800;font-size:12px;line-height:1;margin:0 8px 18px}
+.nav{display:flex;flex-direction:column;gap:2px}.nav div{padding:6px 10px;border-radius:6px;color:var(--sec);font-size:13px;display:flex;align-items:center}.nav .on{background:var(--accent-light);color:var(--accent-text)}.nav hr{border:0;border-top:1px solid var(--border);margin:6px 4px;width:100%}
+.count{margin-left:auto;background:var(--accent);color:#fff;border-radius:99px;font-size:11px;padding:0 6px;line-height:16px;font-weight:600}
+.main{flex:1;padding:22px 24px;min-width:0}
+.ph{display:flex;align-items:center;gap:10px;margin-bottom:16px}.ph h2{font-size:20px;font-weight:600;margin:0}.sp{flex:1}
+.fine{font-size:12px;color:var(--muted)}
+.tabs{display:flex;gap:4px;margin-bottom:18px;border-bottom:1px solid var(--border)}.tabs div{padding:7px 12px;font-size:13px;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px}.tabs .on{color:var(--text);border-color:var(--accent)}.tabs .n{color:var(--faint);margin-left:5px}
+.card{background:var(--surface);border-radius:12px;padding:16px;min-width:0}
+.lbl{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:20px 0 8px}
+.lbl:first-child{margin-top:0}
+.item{background:var(--surface);border-radius:12px;padding:14px 16px;margin-bottom:8px}
+.item .top{display:flex;gap:8px;align-items:baseline;font-size:12px;color:var(--muted);margin-bottom:6px}
+.item .top .r{margin-left:auto;color:var(--faint)}
+.item .t{font-size:14px;font-weight:500;margin-bottom:6px}
+.item p{margin:0 0 10px;color:var(--sec);font-size:13px;line-height:1.5}
+.rec{color:var(--muted);font-size:12.5px;margin:0 0 10px;padding-left:10px;border-left:2px solid var(--border);line-height:1.5}
+.rec b{color:var(--sec);font-weight:500}
+.btn{display:inline-block;background:var(--surface2);border-radius:6px;padding:5px 11px;font-size:12px;color:var(--sec);margin:0 6px 0 0}
+.btn.p{background:var(--accent);color:#fff}
+.btn.g{background:none;color:var(--muted)}
+.chip{display:inline-block;border-radius:99px;font-size:11px;padding:1px 8px;line-height:17px;background:var(--surface2);color:var(--sec);white-space:nowrap}
+.chip.run{background:#10261a;color:#6fdc9b}.chip.chk{background:#2b2110;color:#f2bd5b}.chip.rdy{background:var(--accent-light);color:var(--accent-text)}.chip.hub{background:var(--hub-bg);color:var(--hub)}
+.dot{width:6px;height:6px;border-radius:50%;flex:none;display:inline-block}.g{background:var(--success)}.y{background:var(--warning)}.rd{background:var(--danger)}.m{background:var(--faint)}
+.hubrow{display:flex;align-items:center;gap:10px;background:var(--surface);border-radius:12px;padding:12px 16px;font-size:13px;color:var(--sec)}
+.hubrow .r{margin-left:auto;color:var(--muted);font-size:12px}
+.budget{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--muted)}
+.meter{width:90px;height:4px;background:var(--surface2);border-radius:99px;overflow:hidden;position:relative}.meter i{display:block;height:100%;background:var(--success)}.meter u{position:absolute;top:-2px;bottom:-2px;width:1px;background:var(--muted)}
+/* capture */
+.dim{position:absolute;inset:0;background:rgba(0,0,0,.55)}
+.cap{position:absolute;left:50%;top:86px;transform:translateX(-50%);width:560px;background:#1a1a1a;border:1px solid #333;border-radius:14px;box-shadow:0 24px 60px rgba(0,0,0,.6);overflow:hidden}
+.cap .in{padding:16px 18px;font-size:16px;color:var(--text);border-bottom:1px solid var(--border)}
+.cap .in i{display:inline-block;width:1px;height:18px;background:var(--accent);vertical-align:-3px;margin-left:1px}
+.cap .ft{display:flex;gap:14px;padding:9px 18px;font-size:12px;color:var(--faint)}.cap .ft .r{margin-left:auto}
+kbd{background:var(--surface2);border-radius:4px;padding:1px 5px;font:11px -apple-system,sans-serif;color:var(--muted)}
+/* task rows */
+.trow{display:flex;align-items:center;gap:10px;padding:9px 4px;border-top:1px solid #1e1e1e;font-size:13px;color:var(--sec)}
+.trow:first-of-type{border-top:0}
+.cb{width:14px;height:14px;border:1.5px solid var(--faint);border-radius:4px;flex:none}
+.trow .r{margin-left:auto;display:flex;gap:8px;align-items:center;color:var(--muted);font-size:12px}
+.grp{font-size:12px;color:var(--muted);margin:18px 0 4px;font-weight:600}
+.detail{background:var(--surface);border-radius:12px;padding:16px;margin:4px 0 10px 24px}
+.detail h4{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:14px 0 6px;font-weight:500}
+.detail h4:first-child{margin-top:0}
+.detail p,.detail li{font-size:13px;color:var(--sec);line-height:1.5;margin:0}
+.detail ul{margin:0;padding-left:18px}
+.steps{display:flex;gap:0;margin-bottom:14px}
+.steps div{flex:1;font-size:11px;color:var(--faint);padding-top:8px;border-top:2px solid var(--border)}
+.steps .dn{color:var(--muted);border-color:var(--faint)}.steps .cur{color:#f2bd5b;border-color:var(--warning)}
+.kv{display:grid;grid-template-columns:90px 1fr;row-gap:5px;font-size:13px;color:var(--sec)}.kv span:nth-child(odd){color:var(--muted)}
+.mono{font:12px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--sec)}
+/* calendar */
+.cal{display:grid;grid-template-columns:repeat(7,1fr);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.cal .h{font-size:11px;color:var(--muted);padding:6px 8px;border-bottom:1px solid var(--border);background:var(--surface)}
+.cal .c{min-height:92px;border-right:1px solid #1e1e1e;border-bottom:1px solid #1e1e1e;padding:5px 5px 6px;font-size:11px;color:var(--faint)}
+.cal .c:nth-child(7n){border-right:0}
+.ev{display:block;border-radius:4px;padding:2px 6px;margin-top:4px;font-size:11px;color:var(--accent-text);background:var(--accent-light);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ev.h2{background:var(--hub-bg);color:var(--hub);border-left:2px solid var(--hub)}
+.ev.span{margin-right:-6px;border-radius:4px 0 0 4px}.ev.cont{margin-left:-6px;border-radius:0;border-left:0}.ev.end{margin-left:-6px;border-radius:0 4px 4px 0;border-left:0}
+.legend{display:flex;gap:14px;align-items:center;font-size:12px;color:var(--muted)}
+.sw{width:9px;height:9px;border-radius:2px;display:inline-block;margin-right:5px}
+.tg{width:26px;height:15px;border-radius:99px;background:var(--hub);display:inline-block;position:relative;vertical-align:-3px;margin-left:6px}.tg:after{content:"";position:absolute;right:2px;top:2px;width:11px;height:11px;border-radius:50%;background:#fff}
+.note{color:var(--faint);font-size:12px;margin:10px 4px 0}
+</style></head><body>
+<h1 class="q">Agent orchestrator: the four screens</h1>
+<p class="sub">Mockups for <a style="color:var(--accent-text)" href="../specs/2026-11-12-agent-orchestrator-design.md">the agent orchestrator design</a>. Projects, tasks and numbers are made up. Screens 1 to 3 are the personal orchestrator; screen 4 needs the hub connector.</p>
+
+<!-- 1 CAPTURE -->
+<div class="screen">
+ <div class="shead"><span class="num">1</span><b>Capture</b><span class="d">A hotkey from anywhere on the Mac. Type, Enter, gone. No project, no agent.</span></div>
+ <div class="app" style="height:300px">
+  <div class="side"><div class="logo">STUDIO→|<br>MANAGER</div><div class="nav"><div>Dashboard</div><div>Clients</div><div>Projects</div><div>Calendar</div><hr><div>Wiki</div><div>Agents <span class="count">5</span></div><div>Network</div></div></div>
+  <div class="main"><div class="ph"><h2>Dashboard</h2></div><div class="card" style="height:190px"></div></div>
+  <div class="dim"></div>
+  <div class="cap">
+   <div class="in">the poster tool should export a contact sheet of all variants<i></i></div>
+   <div class="ft"><span><kbd>Enter</kbd> save to inbox</span><span><kbd>Tab</kbd> pick a project (optional)</span><span class="r"><kbd>Esc</kbd></span></div>
+  </div>
+ </div>
+</div>
+
+<!-- 2 NEEDS YOU -->
+<div class="screen">
+ <div class="shead"><span class="num">2</span><b>Needs you</b><span class="d">The first tab of the Agents page. Everything waiting on you, in one list, each with a recommendation.</span></div>
+ <div class="app">
+  <div class="side"><div class="logo">STUDIO→|<br>MANAGER</div><div class="nav"><div>Dashboard</div><div>Clients</div><div>Projects</div><div>Calendar</div><hr><div>Wiki</div><div class="on">Agents <span class="count">5</span></div><div>Network</div><div>Resources</div><div>Upkeep</div><hr><div>Invoices</div><div>Expenses</div></div></div>
+  <div class="main">
+   <div class="ph"><h2>Agents</h2><div class="sp"></div>
+    <div class="budget"><span>2 of 3 workers</span><span>·</span><span>Week 46%</span><div class="meter"><i style="width:46%"></i><u style="left:52%"></u></div><span>under pace</span></div></div>
+   <div class="tabs"><div class="on">Needs you<span class="n">5</span></div><div>Running<span class="n">2</span></div><div>Inbox<span class="n">1</span></div><div>All agents</div></div>
+
+   <div class="lbl">Decide · 2</div>
+   <div class="item">
+    <div class="top"><span>Poster tool</span><span>·</span><span>Export presets</span><span class="r">asked 40 min ago</span></div>
+    <div class="t">Should the PDF preset embed fonts or outline them?</div>
+    <div class="rec"><b>Recommended: outline.</b> The wiki says print files go to the printer without fonts. Embedding is only safer if the text has to stay editable.</div>
+    <span class="btn p">Outline</span><span class="btn">Embed</span><span class="btn g">Answer in words…</span>
+   </div>
+   <div class="item">
+    <div class="top"><span>Studio network</span><span>·</span><span>Backup check</span><span class="r">asked 2 h ago</span></div>
+    <div class="t">The restore test needs 40 GB free on the laptop. Run it tonight or wait for the external drive?</div>
+    <div class="rec"><b>Recommended: wait.</b> The drive is on the hardware list for this month and the test is not urgent.</div>
+    <span class="btn p">Wait for the drive</span><span class="btn">Run tonight</span><span class="btn g">Answer in words…</span>
+   </div>
+
+   <div class="lbl">Check · 2</div>
+   <div class="item">
+    <div class="top"><span>Website</span><span>·</span><span>Fix image captions</span><span class="r">finished 1 h ago</span></div>
+    <div class="t">Captions now wrap under the image on phones</div>
+    <p>Changed 2 files, 31 lines. Tests pass. The lead read the diff and found nothing to send back. To see it: open the preview, any project page, at phone width.</p>
+    <span class="btn p">Accept and merge</span><span class="btn">Open the pull request</span><span class="btn">Send back…</span>
+   </div>
+   <div class="item">
+    <div class="top"><span>Poster tool</span><span>·</span><span>Contact sheet export</span><span class="r">finished 20 min ago</span></div>
+    <div class="t">Contact sheet export works for up to 48 variants</div>
+    <p>Changed 6 files, 240 lines. Tests pass. Too large for the lead to merge alone. Left open: above 48 variants the sheet needs a second page.</p>
+    <span class="btn p">Accept and merge</span><span class="btn">Open the pull request</span><span class="btn">Send back…</span>
+   </div>
+
+   <div class="lbl">Briefs · 1</div>
+   <div class="item">
+    <div class="top"><span>Filed under Travel case</span><span class="r">captured yesterday 22:14</span></div>
+    <div class="t">"add a cable clip next to the power inlet"</div>
+    <p>Brief written: one printed clip beside the inlet, same screw size as the hinges. Unclear: which cable diameter.</p>
+    <span class="btn p">Start an agent</span><span class="btn">Keep as a task</span><span class="btn g">Open the brief</span>
+   </div>
+
+   <div class="lbl">Connected hubs</div>
+   <div class="hubrow"><span class="dot" style="background:var(--hub)"></span>Client hub<span class="chip hub">3 waiting</span><span class="r">Open in the hub ↗</span></div>
+  </div>
+ </div>
+</div>
+
+<!-- 3 TASK WITH STAGE -->
+<div class="screen">
+ <div class="shead"><span class="num">3</span><b>A task carries its agent</b><span class="d">Tasks page. The stage shows on the row; the open task shows the brief, the agent and the result.</span></div>
+ <div class="app">
+  <div class="side"><div class="logo">STUDIO→|<br>MANAGER</div><div class="nav"><div>Dashboard</div><div>Clients</div><div class="on">Projects</div><div>Calendar</div><hr><div>Wiki</div><div>Agents <span class="count">5</span></div><div>Network</div></div></div>
+  <div class="main">
+   <div class="ph"><h2>Tasks</h2></div>
+   <div class="grp">Poster tool</div>
+   <div class="trow"><span class="cb"></span>Export presets<span class="r"><span class="chip run">Running</span><span>waiting on you</span></span></div>
+   <div class="trow"><span class="cb"></span>Contact sheet export<span class="r"><span class="chip chk">To check</span></span></div>
+   <div class="detail">
+    <div class="steps"><div class="dn">Idea</div><div class="dn">Briefed</div><div class="dn">Running</div><div class="cur">To check</div><div>Done</div></div>
+    <h4>Brief</h4>
+    <p>Export one PDF page showing every variant of the current poster as a grid, with the variant name under each. Done when the sheet opens from the export menu and matches the on-screen order.</p>
+    <h4>Agent</h4>
+    <div class="kv"><span>Agent</span><span>task-212-contact-sheet-export · finished 20 min ago · Sonnet</span><span>Branch</span><span class="mono">contact-sheet-export</span><span>Pull request</span><span>#58, tests pass ↗</span></div>
+    <h4>Result</h4>
+    <ul><li>Works for up to 48 variants on one page.</li><li>Left open: a second page above 48 variants.</li><li>To check: export menu, Contact sheet, with the sample poster.</li></ul>
+   </div>
+   <div class="trow"><span class="cb"></span>Rename variants in bulk<span class="r"><span class="chip rdy">Ready for an agent</span></span></div>
+   <div class="trow"><span class="cb"></span>Choose the paper sizes to support<span class="r"><span class="chip">Briefed</span></span></div>
+   <div class="trow"><span class="cb"></span>Shoot the sample posters<span class="r"></span></div>
+  </div>
+ </div>
+</div>
+
+<!-- 4 CALENDAR -->
+<div class="screen">
+ <div class="shead"><span class="num">4</span><b>The hub's timeline in the calendar</b><span class="d">A read-only layer with its own colour and a switch. Dates are changed in the hub.</span></div>
+ <div class="app">
+  <div class="side"><div class="logo">STUDIO→|<br>MANAGER</div><div class="nav"><div>Dashboard</div><div>Clients</div><div>Projects</div><div class="on">Calendar</div><hr><div>Wiki</div><div>Agents <span class="count">5</span></div><div>Network</div></div></div>
+  <div class="main">
+   <div class="ph"><h2>December</h2><div class="sp"></div>
+    <div class="legend"><span><i class="sw" style="background:var(--accent)"></i>Tasks</span><span><i class="sw" style="background:var(--hub)"></i>Client hub<i class="tg"></i></span></div></div>
+   <div class="cal">
+    <div class="h">Mon</div><div class="h">Tue</div><div class="h">Wed</div><div class="h">Thu</div><div class="h">Fri</div><div class="h">Sat</div><div class="h">Sun</div>
+    <div class="c">30<span class="ev h2">Due: toolkit release</span></div><div class="c">1</div><div class="c">2<span class="ev">Website: captions</span></div><div class="c">3<span class="ev h2">Milestone: final files</span></div><div class="c">4<span class="ev h2 span">Winter fair</span></div><div class="c">5<span class="ev h2 cont">&nbsp;</span></div><div class="c">6<span class="ev h2 end">&nbsp;</span></div>
+    <div class="c">7</div><div class="c">8<span class="ev">Poster tool: presets</span></div><div class="c">9</div><div class="c">10<span class="ev h2">Upkeep: template check</span></div><div class="c">11</div><div class="c">12<span class="ev">Travel case: test print</span></div><div class="c">13</div>
+    <div class="c">14<span class="ev h2">Milestone: brief due</span></div><div class="c">15</div><div class="c">16</div><div class="c">17<span class="ev">Invoice reminder</span></div><div class="c">18<span class="ev h2">Due: spring update</span></div><div class="c">19</div><div class="c">20</div>
+   </div>
+  </div>
+ </div>
+</div>
+<p class="note">Tell me in the terminal what to change on any screen.</p>
+</body></html>
