@@ -85,8 +85,9 @@ describe("fileCaptureByHand", () => {
     const id = capture("Idea for the poster");
     const res = await fileCaptureByHand({ captureId: id, projectId, taskId: null, title: "Poster idea" });
     expect(res.kind).toBe("task");
+    const day = (one("SELECT substr(created_at, 1, 10) AS d FROM captures WHERE id = $1", id) as { d: string }).d;
     const task = one("SELECT * FROM tasks WHERE id = $1", res.id);
-    expect(task).toMatchObject({ title: "Poster idea", notes: "Idea for the poster", project_id: projectId });
+    expect(task).toMatchObject({ title: "Poster idea", notes: `Captured ${day}: Idea for the poster`, project_id: projectId });
     expect(one("SELECT * FROM captures WHERE id = $1", id)).toMatchObject({
       status: "filed", outcome: "note", project_id: projectId, task_id: res.id, subtask_id: null,
     });

@@ -557,6 +557,8 @@ pub struct ListCapturesInput {
     pub org: Option<String>,
     /// new (default), filed or dismissed.
     pub status: Option<String>,
+    /// Capture ids (at most 50): return exactly these captures, whatever their status or age. Then status is ignored.
+    pub ids: Option<Vec<i64>>,
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -1005,11 +1007,11 @@ impl Server {
         .await
     }
 
-    #[tool(description = "List captures in the inbox (new by default).")]
+    #[tool(description = "List captures in the inbox (the latest 50 new ones by default, or a given status). Pass ids (at most 50) to fetch exactly those captures, whatever their status or age.")]
     async fn list_captures(&self, Parameters(p): Parameters<ListCapturesInput>) -> CallToolResult {
         self.run(move |d| {
             read_in(d, p.org.as_deref(), |c| {
-                read::list_captures(c, p.status.as_deref())
+                read::list_captures(c, p.status.as_deref(), p.ids.as_deref())
             })
         })
         .await

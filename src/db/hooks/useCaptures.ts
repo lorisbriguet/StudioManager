@@ -15,7 +15,7 @@ export function useBriefEntries() {
 function useCaptureMutation<A, R = void>(fn: (arg: A) => Promise<R>, touchesTasks: boolean) {
   const qc = useQueryClient();
   return useMutation({
-    meta: { errorLabel: "error_save_task" },
+    meta: { errorLabel: "error_capture" },
     mutationFn: fn,
     onSettled: () => {
       qc.invalidateQueries({ queryKey: qk.captures.all });

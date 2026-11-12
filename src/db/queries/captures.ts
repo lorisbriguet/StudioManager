@@ -74,7 +74,7 @@ export async function restoreCapture(id: number): Promise<void> {
 }
 
 /**
- * File a new capture as a task (notes = the words) or, with `taskId`, as a
+ * File a new capture as a task (notes = "Captured YYYY-MM-DD: <the words>") or, with `taskId`, as a
  * subtask of it. One batch: the first statement claims the capture and makes
  * the whole transaction fail (NOT NULL on `status`) if it is no longer new, or
  * if `taskId` is not an open task of the project, so a capture filed by an
@@ -87,8 +87,8 @@ export async function fileCaptureByHand(data: {
   title: string;
 }): Promise<{ kind: "task" | "subtask"; id: number }> {
   const db = await getDb();
-  const rows = await db.select<{ text: string; status: CaptureStatus }[]>(
-    "SELECT text, status FROM captures WHERE id = $1",
+  const rows = await db.select<{ text: string; status: CaptureStatus; created_at: string }[]>(
+    "SELECT text, status, created_at FROM captures WHERE id = $1",
     [data.captureId],
   );
   const cap = rows[0];
@@ -121,7 +121,7 @@ export async function fileCaptureByHand(data: {
     batch.add(
       `INSERT INTO tasks (project_id, title, notes, sort_order)
        VALUES ($1, $2, $3, (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM tasks WHERE project_id = $1))`,
-      [data.projectId, data.title, cap.text],
+      [data.projectId, data.title, `Captured ${cap.created_at.slice(0, 10)}: ${cap.text}`],
     );
     batch.add("UPDATE captures SET task_id = $LAST_INSERT_ID WHERE id = $1", [data.captureId]);
   }

@@ -184,7 +184,7 @@ The `db-changed` event is what `useDbChangedListener` already refreshes on; `key
 - `setBrief(kind: "task" | "subtask", id, brief)`, `briefAgain(captureId)` (`brief_tries = 0`, `inbox_reason = NULL`)
 - Hooks: `useCaptures(status)`, `useBriefEntries()`, `useDismissCapture()`, `useRestoreCapture()`, `useFileCaptureByHand()`, `useKeepAsTask()`, `useMarkStarted()`, `useSetBrief()`, `useBriefAgain()`; each mutation invalidates `captures` and, when it touches a task, `invalidateTaskViews` (`src/db/queryKeys.ts`).
 
-- [ ] **Step 1:** Failing tests: each query against `freshRealDb()`; filing by hand creates the task with the notes and links it; filing a capture filed meanwhile throws and writes nothing; dismiss then restore; `getBriefEntries` lists only `needs_word` filed captures.
+- [ ] **Step 1:** Failing tests: each query against `freshRealDb()`; filing by hand creates the task with the notes ("Captured YYYY-MM-DD: <words>", the capture's created date, as the agent tool writes) and links it; filing a capture filed meanwhile throws and writes nothing; dismiss then restore; `getBriefEntries` lists only `needs_word` filed captures.
 - [ ] **Step 2:** Run `npx vitest run src/__tests__/captureQueries.test.ts` — FAIL. **Step 3:** Implement. **Step 4:** Rerun — PASS. Commit `feat(captures): queries and hooks`.
 
 ### Task 5: Agents page tabs and the Inbox tab
