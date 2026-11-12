@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust (Tauri 2.12, rusqlite 0.32, tauri-nspanel, new `tauri-plugin-global-shortcut`), the `studiomanager-mcp` crate (rmcp `#[tool]` router), React 19 + TypeScript, TanStack Query, Vitest + Testing Library, AppleScript through `osascript`.
 
-**Spec:** [2026-11-12-agent-orchestrator-design.md](../specs/2026-11-12-agent-orchestrator-design.md), part 1 ("1. Capture and briefing", "Data and tools", "Decisions and open questions", "Build order" item 1). Mockups: [the four screens](../mockups/2026-11-12-agent-orchestrator.html), screens 1 and 2 (Briefs group only).
+**Spec:** [2026-11-12-agent-orchestrator-design.md](../specs/2026-11-12-agent-orchestrator-design.md), part 1 ("1. Capture and briefing", "Data and tools", "Decisions", "Build order" item 1). Mockups: [the four screens](../mockups/2026-11-12-agent-orchestrator.html), screens 1 and 2 (Briefs group only).
 
 Rules this plan follows: [CLAUDE.md](../../../CLAUDE.md), [DESIGN-SYSTEM.md](../../../DESIGN-SYSTEM.md), [Agent access](../../agent-access.md), [Agents](../../agents.md), [Menu bar](../../menu-bar.md), "Adding a Rust command" in [the README](../../../README.md#building-from-source), and [RELEASING.md, step 1](../../../RELEASING.md#1-pre-release-validation-all-must-pass). Previous plan in the same format: [Start an agent from a task](2026-11-05-agent-from-task.md).
 
