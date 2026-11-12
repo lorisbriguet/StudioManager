@@ -1,5 +1,6 @@
 pub mod actions;
 pub mod brief;
+pub mod capture;
 pub mod cli;
 pub mod login;
 pub mod model;

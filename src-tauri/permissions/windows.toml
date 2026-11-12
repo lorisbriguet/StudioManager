@@ -69,6 +69,8 @@ permissions = [
   "allow-agents-delete",
   "allow-agents-switch-model",
   "allow-agents-dismiss",
+  "allow-capture-add",
+  "allow-capture-projects",
   "allow-agents-conversation",
   "allow-agents-term-open",
   "allow-agents-term-write",

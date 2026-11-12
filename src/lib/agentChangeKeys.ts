@@ -41,6 +41,10 @@ const TOOL_KEYS: Record<string, readonly string[]> = {
   update_consumable: CONSUMABLES,
   create_subscription: SUBSCRIPTIONS,
   update_subscription: SUBSCRIPTIONS,
+  capture: ["captures"],
+  list_captures: [],
+  file_capture: ["captures", ...TASKS],
+  set_brief: ["captures", ...TASKS],
 };
 
 /** Tools whose writes can add or move an Apple Calendar event. */

@@ -51,7 +51,7 @@ static ORG_LOCK: RwLock<()> = RwLock::new(());
 
 /// The guarded value is `()`, so a panic elsewhere leaves nothing broken:
 /// a poisoned lock is still usable.
-fn org_shared() -> RwLockReadGuard<'static, ()> {
+pub(crate) fn org_shared() -> RwLockReadGuard<'static, ()> {
     ORG_LOCK.read().unwrap_or_else(|e| e.into_inner())
 }
 
@@ -83,7 +83,7 @@ fn app_data_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     app.path().app_data_dir().map_err(|e| format!("Failed to get app data dir: {e}"))
 }
 
-fn active_org(app: &tauri::AppHandle) -> Result<ActiveOrg, String> {
+pub(crate) fn active_org(app: &tauri::AppHandle) -> Result<ActiveOrg, String> {
     let state = app.state::<ActiveOrgState>();
     let guard = state.0.lock().map_err(|e| format!("Lock error: {e}"))?;
     Ok(guard.clone())
@@ -1075,6 +1075,8 @@ pub fn run() {
             agents::actions::agents_delete,
             agents::actions::agents_switch_model,
             agents::actions::agents_dismiss,
+            agents::capture::capture_add,
+            agents::capture::capture_projects,
             agents::transcript::agents_conversation,
             agents::pty::agents_term_open,
             agents::pty::agents_term_write,

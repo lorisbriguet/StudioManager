@@ -65,6 +65,8 @@ const COMMANDS: &[&str] = &[
     "agents_delete",
     "agents_switch_model",
     "agents_dismiss",
+    "capture_add",
+    "capture_projects",
     "agents_conversation",
     "agents_term_open",
     "agents_term_write",

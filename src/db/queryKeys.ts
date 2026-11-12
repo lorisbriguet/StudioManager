@@ -29,6 +29,9 @@ function documentKeys<P extends string>(prefix: P) {
 }
 
 export const qk = {
+  captures: {
+    all: ["captures"] as const,
+  },
   invoices: {
     ...documentKeys("invoices"),
     byClient: (clientId: string) => ["invoices", "client", clientId] as const,
