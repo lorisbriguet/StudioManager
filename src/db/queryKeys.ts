@@ -31,6 +31,8 @@ function documentKeys<P extends string>(prefix: P) {
 export const qk = {
   captures: {
     all: ["captures"] as const,
+    byStatus: (status: string) => ["captures", status] as const,
+    briefs: ["captures", "briefs"] as const,
   },
   invoices: {
     ...documentKeys("invoices"),
