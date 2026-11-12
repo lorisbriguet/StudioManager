@@ -227,7 +227,7 @@ Follow-ups:
 
 Design: [specs/2026-11-12-agent-orchestrator-design.md](docs/superpowers/specs/2026-11-12-agent-orchestrator-design.md), mockups: [the four screens](docs/superpowers/mockups/2026-11-12-agent-orchestrator.html). Approved 2026-11-12; each part gets its own plan.
 
-- [ ] Capture and briefing: a hotkey field, an inbox, briefs written from the project's wiki ([plan](docs/superpowers/plans/2026-11-12-agent-orchestrator-1-capture.md))
+- [ ] Capture and briefing (built, awaiting a hand check in the app: shortcut, menu bar field, Inbox, brief session, Reminders import; see [the Agents guide](docs/agents.md#capture)): a hotkey field, an inbox, briefs written from the project's wiki ([plan](docs/superpowers/plans/2026-11-12-agent-orchestrator-1-capture.md))
 - [ ] A task carries its agent: stage, linked agents, brief and result
 - [ ] The watcher, the lead and "Needs you": worker cap, check command, budget rule
 - [ ] Hubs: a connector for another store of work, its count in "Needs you", its timeline in the calendar

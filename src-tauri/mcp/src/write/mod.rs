@@ -323,12 +323,14 @@ fn escape_html(s: &str) -> String {
 
 // ── Projects ─────────────────────────────────────────────────
 
+mod captures;
 mod clients;
 mod projects;
 mod tasks;
 mod tools;
 mod wiki;
 
+pub use captures::{capture, file_capture, set_brief, Filing};
 pub use clients::create_client;
 pub use projects::{create_project, link_folder, update_project};
 pub use tasks::{create_subtask, create_task, update_subtask, update_task};
@@ -415,7 +417,7 @@ mod tests {
     #[test]
     fn no_delete_statements() {
         // Needles are split so this test does not match itself.
-        let src = [include_str!("mod.rs"), include_str!("projects.rs"), include_str!("tasks.rs"), include_str!("clients.rs"), include_str!("wiki.rs"), include_str!("tools.rs")].concat().to_uppercase();
+        let src = [include_str!("mod.rs"), include_str!("captures.rs"), include_str!("projects.rs"), include_str!("tasks.rs"), include_str!("clients.rs"), include_str!("wiki.rs"), include_str!("tools.rs")].concat().to_uppercase();
         assert!(!src.contains(concat!("DEL", "ETE ")));
         assert!(!src.contains(concat!("ALT", "ER ")));
     }

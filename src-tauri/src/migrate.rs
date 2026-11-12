@@ -31,13 +31,14 @@ pub const MIGRATIONS: &[SqlMigration] = &[
     SqlMigration { version: 13, sql: include_str!("../migrations/013_expense_currency.sql"), columns_if_missing: false },
     SqlMigration { version: 14, sql: include_str!("../migrations/014_app_schema.sql"), columns_if_missing: true },
     SqlMigration { version: 15, sql: include_str!("../migrations/015_notification_keys.sql"), columns_if_missing: true },
+    SqlMigration { version: 16, sql: include_str!("../migrations/016_captures.sql"), columns_if_missing: true },
 ];
 
 // Only referenced from this module's own tests (as the expected "fully
 // migrated" version); nothing in the production path needs it, since
 // `migrate_db` derives what to apply from `MIGRATIONS` itself.
 #[allow(dead_code)]
-pub const LATEST_VERSION: i64 = 15;
+pub const LATEST_VERSION: i64 = 16;
 
 pub(crate) fn table_exists(conn: &rusqlite::Connection, name: &str) -> Result<bool, String> {
     conn.query_row(
@@ -672,7 +673,16 @@ mod tests {
 
     /// The shape without what migrations after 014 add.
     fn shape_014(db: &std::path::Path) -> Vec<String> {
-        shape(db).into_iter().filter(|c| !AFTER_014.contains(&c.as_str())).collect()
+        shape(db)
+            .into_iter()
+            .filter(|c| {
+                !AFTER_014.contains(&c.as_str())
+                    // 016: the captures table and the brief and stage columns.
+                    && !c.starts_with("captures.")
+                    && !c.starts_with("index idx_captures_")
+                    && !["tasks.brief ", "tasks.stage ", "subtasks.brief ", "subtasks.stage "].iter().any(|p| c.starts_with(p))
+            })
+            .collect()
     }
 
     /// A file as v3.4.0 left it: migrations up to 013 plus what its
@@ -761,6 +771,68 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM meta WHERE key LIKE 'before_014:%'", [], |r| r.get(0))
             .unwrap();
         assert_eq!(n, 0);
+        cleanup(&db);
+    }
+
+    #[test]
+    fn m016_adds_captures_brief_and_stage() {
+        let db = temp_db("m016");
+        migrate_db(&db).unwrap();
+        let conn = Connection::open(&db).unwrap();
+        assert!(table_exists(&db, "captures"));
+        let cols = |t: &str| -> Vec<String> {
+            conn.prepare(&format!("SELECT name FROM pragma_table_info('{t}')"))
+                .unwrap()
+                .query_map([], |r| r.get::<_, String>(0))
+                .unwrap()
+                .map(Result::unwrap)
+                .collect()
+        };
+        for c in [
+            "id", "text", "source", "status", "project_id", "task_id", "subtask_id", "outcome",
+            "inbox_reason", "brief_tries", "reminder_id", "created_at", "updated_at",
+        ] {
+            assert!(cols("captures").contains(&c.to_string()), "captures.{c}");
+        }
+        for t in ["tasks", "subtasks"] {
+            for c in ["brief", "stage"] {
+                assert!(cols(t).contains(&c.to_string()), "{t}.{c}");
+            }
+        }
+        conn.execute("INSERT INTO clients (id, name) VALUES ('c1', 'Studio A')", []).unwrap();
+        conn.execute("INSERT INTO projects (id, client_id, name) VALUES (1, 'c1', 'Identity')", []).unwrap();
+        let task = |stage: &str| {
+            conn.execute("INSERT INTO tasks (project_id, title, stage) VALUES (1, 'T', ?1)", [stage])
+        };
+        assert!(task("shipped").is_err(), "unknown stage refused");
+        task("briefed").unwrap();
+        task("to_check").unwrap();
+        conn.execute("INSERT INTO tasks (project_id, title) VALUES (1, 'No stage')", []).unwrap();
+        assert!(
+            conn.execute("INSERT INTO captures (text, source) VALUES ('x', 'email')", []).is_err(),
+            "unknown source refused"
+        );
+        conn.execute("INSERT INTO captures (text, source, reminder_id) VALUES ('x', 'reminders', 'r1')", []).unwrap();
+        assert!(
+            conn.execute("INSERT INTO captures (text, source, reminder_id) VALUES ('y', 'reminders', 'r1')", []).is_err(),
+            "reminder_id is unique"
+        );
+        let (status, tries): (String, i64) = conn
+            .query_row("SELECT status, brief_tries FROM captures WHERE reminder_id = 'r1'", [], |r| Ok((r.get(0)?, r.get(1)?)))
+            .unwrap();
+        assert_eq!((status.as_str(), tries), ("new", 0));
+        drop(conn);
+        cleanup(&db);
+    }
+
+    #[test]
+    fn m016_runs_twice_without_error() {
+        let db = temp_db("m016-twice");
+        migrate_db(&db).unwrap();
+        let conn = Connection::open(&db).unwrap();
+        let sql = MIGRATIONS.iter().find(|m| m.version == 16).expect("016 listed").sql;
+        assert!(run_skipping_existing_columns(&conn, sql).is_ok());
+        drop(conn);
         cleanup(&db);
     }
 

@@ -57,6 +57,10 @@ permissions = [
   "allow-agents-set-enabled",
   "allow-agents-set-menu-bar",
   "allow-agents-set-limit-alerts",
+  "allow-agents-set-briefing",
+  "allow-agents-set-reminders",
+  "allow-agents-briefing-folder",
+  "allow-briefing-status",
   "allow-agents-status-line-preview",
   "allow-agents-status-line-install",
   "allow-agents-status-line-remove",
@@ -69,6 +73,8 @@ permissions = [
   "allow-agents-delete",
   "allow-agents-switch-model",
   "allow-agents-dismiss",
+  "allow-capture-add",
+  "allow-capture-projects",
   "allow-agents-conversation",
   "allow-agents-term-open",
   "allow-agents-term-write",
@@ -91,13 +97,15 @@ permissions = [
   "allow-routines-open-folder",
   "allow-menubar-open-main",
   "allow-menubar-hide",
+  "allow-capture-hide",
+  "allow-capture-hotkey-status",
   "allow-main-ready",
   "allow-quit-ready",
 ]
 
 [[set]]
 identifier = "menubar-window"
-description = "The menu bar panel: list agents and answer their prompts, the Claude sign-in, plan usage, the day's routines, and opening the main window. No database, files, settings, terminals or routine editing."
+description = "The menu bar panel: list agents and answer their prompts, the Claude sign-in, plan usage, the day's routines, noting a capture, and opening the main window. No database, files, settings, terminals or routine editing."
 permissions = [
   "allow-agents-list",
   "allow-agents-watch",
@@ -113,6 +121,17 @@ permissions = [
   "allow-routines-open-result",
   "allow-routines-open-folder",
   "allow-routines-open-link",
+  "allow-capture-add",
+  "allow-capture-projects",
   "allow-menubar-open-main",
   "allow-menubar-hide",
+]
+
+[[set]]
+identifier = "capture-window"
+description = "The capture panel (Control-Option-Space): save a thought, pick a project, close the panel. No database, files, settings, agents or terminals."
+permissions = [
+  "allow-capture-add",
+  "allow-capture-projects",
+  "allow-capture-hide",
 ]

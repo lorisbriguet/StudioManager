@@ -51,7 +51,7 @@ static ORG_LOCK: RwLock<()> = RwLock::new(());
 
 /// The guarded value is `()`, so a panic elsewhere leaves nothing broken:
 /// a poisoned lock is still usable.
-fn org_shared() -> RwLockReadGuard<'static, ()> {
+pub(crate) fn org_shared() -> RwLockReadGuard<'static, ()> {
     ORG_LOCK.read().unwrap_or_else(|e| e.into_inner())
 }
 
@@ -83,7 +83,7 @@ fn app_data_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     app.path().app_data_dir().map_err(|e| format!("Failed to get app data dir: {e}"))
 }
 
-fn active_org(app: &tauri::AppHandle) -> Result<ActiveOrg, String> {
+pub(crate) fn active_org(app: &tauri::AppHandle) -> Result<ActiveOrg, String> {
     let state = app.state::<ActiveOrgState>();
     let guard = state.0.lock().map_err(|e| format!("Lock error: {e}"))?;
     Ok(guard.clone())
@@ -1003,10 +1003,12 @@ pub fn run() {
                     tauri_plugin_window_state::StateFlags::all()
                         - tauri_plugin_window_state::StateFlags::VISIBLE,
                 )
-                .with_denylist(&[menubar::PANEL_LABEL])
+                .with_denylist(&[menubar::PANEL_LABEL, menubar::capture::CAPTURE_LABEL])
                 .build(),
         )
         .plugin(tauri_plugin_notification::init())
+        // The capture shortcut is registered from Rust only (`menubar::capture`).
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             Some(vec![menubar::STARTUP_ARG]),
@@ -1063,6 +1065,10 @@ pub fn run() {
             agents::cli::agents_set_enabled,
             agents::cli::agents_set_menu_bar,
             agents::cli::agents_set_limit_alerts,
+            agents::cli::agents_set_briefing,
+            agents::cli::agents_set_reminders,
+            agents::briefing::agents_briefing_folder,
+            agents::briefing::briefing_status,
             agents::statusline::agents_status_line_preview,
             agents::statusline::agents_status_line_install,
             agents::statusline::agents_status_line_remove,
@@ -1075,6 +1081,8 @@ pub fn run() {
             agents::actions::agents_delete,
             agents::actions::agents_switch_model,
             agents::actions::agents_dismiss,
+            agents::capture::capture_add,
+            agents::capture::capture_projects,
             agents::transcript::agents_conversation,
             agents::pty::agents_term_open,
             agents::pty::agents_term_write,
@@ -1097,6 +1105,8 @@ pub fn run() {
             agents::routines::routines_open_folder,
             menubar::menubar_open_main,
             menubar::menubar_hide,
+            menubar::capture::capture_hide,
+            menubar::capture::capture_hotkey_status,
             menubar::main_ready,
             quit::quit_ready,
         ])
@@ -1139,6 +1149,9 @@ pub fn run() {
             }
             // On the main thread, before any command can run: the lock is free.
             menubar::sync_tray(handle, keep_running, &agents::cli::lock_settings());
+            // Control-Option-Space follows the Agents switch; a failure is logged and shown in
+            // Settings, never fatal.
+            menubar::capture::init_hotkey(handle, agents::cli::read_settings(&app_dir).enabled);
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -1230,12 +1243,21 @@ mod tests {
 
         let mut panel = quoted_after(sets, "identifier = \"menubar-window\"");
         panel.retain(|p| p.starts_with("allow-"));
-        assert_eq!(panel.len(), 16, "{panel:?}");
+        assert_eq!(panel.len(), 18, "{panel:?}");
         for p in &panel {
             assert!(every.contains(p), "{p} is not a command");
         }
         for never in ["execute_batch", "routines_save", "agents_term_write", "agents_send", "agents_start", "set_agent_access", "connection_save_secret"] {
             assert!(!panel.contains(&allow(never)), "the panel must not call {never}");
+        }
+
+        // The capture panel: its three commands and nothing else.
+        let mut capture = quoted_after(sets, "identifier = \"capture-window\"");
+        capture.retain(|p| p.starts_with("allow-"));
+        capture.sort();
+        assert_eq!(capture, ["allow-capture-add", "allow-capture-hide", "allow-capture-projects"]);
+        for never in ["execute_batch", "agents_start", "routines_run", "agents_list", "capture_hotkey_status"] {
+            assert!(!capture.contains(&allow(never)), "the capture panel must not call {never}");
         }
     }
 
@@ -1270,8 +1292,15 @@ mod tests {
             assert!(refused(&call("menubar", cmd)), "panel {cmd}: {}", call("menubar", cmd));
             assert!(!refused(&call("main", cmd)), "main {cmd}: {}", call("main", cmd));
         }
-        for cmd in ["agents_list", "agents_watch", "routines_run", "menubar_open_main", "menubar_hide"] {
+        for cmd in ["agents_list", "agents_watch", "routines_run", "menubar_open_main", "menubar_hide", "capture_add", "capture_projects"] {
             assert!(!refused(&call("menubar", cmd)), "panel {cmd}: {}", call("menubar", cmd));
+        }
+        // The capture panel (its own window, its own set).
+        for cmd in ["execute_batch", "agents_list", "agents_start", "routines_run", "menubar_open_main", "capture_hotkey_status"] {
+            assert!(refused(&call("capture", cmd)), "capture {cmd}: {}", call("capture", cmd));
+        }
+        for cmd in ["capture_add", "capture_projects", "capture_hide"] {
+            assert!(!refused(&call("capture", cmd)), "capture {cmd}: {}", call("capture", cmd));
         }
     }
 

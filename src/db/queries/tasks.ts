@@ -179,8 +179,12 @@ export async function reorderSubtasks(ids: number[]): Promise<void> {
 }
 
 export async function deleteSubtask(id: number): Promise<void> {
-  const db = await getDb();
-  await db.execute("DELETE FROM subtasks WHERE id = $1", [id]);
+  const batch = new TransactionBatch();
+  // A capture filed as this subtask must not fall back to the parent task
+  // (the foreign key only clears subtask_id).
+  batch.add("UPDATE captures SET task_id = NULL WHERE subtask_id = $1", [id]);
+  batch.add("DELETE FROM subtasks WHERE id = $1", [id]);
+  await batch.commit();
 }
 
 // ── Time aggregation queries for dashboard widgets ──

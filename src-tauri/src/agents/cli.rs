@@ -36,14 +36,27 @@ pub struct AgentsSettings {
     pub menu_bar: bool,
     /// Notifications when a usage window nears its limit.
     pub limit_alerts: bool,
+    /// The brief session: every 15 minutes at most, one Opus agent files new captures (see
+    /// briefing.rs). Needs `enabled`; off by default.
+    pub briefing: bool,
+    /// Capture from an Apple Reminders list (see reminders.rs). Needs `enabled`; off by default.
+    pub reminders: bool,
+    /// The list of the default Reminders account that is read.
+    pub reminders_list: String,
     /// Claude Code's `statusLine` before StudioManager's replaced it, restored on removal.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub previous_status_line: Option<serde_json::Value>,
 }
 
+pub const DEFAULT_REMINDERS_LIST: &str = "Inbox";
+
 impl Default for AgentsSettings {
     fn default() -> Self {
-        Self { enabled: false, menu_bar: false, limit_alerts: true, previous_status_line: None }
+        Self { enabled: false, menu_bar: false, limit_alerts: true, briefing: false,
+            reminders: false,
+            reminders_list: DEFAULT_REMINDERS_LIST.into(),
+            previous_status_line: None,
+        }
     }
 }
 
@@ -95,8 +108,52 @@ pub fn in_build(mut s: AgentsSettings, demo: bool) -> AgentsSettings {
     if demo {
         s.enabled = false;
         s.menu_bar = false;
+        s.briefing = false;
+        s.reminders = false;
     }
     s
+}
+
+/// What goes off with the Agents switch: the brief session, Capture from Reminders, and the menu
+/// bar (start at login goes with it, in the command).
+pub fn switch_off(s: &mut AgentsSettings) {
+    s.briefing = false;
+    s.reminders = false;
+    s.menu_bar = false;
+}
+
+/// The brief session switch. Turning it on needs Agents on; turning it off never does.
+pub fn set_briefing(dir: &Path, on: bool) -> Result<(), String> {
+    update_settings(dir, |s| {
+        if on && !s.enabled {
+            return Err("Turn the Agents page on first".into());
+        }
+        s.briefing = on;
+        Ok(())
+    })
+}
+
+/// The Reminders switch and its list. Turning it on needs Agents on and a list name; turning
+/// it off never does. A blank name reads as "Inbox" when switching off.
+pub fn set_reminders(dir: &Path, on: bool, list: &str) -> Result<(), String> {
+    update_settings(dir, |s| {
+        let list = list.trim();
+        if on && !s.enabled {
+            return Err("Turn the Agents page on first".into());
+        }
+        if on && list.is_empty() {
+            return Err("Name the Reminders list".into());
+        }
+        // The name is a script argument and a Reminders list name: never an option-like word.
+        if list.starts_with('-') {
+            return Err("A list name cannot start with \"-\"".into());
+        }
+        s.reminders = on;
+        if !list.is_empty() {
+            s.reminders_list = list.to_string();
+        }
+        Ok(())
+    })
 }
 
 pub fn write_settings(dir: &Path, s: &AgentsSettings) -> Result<(), String> {
@@ -354,6 +411,9 @@ pub struct AgentsInfo {
     pub enabled: bool,
     pub menu_bar: bool,
     pub limit_alerts: bool,
+    pub briefing: bool,
+    pub reminders: bool,
+    pub reminders_list: String,
     pub claude_path: Option<String>,
 }
 
@@ -373,6 +433,9 @@ fn info(app_dir: &Path, login: &super::pty::LoginCache) -> AgentsInfo {
         enabled: s.enabled,
         menu_bar: s.menu_bar,
         limit_alerts: s.limit_alerts,
+        briefing: s.briefing,
+        reminders: s.reminders,
+        reminders_list: s.reminders_list,
         // The demo doesn't look for this Mac's `claude`: the switch stays off and disabled.
         claude_path: if crate::host::running_demo() {
             None
@@ -419,8 +482,7 @@ pub async fn agents_set_enabled(
             let mut s = read_settings(&app_dir);
             s.enabled = enabled;
             if !enabled {
-                // The menu bar is part of Agents: it goes off with it, and so does start at login.
-                s.menu_bar = false;
+                switch_off(&mut s);
                 // Disabling never fails (best effort).
                 let _ = crate::menubar::set_autostart(&app, false);
             }
@@ -429,6 +491,8 @@ pub async fn agents_set_enabled(
                 crate::menubar::sync_tray(&app, false, &held);
             }
         }
+        // Control-Option-Space follows the switch (never in the demo build).
+        crate::menubar::capture::sync_hotkey(&app, enabled);
         if !enabled {
             // Each panel still gets `agents:term-exit` from its reader thread.
             hub.close_all();
@@ -484,6 +548,54 @@ pub async fn agents_set_limit_alerts(
     .await
 }
 
+/// The brief session switch (Settings › Agents). The card asks for the folder's trust first.
+#[tauri::command]
+pub async fn agents_set_briefing(
+    state: tauri::State<'_, super::AgentsState>,
+    on: bool,
+) -> Result<AgentsInfo, String> {
+    super::actions::switched_on(&state)?;
+    let (app_dir, login) = (state.app_dir.clone(), state.login_cache());
+    super::pty::blocking(move || {
+        if on {
+            super::briefing::prepare_folder(&app_dir, &crate::agent_access::mcp_path())?;
+        }
+        set_briefing(&app_dir, on)?;
+        Ok(info(&app_dir, &login))
+    })
+    .await
+}
+
+/// What the Reminders switch answers: the settings, and what went wrong on the import it ran
+/// at once, if anything (the card words it: the list, the account, the permission).
+#[derive(Serialize, Clone, Debug)]
+pub struct RemindersSet {
+    pub info: AgentsInfo,
+    pub problem: Option<super::reminders::Problem>,
+}
+
+/// The "Capture from Reminders" switch and its list (Settings › Agents). Switching on runs one
+/// import at once, so the permission question shows while the person is looking.
+#[tauri::command]
+pub async fn agents_set_reminders(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, super::AgentsState>,
+    on: bool,
+    list: String,
+) -> Result<RemindersSet, String> {
+    if crate::host::is_demo(&app) {
+        return Err("Capture from Reminders is not available in the demo".into());
+    }
+    super::actions::switched_on(&state)?;
+    let (app_dir, login) = (state.app_dir.clone(), state.login_cache());
+    super::pty::blocking(move || {
+        set_reminders(&app_dir, on, &list)?;
+        let problem = if on { super::reminders::run_now(&app) } else { None };
+        Ok(RemindersSet { info: info(&app_dir, &login), problem })
+    })
+    .await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -505,11 +617,75 @@ mod tests {
 
     #[test]
     fn demo_build_always_reads_agents_off() {
-        let on = AgentsSettings { enabled: true, menu_bar: true, limit_alerts: true, previous_status_line: None };
+        let on = AgentsSettings { enabled: true, menu_bar: true, limit_alerts: true, briefing: true, reminders: true, ..Default::default() };
         let demo = in_build(on.clone(), true);
-        assert!(!demo.enabled && !demo.menu_bar);
+        assert!(!demo.enabled && !demo.menu_bar && !demo.briefing && !demo.reminders);
         assert!(demo.limit_alerts);
         assert_eq!(in_build(on.clone(), false), on);
+    }
+
+    #[test]
+    fn briefing_reads_off_when_missing_and_off_in_the_demo() {
+        let none: AgentsSettings = serde_json::from_str(r#"{"enabled":true}"#).unwrap();
+        assert!(!none.briefing);
+        let on = AgentsSettings { enabled: true, briefing: true, ..Default::default() };
+        assert!(!in_build(on.clone(), true).briefing);
+        assert!(in_build(on, false).briefing);
+    }
+
+    #[test]
+    fn set_briefing_is_refused_while_agents_is_off() {
+        let d = tmp("briefing-off");
+        assert!(set_briefing(&d, true).is_err());
+        assert!(!read_settings(&d).briefing);
+        write_settings(&d, &AgentsSettings { enabled: true, ..Default::default() }).unwrap();
+        set_briefing(&d, true).unwrap();
+        assert!(read_settings(&d).briefing);
+        set_briefing(&d, false).unwrap();
+        assert!(!read_settings(&d).briefing);
+        // Switching it off never needs Agents on.
+        write_settings(&d, &AgentsSettings { enabled: false, briefing: true, ..Default::default() }).unwrap();
+        set_briefing(&d, false).unwrap();
+        assert!(!read_settings(&d).briefing);
+    }
+
+    #[test]
+    fn switching_agents_off_turns_the_brief_session_reminders_and_menu_bar_off() {
+        let mut s = AgentsSettings { enabled: true, menu_bar: true, briefing: true, reminders: true, ..Default::default() };
+        switch_off(&mut s);
+        assert!(!s.briefing && !s.reminders && !s.menu_bar);
+        assert_eq!(s.reminders_list, "Inbox", "the list name stays");
+    }
+
+    #[test]
+    fn reminders_default_off_with_the_inbox_list() {
+        let s = AgentsSettings::default();
+        assert!(!s.reminders);
+        assert_eq!(s.reminders_list, "Inbox");
+        let old: AgentsSettings = serde_json::from_str(r#"{"enabled":true}"#).unwrap();
+        assert!(!old.reminders && old.reminders_list == "Inbox");
+        let json = serde_json::to_value(&s).unwrap();
+        assert_eq!(json["remindersList"], "Inbox");
+    }
+
+    #[test]
+    fn set_reminders_needs_agents_on_and_a_list() {
+        let d = tmp("reminders");
+        assert!(set_reminders(&d, true, "Inbox").is_err());
+        write_settings(&d, &AgentsSettings { enabled: true, ..Default::default() }).unwrap();
+        assert!(set_reminders(&d, true, "  ").is_err());
+        assert!(set_reminders(&d, true, "-Inbox").is_err());
+        assert!(set_reminders(&d, false, " --list").is_err());
+        assert!(!read_settings(&d).reminders && read_settings(&d).reminders_list == "Inbox");
+        set_reminders(&d, true, " Phone ").unwrap();
+        let s = read_settings(&d);
+        assert!(s.reminders && s.reminders_list == "Phone");
+        set_reminders(&d, false, "").unwrap();
+        let s = read_settings(&d);
+        assert!(!s.reminders && s.reminders_list == "Phone");
+        // The demo build reads it off whatever the file says.
+        write_settings(&d, &AgentsSettings { reminders: true, ..Default::default() }).unwrap();
+        assert!(!in_build(read_settings(&d), true).reminders);
     }
 
     #[test]

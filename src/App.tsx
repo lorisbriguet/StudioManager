@@ -50,6 +50,7 @@ import { QuickTimerModal } from "./components/QuickTimerModal";
 import { NewTaskModal } from "./components/NewTaskModal";
 import { OrgGate } from "./components/OrgGate";
 import { MenuBarApp } from "./menubar/MenuBarApp";
+import { CaptureApp } from "./capture/CaptureApp";
 import { showMainWindowWhenPainted } from "./lib/showMainWindow";
 import { useFollowAppSettings } from "./menubar/useFollowAppSettings";
 import { PageSpinner, Toaster } from "./components/ui";
@@ -216,9 +217,26 @@ function MenuBarShell() {
   );
 }
 
+/** The capture panel's window (route `/capture`, opened by Control-Option-Space): like the menu
+ *  bar panel, no organisation gate and none of the main window's startup checks. */
+function CaptureShell() {
+  useFollowAppSettings();
+  useEffect(() => {
+    document.documentElement.classList.add("menubar-window");
+  }, []);
+  return (
+    <QueryClientProvider client={queryClient}>
+      <ErrorBoundary FallbackComponent={ErrorFallback}>
+        <CaptureApp />
+      </ErrorBoundary>
+    </QueryClientProvider>
+  );
+}
+
 export default function App() {
   // Each window loads one page for its whole life, so this never flips between renders.
   if (window.location.pathname === "/menubar") return <MenuBarShell />;
+  if (window.location.pathname === "/capture") return <CaptureShell />;
   return <MainApp />;
 }
 

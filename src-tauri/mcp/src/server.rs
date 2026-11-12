@@ -8,7 +8,7 @@
 
 use crate::guard::{self, AccessConfig, Org};
 use crate::orgs::Registry;
-use crate::write::{ProjectChanges, SubtaskChanges, TaskChanges};
+use crate::write::{Filing, ProjectChanges, SubtaskChanges, TaskChanges};
 use crate::upkeep::{ConsumableFields, MachineFields, SubscriptionChanges};
 use crate::{money, read, upkeep, write};
 use chrono::{Datelike, Local};
@@ -62,6 +62,8 @@ pub struct Server {
     /// The data dir, or why it could not be found (every tool returns it).
     dir: Result<PathBuf, String>,
     tool_router: ToolRouter<Server>,
+    /// `STUDIOMANAGER_TOOLS`: the only tools this session may list and call.
+    session_tools: Option<Vec<String>>,
 }
 
 // ── Inputs ───────────────────────────────────────────────────
@@ -539,6 +541,59 @@ pub struct UpdateSubscriptionInput {
     pub notes: Option<String>,
 }
 
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CaptureInput {
+    /// Organisation id or name. Default: the active organisation.
+    pub org: Option<String>,
+    /// The thought, in the user's words.
+    pub text: String,
+    /// Project name or id, as a hint only.
+    pub project: Option<String>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ListCapturesInput {
+    /// Organisation id or name. Default: the active organisation.
+    pub org: Option<String>,
+    /// new (default), filed or dismissed.
+    pub status: Option<String>,
+    /// Capture ids (at most 50): return exactly these captures, whatever their status or age. Then status is ignored.
+    pub ids: Option<Vec<i64>>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct FileCaptureInput {
+    /// Organisation id or name. Default: the active organisation.
+    pub org: Option<String>,
+    pub capture_id: i64,
+    /// Project name or id. Leave it out to keep the capture in the inbox (then reason is required).
+    pub project: Option<String>,
+    /// Id of an open task of that project: the capture becomes a subtask of it. Leave it out for a new task.
+    pub task: Option<i64>,
+    /// Title of the new task or subtask (required with project).
+    pub title: Option<String>,
+    /// What to do, what done looks like, what is unclear (required with project).
+    pub brief: Option<String>,
+    /// note, needs_word or ready (required with project).
+    pub outcome: Option<String>,
+    /// Why no project fits (required without project).
+    pub reason: Option<String>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SetBriefInput {
+    /// Organisation id or name. Default: the active organisation.
+    pub org: Option<String>,
+    /// Exactly one of task_id and subtask_id.
+    pub task_id: Option<i64>,
+    pub subtask_id: Option<i64>,
+    pub brief: String,
+}
+
 // ── Plumbing ─────────────────────────────────────────────────
 
 fn ok(v: Value) -> CallToolResult {
@@ -740,6 +795,13 @@ fn whats_due(dir: &Path, org: Option<&str>, days: Option<i64>) -> R<Value> {
 
 impl Server {
     pub fn new(dir: Result<PathBuf, String>) -> Server {
+        let raw = std::env::var(crate::env::TOOLS_ENV).ok();
+        Self::with_tools(dir, crate::env::parse_tools(raw.as_deref()))
+    }
+
+    /// `new` with the session's tool list given (`STUDIOMANAGER_TOOLS`): only those tools are
+    /// listed and called; None leaves every tool. Names that are no tool are ignored.
+    pub fn with_tools(dir: Result<PathBuf, String>, session_tools: Option<Vec<String>>) -> Server {
         let mut tool_router = Self::tool_router();
         let money = dir
             .as_ref()
@@ -750,7 +812,29 @@ impl Server {
                 tool_router.remove_route(name);
             }
         }
-        Server { dir, tool_router }
+        if let Some(list) = &session_tools {
+            let hidden: Vec<String> = tool_router
+                .list_all()
+                .into_iter()
+                .map(|t| t.name.to_string())
+                .filter(|n| !list.contains(n))
+                .collect();
+            for name in hidden {
+                tool_router.remove_route(&name);
+            }
+        }
+        Server { dir, tool_router, session_tools }
+    }
+
+    /// Refuses a tool the session's list leaves out.
+    fn allows(&self, name: &str) -> Result<(), rmcp::ErrorData> {
+        match &self.session_tools {
+            Some(list) if !list.iter().any(|n| n == name) => Err(rmcp::ErrorData::invalid_params(
+                "This tool is not available in this session",
+                None,
+            )),
+            _ => Ok(()),
+        }
     }
 
     /// Run `f` against the data dir on the blocking pool.
@@ -937,6 +1021,60 @@ impl Server {
             };
             write_in(d, p.org.as_deref(), |d, o| {
                 write::update_subtask(d, o, p.subtask_id, &changes)
+            })
+        })
+        .await
+    }
+
+    #[tool(
+        description = "Save a thought for later in the StudioManager inbox, without choosing where it goes. Use when the user says to note something for later."
+    )]
+    async fn capture(&self, Parameters(p): Parameters<CaptureInput>) -> CallToolResult {
+        self.run(move |d| {
+            write_in(d, p.org.as_deref(), |d, o| {
+                write::capture(d, o, &p.text, p.project.as_deref())
+            })
+        })
+        .await
+    }
+
+    #[tool(description = "List captures in the inbox (the latest 50 new ones by default, or a given status). Pass ids (at most 50) to fetch exactly those captures, whatever their status or age.")]
+    async fn list_captures(&self, Parameters(p): Parameters<ListCapturesInput>) -> CallToolResult {
+        self.run(move |d| {
+            read_in(d, p.org.as_deref(), |c| {
+                read::list_captures(c, p.status.as_deref(), p.ids.as_deref())
+            })
+        })
+        .await
+    }
+
+    #[tool(
+        description = "File a new capture under a project as a task or a subtask with a brief, or leave it in the inbox with a reason when no project fits."
+    )]
+    async fn file_capture(&self, Parameters(p): Parameters<FileCaptureInput>) -> CallToolResult {
+        self.run(move |d| {
+            let filing = Filing {
+                project: p.project,
+                task: p.task,
+                title: p.title,
+                brief: p.brief,
+                outcome: p.outcome,
+                reason: p.reason,
+            };
+            write_in(d, p.org.as_deref(), |d, o| {
+                write::file_capture(d, o, p.capture_id, &filing)
+            })
+        })
+        .await
+    }
+
+    #[tool(
+        description = "Write the brief of a task or subtask: what to do, what done looks like, what is unclear."
+    )]
+    async fn set_brief(&self, Parameters(p): Parameters<SetBriefInput>) -> CallToolResult {
+        self.run(move |d| {
+            write_in(d, p.org.as_deref(), |d, o| {
+                write::set_brief(d, o, p.task_id, p.subtask_id, &p.brief)
             })
         })
         .await
@@ -1358,6 +1496,16 @@ Titles that match nothing come back in unresolved_links and stay as text: write 
 
 #[tool_handler(router = self.tool_router)]
 impl ServerHandler for Server {
+    async fn call_tool(
+        &self,
+        request: rmcp::model::CallToolRequestParams,
+        context: rmcp::service::RequestContext<rmcp::RoleServer>,
+    ) -> Result<rmcp::model::CallToolResponse, rmcp::ErrorData> {
+        self.allows(&request.name)?;
+        let tcc = rmcp::handler::server::tool::ToolCallContext::new(self, request, context);
+        self.tool_router.call(tcc).await
+    }
+
     fn get_info(&self) -> ServerConfig {
         ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
             .with_server_info(Implementation::new(
@@ -1391,14 +1539,35 @@ mod tests {
         let dir = crate::test_support::ready_dir("org-a", "Studio A");
         assert_eq!(
             Server::new(Ok(dir.clone())).tool_router.list_all().len(),
-            35
+            39
         );
         crate::test_support::allow_listed(&dir, true, &[]);
-        assert_eq!(Server::new(Ok(dir)).tool_router.list_all().len(), 40);
+        assert_eq!(Server::new(Ok(dir)).tool_router.list_all().len(), 44);
         assert_eq!(
             Server::new(Err("x".into())).tool_router.list_all().len(),
-            35
+            39
         );
+    }
+
+    fn names(s: &Server) -> Vec<String> {
+        s.tool_router.list_all().into_iter().map(|t| t.name.to_string()).collect()
+    }
+
+    #[test]
+    fn a_session_tool_list_shows_and_allows_only_those_tools() {
+        let list = Some(vec!["list_captures".to_string(), "no_such_tool".to_string(), "get_project".to_string()]);
+        let s = Server::with_tools(Err("x".into()), list);
+        assert_eq!(names(&s), vec!["get_project", "list_captures"]);
+        assert!(s.allows("list_captures").is_ok());
+        let err = s.allows("create_client").unwrap_err();
+        assert_eq!(err.message, "This tool is not available in this session");
+    }
+
+    #[test]
+    fn without_a_session_tool_list_nothing_changes() {
+        let s = Server::with_tools(Err("x".into()), None);
+        assert_eq!(names(&s).len(), 39);
+        assert!(s.allows("create_client").is_ok());
     }
 
     #[test]

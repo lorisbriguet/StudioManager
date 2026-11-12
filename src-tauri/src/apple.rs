@@ -179,6 +179,56 @@ on run argv
 end run
 "#;
 
+/// The open reminders of a list of the DEFAULT Reminders account (the one the phone shows).
+/// The app never creates a list: `make new list` at the top level can land in another account.
+/// argv: list name. Output: records ended by ASCII 30, fields separated by ASCII 31 (text with
+/// tabs or new lines survives). The first record is the header: "OK" or "NOTFOUND", then the
+/// default account's name. The others are `id`, `name`, `body` (empty when there is none).
+pub(crate) const REM_LIST_OPEN: &str = r#"
+on run argv
+  set listName to item 1 of argv
+  set fieldSep to character id 31
+  set recSep to character id 30
+  tell application "Reminders"
+    set acc to default account
+    set accName to name of acc
+    try
+      set theList to list listName of acc
+    on error
+      return "NOTFOUND" & fieldSep & accName & recSep
+    end try
+    set output to "OK" & fieldSep & accName & recSep
+    -- Three bulk reads (one Apple Event each), joined by position.
+    set theIds to id of (every reminder of theList whose completed is false)
+    set theNames to name of (every reminder of theList whose completed is false)
+    set theBodies to body of (every reminder of theList whose completed is false)
+    set n to count of theIds
+    if (count of theNames) is not n or (count of theBodies) is not n then error "The list changed while it was read"
+    repeat with i from 1 to n
+      set theName to item i of theNames
+      if theName is missing value then set theName to ""
+      set theBody to item i of theBodies
+      if theBody is missing value then set theBody to ""
+      set output to output & (item i of theIds) & fieldSep & theName & fieldSep & theBody & recSep
+    end repeat
+    return output
+  end tell
+end run
+"#;
+
+/// Tick one reminder of a list of the default account.
+/// argv: list name, reminder id.
+pub(crate) const REM_COMPLETE: &str = r#"
+on run argv
+  set listName to item 1 of argv
+  set theId to item 2 of argv
+  tell application "Reminders"
+    set theList to list listName of default account
+    set completed of (first reminder of theList whose id is theId) to true
+  end tell
+end run
+"#;
+
 // ── Pure helpers ────────────────────────────────────────────────────────────
 
 /// Parse a strict `yyyy-MM-dd` date into (year, month, day).
@@ -418,6 +468,9 @@ pub(crate) async fn extract_pdf_text(path: String) -> Result<String, String> {
 const PDF_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 const OCR_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 const CAL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
+/// Reminders is slow: one script that made 2 reminders, listed and ticked one took 12.5 s with
+/// the app already running, and the call that had to launch it took over 25 s.
+pub(crate) const REMINDERS_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 const MAIL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
 
 /// Run Vision OCR on an image file and return the recognized lines.
@@ -549,6 +602,92 @@ pub(crate) async fn share_pdf_via_mail(
         Ok(())
     })
     .await
+}
+
+// ── Reminders ───────────────────────────────────────────────────────────────
+
+/// An open reminder. `body` is "" when it has none.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Reminder {
+    pub id: String,
+    pub title: String,
+    pub body: String,
+}
+
+/// Why Reminders could not be read or ticked.
+#[derive(Clone, Debug, PartialEq)]
+pub enum RemindersError {
+    /// The list is not in the default account (the app never creates one).
+    NotFound { account: String },
+    /// Automation of Reminders is refused (error -1743).
+    Denied,
+    /// Reminders did not answer in time; the next pass retries.
+    Timeout,
+    Other(String),
+}
+
+impl std::fmt::Display for RemindersError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NotFound { account } => write!(f, "Reminders list not found in the {account} account"),
+            Self::Denied => write!(f, "Allow StudioManager to control Reminders in System Settings > Privacy & Security > Automation"),
+            Self::Timeout => write!(f, "Reminders did not answer"),
+            Self::Other(m) => write!(f, "{m}"),
+        }
+    }
+}
+
+/// A failure of the runner, sorted. A timeout is never a permission error.
+pub(crate) fn classify_reminders_error(raw: &str) -> RemindersError {
+    if raw.starts_with("osascript timed out") {
+        RemindersError::Timeout
+    } else if raw.contains("-1743") || raw.contains("Not authorized") {
+        RemindersError::Denied
+    } else {
+        RemindersError::Other(raw.to_string())
+    }
+}
+
+const FIELD_SEP: char = '\u{1f}';
+const RECORD_SEP: char = '\u{1e}';
+
+/// The output of `REM_LIST_OPEN`: the open reminders, or `NotFound` with the account's name.
+/// An empty output is no reminder.
+pub(crate) fn parse_reminders(raw: &str) -> Result<Vec<Reminder>, RemindersError> {
+    let mut records = raw.split(RECORD_SEP);
+    let Some(header) = records.next().filter(|h| !h.is_empty()) else {
+        return Ok(Vec::new());
+    };
+    let mut head = header.split(FIELD_SEP);
+    match head.next() {
+        Some("NOTFOUND") => return Err(RemindersError::NotFound { account: head.next().unwrap_or_default().to_string() }),
+        Some("OK") => {}
+        _ => return Err(RemindersError::Other("Unexpected answer from Reminders".into())),
+    }
+    Ok(records
+        .filter(|r| !r.is_empty())
+        .filter_map(|r| {
+            let mut f = r.splitn(3, FIELD_SEP);
+            let id = f.next()?.trim();
+            if id.is_empty() {
+                return None;
+            }
+            Some(Reminder { id: id.to_string(), title: f.next().unwrap_or_default().to_string(), body: f.next().unwrap_or_default().to_string() })
+        })
+        .collect())
+}
+
+/// The open reminders of `list` in the default Reminders account. Blocking: call it off the
+/// async runtime. Not a Tauri command: the callers (the import loop, `agents_set_reminders`)
+/// check the demo first.
+pub(crate) fn reminders_open(list: &str) -> Result<Vec<Reminder>, RemindersError> {
+    let raw = run_osascript(&[], REM_LIST_OPEN, &[list], REMINDERS_TIMEOUT).map_err(|e| classify_reminders_error(&e))?;
+    parse_reminders(&raw)
+}
+
+/// Ticks one reminder of `list` in the default account, by id. Blocking, like `reminders_open`.
+pub(crate) fn reminders_complete(list: &str, id: &str) -> Result<(), RemindersError> {
+    run_osascript(&[], REM_COMPLETE, &[list, id], REMINDERS_TIMEOUT).map(|_| ()).map_err(|e| classify_reminders_error(&e))
 }
 
 /// Run blocking osascript work on Tauri's blocking pool so a slow or hung
@@ -709,5 +848,58 @@ mod tests {
         assert!(PDF_TEXT_JXA.contains("function run(argv)"));
         assert!(!OCR_VISION_JXA.contains("${"));
         assert!(OCR_VISION_JXA.contains("function run(argv)"));
+    }
+    #[test]
+    fn parse_reminders_keeps_tabs_new_lines_quotes_and_an_empty_body() {
+        let raw = "OK\u{1f}Cloud\u{1e}x-apple-reminder://AAA\u{1f}Call\tthe \"printer\"\u{1f}Ask for a quote\nand a date\u{1e}x-apple-reminder://BBB\u{1f}Buy tape\u{1f}\u{1e}";
+        let got = parse_reminders(raw).unwrap();
+        assert_eq!(got.len(), 2);
+        assert_eq!(got[0], Reminder { id: "x-apple-reminder://AAA".into(), title: "Call\tthe \"printer\"".into(), body: "Ask for a quote\nand a date".into() });
+        assert_eq!(got[1], Reminder { id: "x-apple-reminder://BBB".into(), title: "Buy tape".into(), body: String::new() });
+    }
+
+    #[test]
+    fn parse_reminders_empty_output_and_empty_list_give_none() {
+        assert_eq!(parse_reminders("").unwrap(), vec![]);
+        assert_eq!(parse_reminders("OK\u{1f}Cloud\u{1e}").unwrap(), vec![]);
+    }
+
+    #[test]
+    fn parse_reminders_reports_a_list_missing_from_the_default_account() {
+        assert_eq!(
+            parse_reminders("NOTFOUND\u{1f}Cloud\u{1e}"),
+            Err(RemindersError::NotFound { account: "Cloud".into() })
+        );
+        assert!(matches!(parse_reminders("garbage"), Err(RemindersError::Other(_))));
+    }
+
+    #[test]
+    fn a_timeout_is_not_a_permission_error() {
+        assert_eq!(classify_reminders_error("osascript timed out after 30s"), RemindersError::Timeout);
+        assert_eq!(
+            classify_reminders_error("execution error: Not authorized to send Apple events to Reminders. (-1743)"),
+            RemindersError::Denied
+        );
+        assert!(matches!(classify_reminders_error("boom"), RemindersError::Other(_)));
+    }
+
+    #[test]
+    fn the_reminders_scripts_take_every_value_as_argv() {
+        for script in [REM_LIST_OPEN, REM_COMPLETE] {
+            assert!(script.contains("on run argv"));
+            assert!(script.contains("default account"));
+            assert!(!script.contains("make new list"));
+        }
+        assert!(REM_COMPLETE.contains("item 2 of argv"));
+        // Read in bulk, not one Apple Event per reminder.
+        assert!(!REM_LIST_OPEN.contains("repeat with r in"));
+        for bulk in [
+            "set theIds to id of (every reminder of theList whose completed is false)",
+            "set theNames to name of (every reminder of theList whose completed is false)",
+            "set theBodies to body of (every reminder of theList whose completed is false)",
+        ] {
+            assert!(REM_LIST_OPEN.contains(bulk), "{bulk}");
+        }
+        assert!(!REM_LIST_OPEN.contains("of r"));
     }
 }

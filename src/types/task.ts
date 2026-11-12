@@ -1,4 +1,6 @@
 export type TaskStatus = "todo" | "done";
+/** Where a briefed item stands. Part 1 writes only briefed and ready; running and to_check come later. */
+export type TaskStage = "briefed" | "ready" | "running" | "to_check";
 export type TaskPriority = "low" | "medium" | "high";
 
 const PRIORITY_RANK: Record<TaskPriority, number> = { low: 0, medium: 1, high: 2 };
@@ -42,6 +44,9 @@ export interface Task {
   workload_cells: string; // JSON string — parsed in workload layer
   workload_sort_order: number;
   sort_order: number;
+  /** Optional: the create helpers do not set them (part 1 writes them only through the capture tools). */
+  brief?: string | null;
+  stage?: TaskStage | null;
   created_at: string;
   updated_at: string;
 }
@@ -58,6 +63,9 @@ export interface Subtask {
   reminder: ReminderOption | null;
   calendar_event_id: string | null;
   sort_order: number;
+  /** Optional: the create helpers do not set them (part 1 writes them only through the capture tools). */
+  brief?: string | null;
+  stage?: TaskStage | null;
   created_at: string;
   updated_at: string;
 }

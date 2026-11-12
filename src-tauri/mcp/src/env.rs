@@ -5,10 +5,20 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
 pub const DATA_DIR_ENV: &str = "STUDIOMANAGER_DATA_DIR";
+/// Comma-separated tool names (no `mcp__studiomanager__` prefix): when set and not empty, the
+/// server lists and allows only those tools (a brief session's limit).
+pub const TOOLS_ENV: &str = "STUDIOMANAGER_TOOLS";
 pub const DEFAULT_IDENTIFIER: &str = "ch.studiomanager.app";
 
 pub const UNKNOWN_BUNDLE: &str =
     "Can't tell which StudioManager this is (Info.plist unreadable). Reinstall StudioManager.";
+
+/// The names in `$STUDIOMANAGER_TOOLS`; None when it is unset or holds no name.
+pub fn parse_tools(raw: Option<&str>) -> Option<Vec<String>> {
+    let names: Vec<String> =
+        raw?.split(',').map(str::trim).filter(|n| !n.is_empty()).map(String::from).collect();
+    (!names.is_empty()).then_some(names)
+}
 
 /// `$STUDIOMANAGER_DATA_DIR` when set; otherwise the Application Support
 /// folder for the identifier of the enclosing `.app` (so the demo bundle
@@ -72,6 +82,18 @@ pub fn identifier_from_bundle(exe: &Path) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn tools_env_is_a_trimmed_comma_list_and_empty_means_unset() {
+        use super::parse_tools;
+        assert_eq!(parse_tools(None), None);
+        assert_eq!(parse_tools(Some("")), None);
+        assert_eq!(parse_tools(Some(" , ")), None);
+        assert_eq!(
+            parse_tools(Some("list_captures, get_project,,")),
+            Some(vec!["list_captures".to_string(), "get_project".to_string()])
+        );
+    }
+
     use super::*;
     use crate::test_support::temp_data_dir;
 

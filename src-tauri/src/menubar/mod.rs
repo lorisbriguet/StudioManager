@@ -12,6 +12,7 @@ use tauri_plugin_autostart::ManagerExt;
 
 use crate::agents::cli::{read_settings, SettingsGuard};
 
+pub mod capture;
 #[cfg(target_os = "macos")]
 mod nspanel;
 
@@ -276,7 +277,7 @@ pub fn panel_origin(item: Area, screen: Area, panel_w: f64, scale: f64) -> (f64,
 
 /// The screen holding a point in physical pixels (screens' frames are physical too), else
 /// the main screen.
-fn monitor_under(app: &AppHandle, x: f64, y: f64) -> Option<tauri::Monitor> {
+pub(crate) fn monitor_under(app: &AppHandle, x: f64, y: f64) -> Option<tauri::Monitor> {
     let contains = |m: &tauri::Monitor| {
         let (p, s) = (m.position(), m.size());
         x >= p.x as f64

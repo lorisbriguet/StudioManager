@@ -13,9 +13,9 @@ use tauri_plugin_notification::NotificationExt;
 /// A slot is caught up for this long after its time (app started or Mac woke late).
 const CATCH_UP: chrono::Duration = chrono::Duration::hours(2);
 /// How often the due routines are looked up.
-const CHECK_EVERY: Duration = Duration::from_secs(30);
+pub(crate) const CHECK_EVERY: Duration = Duration::from_secs(30);
 /// How often the thread wakes to compare the wall clock with its own count.
-const SLICE: Duration = Duration::from_secs(5);
+pub(crate) const SLICE: Duration = Duration::from_secs(5);
 /// A wall-clock jump longer than this between two wake-ups means the Mac slept.
 const WAKE_JUMP: Duration = Duration::from_secs(60);
 
@@ -124,7 +124,7 @@ pub fn notify(app: &AppHandle, message: &str) {
     }
 }
 
-fn wall_ms() -> i64 {
+pub(crate) fn wall_ms() -> i64 {
     SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .map(|d| d.as_millis() as i64)
@@ -168,12 +168,12 @@ fn check(app: &AppHandle, mem: &Arc<Mutex<Memory>>) {
 }
 
 /// Whether the wall clock moved on so much more than one slice that the Mac must have slept.
-fn woke(last_wall: i64, wall: i64) -> bool {
+pub(crate) fn woke(last_wall: i64, wall: i64) -> bool {
     wall - last_wall > (SLICE + WAKE_JUMP).as_millis() as i64
 }
 
 /// Time counted towards the next check after one slice: a wake makes the check due at once.
-fn next_since_check(since_check: Duration, last_wall: i64, wall: i64) -> Duration {
+pub(crate) fn next_since_check(since_check: Duration, last_wall: i64, wall: i64) -> Duration {
     if woke(last_wall, wall) {
         CHECK_EVERY
     } else {

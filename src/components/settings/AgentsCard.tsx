@@ -2,18 +2,32 @@ import { useEffect, useState } from "react";
 import { SettingRow, SettingsCard } from "../ui/Settings";
 import { Toggle } from "../ui/Toggle";
 import { Button } from "../ui/Button";
+import { Input } from "../ui/Input";
 import { FormActions } from "../ui/Form";
 import { useConfirm } from "../../lib/confirm";
 import { useAppStore } from "../../stores/app-store";
 import { useT } from "../../i18n/useT";
 import { isDemoBuild } from "../../lib/demoBuild";
+import { captureHotkeyStatus } from "../../lib/captures";
+import { confirmTrust } from "../../lib/agentStart";
+import { useNow } from "../../hooks/useNow";
+import { useBriefingStatus } from "../../hooks/useBriefingStatus";
 import {
+  briefingFolder,
+  briefingLines,
   getAgentsSettings,
+  isInside,
+  setAgentsBriefing,
+  startFolders,
+  trustFolder,
   installStatusLine,
   removeStatusLine,
   setAgentsEnabled,
   setAgentsLimitAlerts,
   setAgentsMenuBar,
+  setAgentsReminders,
+  remindersProblemText,
+  type RemindersProblem,
   statusLinePreview,
   type AgentsInfo,
   type StatusLinePreview,
@@ -27,6 +41,9 @@ export function AgentsCard() {
   const setStoreEnabled = useAppStore((s) => s.setAgentsEnabled);
   const [info, setInfo] = useState<AgentsInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // The list field, saved when it loses focus; the problem of the last import under the switch.
+  const [remindersList, setRemindersList] = useState("Inbox");
+  const [remindersProblem, setRemindersProblem] = useState<RemindersProblem | null>(null);
   // Plan-limits status line: the latest preview, which change is shown for confirmation.
   const [line, setLine] = useState<StatusLinePreview | null>(null);
   const [lineMode, setLineMode] = useState<"install" | "remove" | null>(null);
@@ -36,12 +53,24 @@ export function AgentsCard() {
   useEffect(() => {
     let cancelled = false;
     getAgentsSettings()
-      .then((i) => { if (!cancelled) { setInfo(i); setStoreEnabled(i.enabled); } })
+      .then((i) => { if (!cancelled) { setInfo(i); setRemindersList(i.remindersList); setStoreEnabled(i.enabled); } })
       .catch((e) => { if (!cancelled) setError(msg(e)); });
     return () => { cancelled = true; };
   }, [setStoreEnabled]);
 
   const enabled = info?.enabled ?? false;
+  const now = useNow();
+  const briefing = useBriefingStatus(enabled && (info?.briefing ?? false));
+  // Why Control-Option-Space is not registered (null: it is). Read again after each switch.
+  const [hotkeyError, setHotkeyError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!enabled) return;
+    let cancelled = false;
+    captureHotkeyStatus()
+      .then((s) => { if (!cancelled) setHotkeyError(s); })
+      .catch(() => { if (!cancelled) setHotkeyError(null); });
+    return () => { cancelled = true; };
+  }, [enabled]);
   // Read even while Agents is off: a StudioManager status line left behind can still be removed.
   useEffect(() => {
     let cancelled = false;
@@ -123,6 +152,40 @@ export function AgentsCard() {
     }
   };
 
+  /** On: make the folder, ask to trust it when Claude Code doesn't yet, then switch on. */
+  const toggleBriefing = async (on: boolean) => {
+    if (!on) {
+      await run(() => setAgentsBriefing(false));
+      return;
+    }
+    setError(null);
+    try {
+      const folder = await briefingFolder();
+      const folders = await startFolders();
+      if (!folders.some((f) => f.trusted && isInside(folder, f.path))) {
+        if (!(await confirmTrust(folder, false))) return;
+        await trustFolder(folder);
+      }
+      setInfo(await setAgentsBriefing(true));
+    } catch (e) {
+      setError(msg(e));
+    }
+  };
+
+  /** Switch on or off, or save another list; switching on imports at once (the permission question). */
+  const saveReminders = async (on: boolean, list: string) => {
+    setError(null);
+    setRemindersProblem(null);
+    try {
+      const res = await setAgentsReminders(on, list);
+      setInfo(res.info);
+      setRemindersList(res.info.remindersList);
+      setRemindersProblem(res.problem);
+    } catch (e) {
+      setError(msg(e));
+    }
+  };
+
   const toggleMenuBar = async (on: boolean) => {
     if (!(await run(() => setAgentsMenuBar(on))) || on) return;
     await offerRemoval();
@@ -164,6 +227,41 @@ export function AgentsCard() {
           onChange={(on) => void run(() => setAgentsLimitAlerts(on))}
         />
       </SettingRow>
+      <SettingRow label={t.briefing_switch} desc={t.briefing_desc}>
+        <Toggle
+          checked={!demo && (info?.briefing ?? false)}
+          disabled={!info || !info.enabled}
+          ariaLabel={t.briefing_switch}
+          onChange={(on) => void toggleBriefing(on)}
+        />
+      </SettingRow>
+      {briefingLines(briefing, t, now).map((l) => (
+        <p key={l.text} className={`text-xs py-1 ${l.warn ? "text-warning-text" : "text-muted"}`}>{l.text}</p>
+      ))}
+      <SettingRow label={t.reminders_switch} desc={t.reminders_desc}>
+        <Toggle
+          checked={!demo && (info?.reminders ?? false)}
+          disabled={!info || !info.enabled}
+          ariaLabel={t.reminders_switch}
+          onChange={(on) => void saveReminders(on, remindersList)}
+        />
+      </SettingRow>
+      <SettingRow label={t.reminders_list}>
+        <Input
+          value={remindersList}
+          disabled={!info || !info.enabled}
+          aria-label={t.reminders_list}
+          onChange={(e) => setRemindersList(e.target.value)}
+          onBlur={() => {
+            if (info && remindersList.trim() !== info.remindersList) {
+              void saveReminders(info.reminders, remindersList);
+            }
+          }}
+        />
+      </SettingRow>
+      {remindersProblem && (
+        <p role="alert" className="text-xs text-warning-text py-1">{remindersProblemText(remindersProblem, t)}</p>
+      )}
       {showLine && (
         <SettingRow label={t.agents_status_line} desc={t.agents_status_line_desc}>
           <div className="flex gap-2">
@@ -204,6 +302,15 @@ export function AgentsCard() {
             <span className="text-xs text-danger-text">{t.agents_claude_missing}</span>
           )}
         </SettingRow>
+      )}
+      {enabled && !demo && (
+        hotkeyError ? (
+          <p role="alert" className="text-xs text-warning-text py-1">
+            {t.capture_hotkey_taken} <span className="font-mono">{hotkeyError}</span>
+          </p>
+        ) : (
+          <p className="text-xs text-muted py-1">{t.capture_hotkey}</p>
+        )
       )}
       <p className="text-xs text-muted py-2.5">{t.agents_trust_hint}</p>
     </SettingsCard>

@@ -39,6 +39,13 @@ describe("agent change keys", () => {
     expect(keysForTools(null)).toBeNull();
   });
 
+  it("maps the capture tools", () => {
+    expect(keysForTools(["capture"])).toEqual(["captures"]);
+    expect(keysForTools(["list_captures"])).toEqual([]);
+    expect(keysForTools(["file_capture"])).toEqual(["captures", "tasks", "subtasks", "workload-rows", "projects"]);
+    expect(keysForTools(["set_brief"])).toEqual(["captures", "tasks", "subtasks", "workload-rows", "projects"]);
+  });
+
   it("syncs the calendar only after upkeep or subscription writes, or when unsure", () => {
     expect(touchesCalendar(["create_task", "put_wiki_article"])).toBe(false);
     expect(touchesCalendar(["create_task", "update_subscription"])).toBe(true);

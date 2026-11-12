@@ -23,9 +23,10 @@ const inFlight = new Set<string>();
 /**
  * "Start work with agent": one click starts an Opus agent on a task, subtask or
  * project, in its project's folder (asked for and saved when none is linked),
- * then opens it on the Agents page. `enabled` is false while agents are off.
+ * then opens it on the Agents page. `enabled` is false while agents are off. It resolves to
+ * true only when the agent was started; every early stop (and a failure) is false.
  */
-export function useStartAgentOn(): { enabled: boolean; start: (target: AgentTarget) => Promise<void> } {
+export function useStartAgentOn(): { enabled: boolean; start: (target: AgentTarget) => Promise<boolean> } {
   const enabled = useAppStore((s) => s.agentsEnabled);
   const navigate = useNavigate();
   const updateProject = useUpdateProject();
@@ -33,7 +34,7 @@ export function useStartAgentOn(): { enabled: boolean; start: (target: AgentTarg
   const start = useCallback(
     async (target: AgentTarget) => {
       const key = `${target.kind}-${target.id}`;
-      if (inFlight.has(key)) return;
+      if (inFlight.has(key)) return false;
       inFlight.add(key);
       const t = getLabels();
       try {
@@ -41,24 +42,24 @@ export function useStartAgentOn(): { enabled: boolean; start: (target: AgentTarg
         let folder: string | null;
         try {
           item = await loadAgentItem(target, useOrgStore.getState().activeId);
-          if (!item) return;
+          if (!item) return false;
           folder = item.project.folder;
           if (!folder) {
             const dir = await openDirectory({ directory: true, title: t.agents_choose_folder });
-            if (typeof dir !== "string") return;
+            if (typeof dir !== "string") return false;
             folder = dir;
           }
         } catch (e) {
           void logError("Agents: couldn't read the item to start on:", e);
           notify.error(t.agents_start_failed, e);
-          return;
+          return false;
         }
         if (!item.project.folder) {
           try {
             await updateProject.mutateAsync({ id: item.project.id, data: { folder_path: folder } });
           } catch {
             // The query client's backstop already shows "Couldn't save the project".
-            return;
+            return false;
           }
         }
 
@@ -68,16 +69,16 @@ export function useStartAgentOn(): { enabled: boolean; start: (target: AgentTarg
         } catch (e) {
           void logError("Agents: couldn't list the start folders:", e);
           notify.error(t.agents_folders_load_failed, e);
-          return;
+          return false;
         }
         if (!isTrustedFolder(folder, folders)) {
-          if (!(await confirmTrust(folder, isHomeFolder(folder, folders)))) return;
+          if (!(await confirmTrust(folder, isHomeFolder(folder, folders)))) return false;
           try {
             folder = await trustFolder(folder);
           } catch (e) {
             void logError("Agents: couldn't trust the folder:", e);
             notify.error(t.agents_trust_failed, e);
-            return;
+            return false;
           }
         }
 
@@ -87,9 +88,10 @@ export function useStartAgentOn(): { enabled: boolean; start: (target: AgentTarg
         } catch (e) {
           void logError("Agents: start failed:", e);
           notify.error(t.agents_start_failed, e);
-          return;
+          return false;
         }
         navigate(`/agents?started=${encodeURIComponent(shortId)}`);
+        return true;
       } finally {
         inFlight.delete(key);
       }

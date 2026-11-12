@@ -25,6 +25,11 @@ vi.mock("@tauri-apps/plugin-dialog", async (orig) => ({
 }));
 const mutateAsync = vi.hoisted(() => vi.fn(async () => {}));
 vi.mock("../db/hooks/useProjects", () => ({ useUpdateProject: () => ({ mutateAsync }) }));
+// The Agents page counts captures on its tabs; this test is about ?started=.
+vi.mock("../db/hooks/useCaptures", () => ({
+  useCaptures: () => ({ data: [] }),
+  useBriefEntries: () => ({ data: [] }),
+}));
 
 import { useStartAgentOn } from "../hooks/useStartAgentOn";
 import { notify } from "../lib/notify";
@@ -94,7 +99,11 @@ describe("useStartAgentOn", () => {
 
   it("starts on Opus in the linked folder and opens the agent", async () => {
     const { result } = renderHook(() => useStartAgentOn(), { wrapper });
-    await act(() => result.current.start({ kind: "task", id: 44 }));
+    let started: boolean | undefined;
+    await act(async () => {
+      started = await result.current.start({ kind: "task", id: 44 });
+    });
+    expect(started).toBe(true);
     expect(starts()).toHaveLength(1);
     expect(starts()[0].args).toMatchObject({
       folder: "/work/proj",
@@ -117,7 +126,7 @@ describe("useStartAgentOn", () => {
   it("stops quietly when the folder picker is cancelled", async () => {
     item.current = task(null);
     const { result } = renderHook(() => useStartAgentOn(), { wrapper });
-    await act(() => result.current.start({ kind: "task", id: 44 }));
+    await act(() => expect(result.current.start({ kind: "task", id: 44 })).resolves.toBe(false));
     expect(mutateAsync).not.toHaveBeenCalled();
     expect(starts()).toHaveLength(0);
     expect(notify.error).not.toHaveBeenCalled();
@@ -126,12 +135,14 @@ describe("useStartAgentOn", () => {
   it("asks before trusting an untrusted folder; declining starts nothing", async () => {
     trusted = false;
     const { result } = renderHook(() => useStartAgentOn(), { wrapper });
-    let done: Promise<void> = Promise.resolve();
+    let done: Promise<boolean> = Promise.resolve(false);
     act(() => {
       done = result.current.start({ kind: "task", id: 44 });
     });
     fireEvent.click(await screen.findByRole("button", { name: "Cancel" }));
-    await act(() => done);
+    await act(async () => {
+      expect(await done).toBe(false);
+    });
     expect(invokedCommands.some((c) => c.cmd === "agents_trust_folder")).toBe(false);
     expect(starts()).toHaveLength(0);
   });
@@ -139,12 +150,14 @@ describe("useStartAgentOn", () => {
   it("trusts then starts when the folder is confirmed", async () => {
     trusted = false;
     const { result } = renderHook(() => useStartAgentOn(), { wrapper });
-    let done: Promise<void> = Promise.resolve();
+    let done: Promise<boolean> = Promise.resolve(false);
     act(() => {
       done = result.current.start({ kind: "task", id: 44 });
     });
     fireEvent.click(await screen.findByRole("button", { name: "Trust and start" }));
-    await act(() => done);
+    await act(async () => {
+      expect(await done).toBe(true);
+    });
     expect(invokedCommands.some((c) => c.cmd === "agents_trust_folder")).toBe(true);
     expect(starts()).toHaveLength(1);
   });
@@ -152,7 +165,7 @@ describe("useStartAgentOn", () => {
   it("shows the start error and stays on the page when the start fails", async () => {
     startFails = true;
     const { result } = renderHook(() => useStartAgentOn(), { wrapper });
-    await act(() => result.current.start({ kind: "task", id: 44 }));
+    await act(() => expect(result.current.start({ kind: "task", id: 44 })).resolves.toBe(false));
     expect(notify.error).toHaveBeenCalledWith("Couldn't start the agent", expect.anything());
     expect(where).toBe("/tasks");
   });
@@ -161,7 +174,7 @@ describe("useStartAgentOn", () => {
     const { loadAgentItem } = await import("../lib/agentStart");
     vi.mocked(loadAgentItem).mockRejectedValueOnce(new Error("database is locked"));
     const { result } = renderHook(() => useStartAgentOn(), { wrapper });
-    await act(() => expect(result.current.start({ kind: "task", id: 44 })).resolves.toBeUndefined());
+    await act(() => expect(result.current.start({ kind: "task", id: 44 })).resolves.toBe(false));
     expect(notify.error).toHaveBeenCalledWith("Couldn't start the agent", expect.anything());
     expect(starts()).toHaveLength(0);
   });
@@ -171,15 +184,20 @@ describe("useStartAgentOn", () => {
     picked.dir = "/work/new";
     mutateAsync.mockRejectedValueOnce(new Error("save failed"));
     const { result } = renderHook(() => useStartAgentOn(), { wrapper });
-    await act(() => expect(result.current.start({ kind: "task", id: 44 })).resolves.toBeUndefined());
+    await act(() => expect(result.current.start({ kind: "task", id: 44 })).resolves.toBe(false));
     expect(starts()).toHaveLength(0);
   });
 
   it("starts once when clicked twice while starting", async () => {
     const { result } = renderHook(() => useStartAgentOn(), { wrapper });
-    await act(() =>
-      Promise.all([result.current.start({ kind: "task", id: 44 }), result.current.start({ kind: "task", id: 44 })]),
-    );
+    let results: boolean[] = [];
+    await act(async () => {
+      results = await Promise.all([
+        result.current.start({ kind: "task", id: 44 }),
+        result.current.start({ kind: "task", id: 44 }),
+      ]);
+    });
+    expect(results).toEqual([true, false]);
     expect(starts()).toHaveLength(1);
   });
 });

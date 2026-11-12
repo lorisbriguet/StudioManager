@@ -160,6 +160,8 @@ const MONEY_TOOLS: [&str; 5] = [
     "pnl_summary",
 ];
 
+const CAPTURE_TOOLS: [&str; 4] = ["capture", "list_captures", "file_capture", "set_brief"];
+
 #[test]
 fn stdio_round_trip() {
     let dir = seeded(true);
@@ -173,8 +175,8 @@ fn stdio_round_trip() {
     assert!(instructions.lines().count() <= 8);
 
     let names = server.tool_names();
-    assert_eq!(names.len(), 40, "{names:?}");
-    for t in MONEY_TOOLS.iter().chain(UPKEEP_TOOLS.iter()) {
+    assert_eq!(names.len(), 44, "{names:?}");
+    for t in MONEY_TOOLS.iter().chain(UPKEEP_TOOLS.iter()).chain(CAPTURE_TOOLS.iter()) {
         assert!(names.iter().any(|n| n == t), "missing {t}");
     }
 
@@ -220,11 +222,11 @@ fn money_tools_hidden_when_off_at_startup() {
     let mut server = Server::start(&dir);
     server.initialize();
     let names = server.tool_names();
-    assert_eq!(names.len(), 35, "{names:?}");
+    assert_eq!(names.len(), 39, "{names:?}");
     for t in MONEY_TOOLS {
         assert!(!names.iter().any(|n| n == t), "{t} listed");
     }
-    for t in UPKEEP_TOOLS {
+    for t in UPKEEP_TOOLS.iter().chain(CAPTURE_TOOLS.iter()) {
         assert!(names.iter().any(|n| n == t), "missing {t}");
     }
 }

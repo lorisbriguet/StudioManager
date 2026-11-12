@@ -29,6 +29,11 @@ function documentKeys<P extends string>(prefix: P) {
 }
 
 export const qk = {
+  captures: {
+    all: ["captures"] as const,
+    byStatus: (status: string) => ["captures", status] as const,
+    briefs: ["captures", "briefs"] as const,
+  },
   invoices: {
     ...documentKeys("invoices"),
     byClient: (clientId: string) => ["invoices", "client", clientId] as const,
@@ -220,6 +225,8 @@ export function invalidateMoney(qc: QueryClient) {
  */
 export function invalidateTasks(qc: QueryClient) {
   qc.invalidateQueries({ queryKey: qk.tasks.all });
+  // Needs you and the Inbox show the task or subtask a capture was filed as.
+  qc.invalidateQueries({ queryKey: qk.captures.all });
   qc.invalidateQueries({ queryKey: qk.workload.all });
   qc.invalidateQueries({ queryKey: qk.dashboard.plannedVsActual });
 }

@@ -4,6 +4,12 @@ export interface AgentsInfo {
   enabled: boolean;
   menuBar: boolean;
   limitAlerts: boolean;
+  /** The brief session switch (Settings › Agents). */
+  briefing: boolean;
+  /** Capture from an Apple Reminders list (Settings › Agents). */
+  reminders: boolean;
+  /** The list of the default Reminders account that is read. */
+  remindersList: string;
   claudePath: string | null;
 }
 
@@ -24,6 +30,55 @@ export function setAgentsEnabled(enabled: boolean): Promise<AgentsInfo> {
 /** Needs the Agents switch on; also starts the app at login (hidden). */
 export function setAgentsMenuBar(on: boolean): Promise<AgentsInfo> {
   return invoke<AgentsInfo>("agents_set_menu_bar", { on });
+}
+
+/** Turns the brief session on or off; the folder must be trusted before it is turned on. */
+export function setAgentsBriefing(on: boolean): Promise<AgentsInfo> {
+  return invoke<AgentsInfo>("agents_set_briefing", { on });
+}
+
+/** What went wrong on the import that switching Reminders on ran at once. */
+export interface RemindersProblem {
+  kind: "not_found" | "denied" | "timeout" | "other";
+  list: string;
+  /** The default Reminders account's name (not_found only). */
+  account: string;
+  message: string;
+}
+
+export interface RemindersSet {
+  info: AgentsInfo;
+  problem: RemindersProblem | null;
+}
+
+/**
+ * Switches the Reminders capture on or off and saves the list. On: one import runs at once, so
+ * macOS asks to allow StudioManager to control Reminders while the person is looking.
+ */
+export function setAgentsReminders(on: boolean, list: string): Promise<RemindersSet> {
+  return invoke<RemindersSet>("agents_set_reminders", { on, list });
+}
+
+/** The text under the Reminders switch for a problem; the list and the account are named. */
+export function remindersProblemText(
+  p: RemindersProblem,
+  t: Record<"reminders_not_found" | "reminders_denied" | "reminders_timeout", string>,
+): string {
+  switch (p.kind) {
+    case "not_found":
+      return t.reminders_not_found.replace("{list}", p.list).replace("{account}", p.account);
+    case "denied":
+      return t.reminders_denied;
+    case "timeout":
+      return t.reminders_timeout;
+    default:
+      return p.message;
+  }
+}
+
+/** Makes the brief session's folder (its files included) and returns its path. */
+export function briefingFolder(): Promise<string> {
+  return invoke<string>("agents_briefing_folder");
 }
 
 export function setAgentsLimitAlerts(on: boolean): Promise<AgentsInfo> {
@@ -279,4 +334,47 @@ export function startFolders(): Promise<StartFolder[]> {
  */
 export function trustFolder(folder: string): Promise<string> {
   return invoke<string>("agents_trust_folder", { folder });
+}
+
+export interface BriefingStatus {
+  /** `demo`, `off`, `agents_off`, `access_off`, `budget`, `too_soon`, `running`, `nothing`; null when a session may start at the next check. */
+  paused: string | null;
+  percent: number | null;
+  /** When the next slot opens (epoch ms), with `too_soon`. */
+  nextAt: number | null;
+  running: boolean;
+  last: { finished_at: number; ok: boolean; message: string | null } | null;
+}
+
+/** Why the brief session waits, and when it runs next. Rejects while Agents is off. */
+export function briefingStatus(): Promise<BriefingStatus | null> {
+  return invoke<BriefingStatus | null>("briefing_status");
+}
+
+export interface BriefingLine {
+  text: string;
+  /** A failure or a pause the person can act on. */
+  warn: boolean;
+}
+
+/** The muted lines under the brief session switch and in the Inbox: the next slot or why it waits, and the last failure. */
+export function briefingLines(
+  status: BriefingStatus | null,
+  t: Record<"briefing_next" | "briefing_paused_budget" | "briefing_last_failed" | "briefing_access_off", string>,
+  now: number,
+): BriefingLine[] {
+  if (!status || ["demo", "off", "agents_off"].includes(status.paused ?? "")) return [];
+  const lines: BriefingLine[] = [];
+  if (status.paused === "too_soon" && status.nextAt != null) {
+    const min = Math.max(1, Math.ceil((status.nextAt - now) / 60_000));
+    lines.push({ text: t.briefing_next.replace("{min}", String(min)), warn: false });
+  } else if (status.paused === "budget" && status.percent != null) {
+    lines.push({ text: t.briefing_paused_budget.replace("{percent}", String(Math.round(status.percent))), warn: true });
+  } else if (status.paused === "access_off") {
+    lines.push({ text: t.briefing_access_off, warn: true });
+  }
+  if (status.last && !status.last.ok) {
+    lines.push({ text: t.briefing_last_failed.replace("{reason}", status.last.message ?? ""), warn: true });
+  }
+  return lines;
 }

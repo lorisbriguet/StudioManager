@@ -27,7 +27,7 @@ It has three tabs.
 
 ### Agents
 
-The same list as the Agents page: Needs you, Working, Idle and Done. You can answer a prompt right here, with the same safety rules as the page (see [Answer buttons](agents.md#answer-buttons)). Clicking an agent opens it in the main window. From 10 days before the Claude sign-in ends, a warning sits above the list (see [Claude sign-in](agents.md#claude-sign-in)).
+A field at the top notes a thought in the Inbox: Enter saves, Tab picks a project, see [Capture](agents.md#capture). Below it, the same list as the Agents page: Needs you, Working, Idle and Done. You can answer a prompt right here, with the same safety rules as the page (see [Answer buttons](agents.md#answer-buttons)). Clicking an agent opens it in the main window. From 10 days before the Claude sign-in ends, a warning sits above the list (see [Claude sign-in](agents.md#claude-sign-in)).
 
 ### Usage
 
@@ -47,9 +47,9 @@ The last run of each routine is kept in `routine-runs.json` in the app data fold
 
 ## What the panel can do
 
-The panel is a separate window, and it may call only the 14 app commands it needs: list agents and answer their prompts, check the Claude sign-in, read plan usage, read, run and open the day's routines, and open the main window. Everything else, such as changing your data, saving routines, typing into an agent's terminal or changing settings, is refused for the panel by Tauri itself. The main window keeps every command. So even if something hostile ever ran inside the panel, it couldn't reach your database.
+The panel is a separate window, and it may call only the 18 app commands it needs: list agents and answer their prompts, save a captured thought and list projects to file it under, check the Claude sign-in, read plan usage, read, run and open the day's routines, and open the main window. Everything else, such as changing your data, saving routines, typing into an agent's terminal or changing settings, is refused for the panel by Tauri itself. The main window keeps every command. So even if something hostile ever ran inside the panel, it couldn't reach your database.
 
-The lists are in `src-tauri/permissions/windows.toml`; developers adding a command follow the note in the [README](../README.md).
+The shortcut's capture field lives in its own small window, which may call 3 commands: save a capture, list projects and close itself. The lists are in `src-tauri/permissions/windows.toml`; developers adding a command follow the note in the [README](../README.md).
 
 ## Plan limits
 
