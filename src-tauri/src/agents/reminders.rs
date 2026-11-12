@@ -23,6 +23,23 @@ pub trait ReminderSource {
     fn complete(&self, list: &str, id: &str) -> Result<(), RemindersError>;
 }
 
+/// How one reminder was added to the active organisation.
+#[derive(Debug, PartialEq)]
+pub enum Add {
+    /// Saved (true) or already there (false).
+    Done(bool),
+    /// The active organisation changed, or is now in a mode: the pass stops here.
+    OrgChanged,
+    /// Could not be saved: this reminder is skipped.
+    Failed(String),
+}
+
+/// Adds one reminder (its text and id) to the organisation the pass is for, or says why not.
+pub type AddFn<'a> = &'a dyn Fn(&str, &str) -> Add;
+
+/// One pass at a time: the Settings switch-on pass and the loop's never overlap.
+static PASS: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 /// What a pass did: the captures it added, and the first completion that failed (retried on the
 /// next pass).
 #[derive(Debug, PartialEq, Default)]
@@ -57,21 +74,26 @@ fn write_seen(app_dir: &Path, seen: &mut Vec<String>) -> Result<(), String> {
     crate::agent_access::write_atomic(&app_dir.join(SEEN_FILE), &format!("{json}\n"))
 }
 
-/// One pass: every open reminder of `list` becomes a capture in `db` (once: the seen list and the
+/// One pass: every open reminder of `list` becomes a capture (once: the seen list and the
 /// `UNIQUE` reminder id see to that), is recorded as seen, then ticked. Only reading the list can
-/// fail the pass; a tick that fails is kept in the outcome and retried next time (a timeout
+/// fail the pass; a reminder `add` cannot save is skipped; a tick that fails is kept in the outcome and retried next time (a timeout
 /// stops the ticks: each would wait as long).
-pub fn import(app_dir: &Path, db: &Path, list: &str, src: &dyn ReminderSource) -> Result<Outcome, RemindersError> {
+pub fn import(app_dir: &Path, list: &str, src: &dyn ReminderSource, add: AddFn) -> Result<Outcome, RemindersError> {
     let open = src.open(list)?;
     let mut seen = read_seen(app_dir);
     let mut out = Outcome::default();
     for r in open {
         let Some(text) = capture_text(&r) else { continue };
         if !seen.iter().any(|s| s == &r.id) {
-            match capture::add(db, &text, Source::Reminders, None, Some(&r.id)) {
-                Ok(added) => out.added += usize::from(added.is_some()),
-                // Not saved, so not ticked: it is read again next time.
-                Err(e) => return Err(RemindersError::Other(e)),
+            match add(&text, &r.id) {
+                Add::Done(added) => out.added += usize::from(added),
+                // The rest stays unticked: the next pass reads it again.
+                Add::OrgChanged => break,
+                // Not saved, so not seen and not ticked: it is read again next time.
+                Add::Failed(e) => {
+                    log::warn!("[reminders] could not save a reminder as a capture: {e}");
+                    continue;
+                }
             }
             seen.push(r.id.clone());
             write_seen(app_dir, &mut seen).map_err(RemindersError::Other)?;
@@ -93,11 +115,13 @@ pub fn pass(
     org: &crate::ActiveOrg,
     list: &str,
     src: &dyn ReminderSource,
+    add: AddFn,
 ) -> Option<Result<Outcome, RemindersError>> {
+    let _one_at_a_time = PASS.lock().unwrap_or_else(|e| e.into_inner());
     if org.in_mode() {
         return None;
     }
-    Some(import(app_dir, &org.prod_db_path(), list, src))
+    Some(import(app_dir, list, src, add))
 }
 
 /// Apple Reminders, through the fixed scripts of `apple.rs`.
@@ -139,7 +163,23 @@ pub fn run_now(app: &tauri::AppHandle) -> Option<Problem> {
     let state = app.state::<super::AgentsState>();
     let list = read_settings(&state.app_dir).reminders_list;
     let org = crate::active_org(app).ok()?;
-    let out = pass(&state.app_dir, &org, &list, &Apple)?;
+    // Before each add: the active organisation is read again under the organisation lock (held
+    // only for the add, never across Reminders), so a switch or a mode never receives a capture
+    // meant for the organisation the pass began with.
+    let add = |text: &str, id: &str| {
+        let _guard = crate::org_shared();
+        match crate::active_org(app) {
+            Ok(now) if now.id == org.id && !now.in_mode() => {
+                match capture::add(&now.prod_db_path(), text, Source::Reminders, None, Some(id)) {
+                    Ok(added) => Add::Done(added.is_some()),
+                    Err(e) => Add::Failed(e),
+                }
+            }
+            Ok(_) => Add::OrgChanged,
+            Err(e) => Add::Failed(e),
+        }
+    };
+    let out = pass(&state.app_dir, &org, &list, &Apple, &add)?;
     let result = match out {
         Ok(o) => {
             if o.added > 0 {
@@ -243,6 +283,14 @@ mod tests {
         }
     }
 
+    /// The real add (`capture::add`) into `db`, as `import` takes it.
+    fn into(db: &Path) -> impl Fn(&str, &str) -> Add + '_ {
+        move |text, id| match capture::add(db, text, Source::Reminders, None, Some(id)) {
+            Ok(added) => Add::Done(added.is_some()),
+            Err(e) => Add::Failed(e),
+        }
+    }
+
     fn captures(db: &Path) -> Vec<(String, String, Option<String>)> {
         let conn = Connection::open(db).unwrap();
         let mut st = conn.prepare("SELECT text, source, reminder_id FROM captures ORDER BY id").unwrap();
@@ -266,7 +314,7 @@ mod tests {
         let db = migrated(&dir, "a.db");
         let src = Fake::default();
         *src.open.borrow_mut() = vec![rem("r1", "Call the printer", ""), rem("r2", "Buy tape", "Two rolls")];
-        let out = import(&dir, &db, "Inbox", &src).unwrap();
+        let out = import(&dir, "Inbox", &src, &into(&db)).unwrap();
         assert_eq!(out, Outcome { added: 2, error: None });
         assert_eq!(
             captures(&db),
@@ -285,11 +333,11 @@ mod tests {
         let src = Fake::default();
         *src.open.borrow_mut() = vec![rem("r1", "Call the printer", "")];
         *src.failing.borrow_mut() = vec!["r1".into()];
-        let first = import(&dir, &db, "Inbox", &src).unwrap();
+        let first = import(&dir, "Inbox", &src, &into(&db)).unwrap();
         assert_eq!(first, Outcome { added: 1, error: Some(RemindersError::Timeout) });
         assert!(src.ticked.borrow().is_empty());
         src.failing.borrow_mut().clear();
-        let second = import(&dir, &db, "Inbox", &src).unwrap();
+        let second = import(&dir, "Inbox", &src, &into(&db)).unwrap();
         assert_eq!(second, Outcome { added: 0, error: None });
         assert_eq!(*src.ticked.borrow(), vec!["r1"]);
         assert_eq!(captures(&db).len(), 1);
@@ -302,14 +350,84 @@ mod tests {
         let src = Fake::default();
         *src.open.borrow_mut() = vec![rem("r1", "Call the printer", "")];
         *src.failing.borrow_mut() = vec!["r1".into()];
-        import(&dir, &a, "Inbox", &src).unwrap();
+        import(&dir, "Inbox", &src, &into(&a)).unwrap();
         // The active organisation changed before the tick worked.
         src.failing.borrow_mut().clear();
-        let out = import(&dir, &b, "Inbox", &src).unwrap();
+        let out = import(&dir, "Inbox", &src, &into(&b)).unwrap();
         assert_eq!(out.added, 0);
         assert!(captures(&b).is_empty());
         assert_eq!(captures(&a).len(), 1);
         assert_eq!(*src.ticked.borrow(), vec!["r1"]);
+    }
+
+    #[test]
+    fn a_pass_stops_when_the_organisation_changed_and_leaves_the_rest_unticked() {
+        let dir = tmp("changed");
+        let db = migrated(&dir, "a.db");
+        let src = Fake::default();
+        *src.open.borrow_mut() = vec![rem("r1", "One", ""), rem("r2", "Two", ""), rem("r3", "Three", "")];
+        let calls = RefCell::new(0);
+        let add = |text: &str, id: &str| {
+            *calls.borrow_mut() += 1;
+            // The second add finds another active organisation (or a mode).
+            if *calls.borrow() == 2 { Add::OrgChanged } else { into(&db)(text, id) }
+        };
+        let out = import(&dir, "Inbox", &src, &add).unwrap();
+        assert_eq!(out.added, 1);
+        assert_eq!(*calls.borrow(), 2, "no add after the change");
+        assert_eq!(*src.ticked.borrow(), vec!["r1"]);
+        assert_eq!(captures(&db).len(), 1);
+        // Next pass: r2 and r3 are still open and unseen.
+        let out = import(&dir, "Inbox", &src, &into(&db)).unwrap();
+        assert_eq!(out.added, 2);
+    }
+
+    #[test]
+    fn a_reminder_that_cannot_be_added_is_skipped_and_the_pass_goes_on() {
+        let dir = tmp("skip");
+        let db = migrated(&dir, "a.db");
+        let src = Fake::default();
+        *src.open.borrow_mut() = vec![rem("r1", "One", ""), rem("r2", "Two", ""), rem("r3", "Three", "")];
+        let add = |text: &str, id: &str| {
+            if id == "r2" { Add::Failed("disk full".into()) } else { into(&db)(text, id) }
+        };
+        let out = import(&dir, "Inbox", &src, &add).unwrap();
+        assert_eq!(out, Outcome { added: 2, error: None });
+        assert_eq!(*src.ticked.borrow(), vec!["r1", "r3"]);
+        // r2 stays open, not seen: it is read again next pass.
+        assert_eq!(src.open.borrow().iter().map(|r| r.id.as_str()).collect::<Vec<_>>(), vec!["r2"]);
+        assert!(!read_seen(&dir).contains(&"r2".to_string()));
+    }
+
+    #[test]
+    fn two_passes_never_overlap() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        struct Slow {
+            now: AtomicUsize,
+            max: AtomicUsize,
+        }
+        impl ReminderSource for Slow {
+            fn open(&self, _l: &str) -> Result<Vec<Reminder>, RemindersError> {
+                let n = self.now.fetch_add(1, Ordering::SeqCst) + 1;
+                self.max.fetch_max(n, Ordering::SeqCst);
+                std::thread::sleep(Duration::from_millis(150));
+                self.now.fetch_sub(1, Ordering::SeqCst);
+                Ok(vec![])
+            }
+            fn complete(&self, _l: &str, _i: &str) -> Result<(), RemindersError> {
+                Ok(())
+            }
+        }
+        let dir = tmp("overlap");
+        let db = migrated(&dir, "studiomanager.db");
+        let src = Slow { now: AtomicUsize::new(0), max: AtomicUsize::new(0) };
+        let org = crate::ActiveOrg { id: "o".into(), dir: dir.clone(), db_name: "studiomanager.db".into() };
+        std::thread::scope(|sc| {
+            for _ in 0..2 {
+                sc.spawn(|| pass(&dir, &org, "Inbox", &src, &into(&db)));
+            }
+        });
+        assert_eq!(src.max.load(Ordering::SeqCst), 1);
     }
 
     #[test]
@@ -318,7 +436,7 @@ mod tests {
         let db = migrated(&dir, "a.db");
         let src = Fake::default();
         *src.open.borrow_mut() = vec![rem("r1", " ", "")];
-        assert_eq!(import(&dir, &db, "Inbox", &src).unwrap(), Outcome::default());
+        assert_eq!(import(&dir, "Inbox", &src, &into(&db)).unwrap(), Outcome::default());
         assert!(src.ticked.borrow().is_empty());
     }
 
@@ -328,7 +446,7 @@ mod tests {
         let db = migrated(&dir, "a.db");
         let src = Fake::default();
         *src.open.borrow_mut() = (0..510).map(|i| rem(&format!("r{i}"), &format!("Thing {i}"), "")).collect();
-        import(&dir, &db, "Inbox", &src).unwrap();
+        import(&dir, "Inbox", &src, &into(&db)).unwrap();
         let seen: Vec<String> = serde_json::from_str(&std::fs::read_to_string(dir.join(SEEN_FILE)).unwrap()).unwrap();
         assert_eq!(seen.len(), 500);
         assert_eq!(seen.last().unwrap(), "r509");
@@ -340,10 +458,10 @@ mod tests {
         let src = Fake::default();
         *src.open.borrow_mut() = vec![rem("r1", "Call the printer", "")];
         let org = |db_name: &str| crate::ActiveOrg { id: "o".into(), dir: dir.clone(), db_name: db_name.into() };
-        assert_eq!(pass(&dir, &org("studiomanager_test.db"), "Inbox", &src), None);
+        assert_eq!(pass(&dir, &org("studiomanager_test.db"), "Inbox", &src, &into(&dir.join("studiomanager_test.db"))), None);
         assert_eq!(*src.reads.borrow(), 0);
         migrated(&dir, "studiomanager.db");
-        let out = pass(&dir, &org("studiomanager.db"), "Inbox", &src).unwrap().unwrap();
+        let out = pass(&dir, &org("studiomanager.db"), "Inbox", &src, &into(&dir.join("studiomanager.db"))).unwrap().unwrap();
         assert_eq!(out.added, 1);
         // The loop's first line, before any read of this Mac.
         let code = include_str!("reminders.rs");

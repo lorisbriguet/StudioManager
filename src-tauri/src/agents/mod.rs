@@ -29,6 +29,9 @@ pub struct AgentsState {
     pub hub: pty::TerminalHub,
     /// The last list the poller emitted (labelled, quiet applied).
     pub last: Mutex<Vec<model::Agent>>,
+    /// Epoch ms of the poller's last SUCCESSFUL agent list; 0 before the first (or while Agents
+    /// is off). The brief scheduler trusts "not listed" only after a list newer than its start.
+    listed_at: std::sync::atomic::AtomicI64,
     /// The transcript scan behind the Usage tab, and its last result (60 s cache).
     pub activity: Arc<Mutex<usage::activity::ActivityCache>>,
     /// The last `claude auth status` (see login.rs); None before the first check.
@@ -42,7 +45,7 @@ impl AgentsState {
             Arc::new(pty::RealSpawner::new(login_env.clone())),
             Arc::new(pty::SystemClock),
         );
-        Self { app_dir, login_env, hub, last: Mutex::new(Vec::new()), activity: Default::default(), login: Mutex::new(None) }
+        Self { app_dir, login_env, hub, last: Mutex::new(Vec::new()), listed_at: Default::default(), activity: Default::default(), login: Mutex::new(None) }
     }
 
     /// The cached login-shell environment, for use on a blocking thread: resolving it runs a
@@ -54,6 +57,15 @@ impl AgentsState {
     /// A copy of the poller's last list (empty before the first pass).
     pub fn cached(&self) -> Vec<model::Agent> {
         self.last.lock().map(|c| c.clone()).unwrap_or_default()
+    }
+
+    /// When the poller last listed the agents successfully.
+    pub fn listed_at(&self) -> Option<i64> {
+        Some(self.listed_at.load(std::sync::atomic::Ordering::Relaxed)).filter(|t| *t > 0)
+    }
+
+    pub fn set_listed_at(&self, ms: i64) {
+        self.listed_at.store(ms, std::sync::atomic::Ordering::Relaxed);
     }
 
     /// A runner for the `claude` CLI, or None when it cannot be found. May run the login-shell

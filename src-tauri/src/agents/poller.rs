@@ -312,6 +312,7 @@ fn run(app: tauri::AppHandle, reload: Arc<AtomicBool>) {
                 if let Ok(mut c) = state.last.lock() {
                     c.clear();
                 }
+                state.set_listed_at(0);
                 crate::menubar::set_attention(&app, false);
             }
             continue;
@@ -357,10 +358,14 @@ fn run(app: tauri::AppHandle, reload: Arc<AtomicBool>) {
             label_and_quiet(&mut v, &index, &state.app_dir, &mut models);
             v
         });
+        let listed = result.is_ok();
         let (emit, fresh) = poll_once(&mut poll, result);
         let notify = gate.admit(fresh, &emit, now_ms());
         if let Ok(mut c) = state.last.lock() {
             *c = emit.clone();
+        }
+        if listed {
+            state.set_listed_at(now_ms());
         }
         // No lock is held from here on.
         let _ = app.emit(CHANGED_EVENT, &emit);

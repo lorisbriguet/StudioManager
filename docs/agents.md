@@ -101,9 +101,9 @@ Agents can also note a thought through the `capture` tool of [Agent access](agen
 
 Turn on **Capture from Reminders** in Settings › Agents and name a list (**Inbox** by default). Every 2 minutes, and right after the Mac wakes, StudioManager reads the open reminders of that list, saves each as a capture (the title, then the notes), and ticks it in Reminders. A reminder added on your iPhone or Watch shows in the Inbox within a few minutes. It only works while StudioManager is open, and it waits while the organisation is in test or presentation mode.
 
-- The list must already exist in your **default** Reminders account, the one your phone shows. StudioManager never creates a list; if it is missing, Settings says so and names the account.
+- The list name cannot start with "-". The list must already exist in your **default** Reminders account, the one your phone shows. StudioManager never creates a list; if it is missing, Settings says so and names the account.
 - The first time, macOS asks to allow StudioManager to control Reminders (System Settings › Privacy & Security › Automation).
-- If Reminders is slow, StudioManager says "Reminders did not answer" and tries again on the next pass. A reminder is never captured twice, even when ticking it failed or you changed organisation in between.
+- If Reminders is slow, StudioManager says "Reminders did not answer" and tries again on the next pass. A reminder is never captured twice, even when ticking it failed or you changed organisation in between. If you change organisation (or enter test or presentation mode) during a pass, the pass stops and the rest waits for the next one; a reminder that cannot be saved is skipped and tried again. Switching Agents off also switches this off.
 - Not in the demo build. Captures made this way show "Reminders" as their source in the [Inbox](#inbox).
 
 ## Inbox and briefs
@@ -125,10 +125,10 @@ Off by default. In Settings › Agents, switch on **Brief new captures with an a
 
 - **The folder.** The app prepares a `briefing` folder in its data folder. It holds the config for the StudioManager server and a settings file that only denies tools. Turning the switch on asks you to trust that folder in Claude Code, once.
 - **The session.** At most every 15 minutes, when new captures wait, the app starts one background agent on Opus in that folder. It takes up to 20 captures of one organisation, the one whose oldest capture is oldest. Organisations in test or presentation mode are skipped.
-- **What it may do.** It starts with only the StudioManager server and eight tools: read captures, projects, tasks and wiki articles, and file a capture and write a brief. It has no shell, no file editing and no web. It never creates projects or clients.
+- **What it may do.** It starts with only the StudioManager server and seven tools: read captures, projects, tasks and wiki articles, and file a capture with its brief. The server itself lists and allows only those seven for this session (the `STUDIOMANAGER_TOOLS` setting in the folder's config), and the session may not read files, search, start other agents, use skills or the browser, run a shell, edit files or use the web. It never creates projects or clients.
 - **What it writes.** For each capture it finds the project, reads the wiki, decisions and open tasks, then files the capture as a task, or as a subtask of an open task that already covers it. It writes a short brief (what to do, done when, unclear) and sets an outcome: a note, ready, or needs your word. With no clear project it leaves the capture in the Inbox with a reason.
 - **Limits.** It pauses while the 5-hour plan limit is at 80% or more (see [plan limits](menu-bar.md#plan-limits)). A session that runs over 20 minutes, or waits for an answer for over 2 minutes, is stopped. The app gives a session 60 seconds to appear in the list before it counts it as ended.
-- **After it.** When everything is filed, the session is stopped and removed. If some captures are left, or the session failed, each still waiting gets one try counted. After 3 tries it shows **Briefing failed** in the Inbox. Settings shows the last failure, the next session time and why a session is paused.
+- **After it.** When everything is filed, the session is stopped and removed. Each capture sent gets one try counted when the session starts (a start that fails before it began counts none and is shown as the last failure; the next slot tries again). After 3 tries a capture that is still waiting shows **Briefing failed** in the Inbox. Settings shows the last failure, the next session time and why a session is paused. The app only trusts "not in the list" after the Agents list has been read again following the start. Switching Agents off stops a running brief session.
 
 ### Needs you
 

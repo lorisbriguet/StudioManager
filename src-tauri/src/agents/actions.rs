@@ -172,7 +172,7 @@ fn trim_slash(s: &str) -> &str {
     s.trim_end_matches('/')
 }
 
-const START_TIMED_OUT: &str = "Claude took too long to start the agent. It may still appear in \
+pub const START_TIMED_OUT: &str = "Claude took too long to start the agent. It may still appear in \
     the list in a moment: check there before starting it again.";
 /// Clock difference allowed between "the start was asked" and the agent's `startedAt`.
 const START_SLACK_MS: i64 = 5_000;

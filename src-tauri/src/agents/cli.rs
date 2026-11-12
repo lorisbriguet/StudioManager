@@ -114,6 +114,14 @@ pub fn in_build(mut s: AgentsSettings, demo: bool) -> AgentsSettings {
     s
 }
 
+/// What goes off with the Agents switch: the brief session, Capture from Reminders, and the menu
+/// bar (start at login goes with it, in the command).
+pub fn switch_off(s: &mut AgentsSettings) {
+    s.briefing = false;
+    s.reminders = false;
+    s.menu_bar = false;
+}
+
 /// The brief session switch. Turning it on needs Agents on; turning it off never does.
 pub fn set_briefing(dir: &Path, on: bool) -> Result<(), String> {
     update_settings(dir, |s| {
@@ -135,6 +143,10 @@ pub fn set_reminders(dir: &Path, on: bool, list: &str) -> Result<(), String> {
         }
         if on && list.is_empty() {
             return Err("Name the Reminders list".into());
+        }
+        // The name is a script argument and a Reminders list name: never an option-like word.
+        if list.starts_with('-') {
+            return Err("A list name cannot start with \"-\"".into());
         }
         s.reminders = on;
         if !list.is_empty() {
@@ -470,9 +482,7 @@ pub async fn agents_set_enabled(
             let mut s = read_settings(&app_dir);
             s.enabled = enabled;
             if !enabled {
-                s.briefing = false;
-                // The menu bar is part of Agents: it goes off with it, and so does start at login.
-                s.menu_bar = false;
+                switch_off(&mut s);
                 // Disabling never fails (best effort).
                 let _ = crate::menubar::set_autostart(&app, false);
             }
@@ -640,6 +650,14 @@ mod tests {
     }
 
     #[test]
+    fn switching_agents_off_turns_the_brief_session_reminders_and_menu_bar_off() {
+        let mut s = AgentsSettings { enabled: true, menu_bar: true, briefing: true, reminders: true, ..Default::default() };
+        switch_off(&mut s);
+        assert!(!s.briefing && !s.reminders && !s.menu_bar);
+        assert_eq!(s.reminders_list, "Inbox", "the list name stays");
+    }
+
+    #[test]
     fn reminders_default_off_with_the_inbox_list() {
         let s = AgentsSettings::default();
         assert!(!s.reminders);
@@ -656,6 +674,9 @@ mod tests {
         assert!(set_reminders(&d, true, "Inbox").is_err());
         write_settings(&d, &AgentsSettings { enabled: true, ..Default::default() }).unwrap();
         assert!(set_reminders(&d, true, "  ").is_err());
+        assert!(set_reminders(&d, true, "-Inbox").is_err());
+        assert!(set_reminders(&d, false, " --list").is_err());
+        assert!(!read_settings(&d).reminders && read_settings(&d).reminders_list == "Inbox");
         set_reminders(&d, true, " Phone ").unwrap();
         let s = read_settings(&d);
         assert!(s.reminders && s.reminders_list == "Phone");

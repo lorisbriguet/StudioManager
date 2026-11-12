@@ -57,12 +57,16 @@ Money (hidden unless allowed in Settings): `list_invoices`, `get_invoice`, `list
 
 That is 44 tools, 5 of them money tools. Names given to the tools (projects, clients, articles) match regardless of accents and case; if several match, the server returns the candidates instead of picking one. Agents are asked to check with you before creating projects or clients and before every upkeep write.
 
+### Limiting a session to some tools
+
+If the environment variable `STUDIOMANAGER_TOOLS` is set and not empty, the server lists and allows only the tools it names (comma-separated, without the `mcp__studiomanager__` prefix, for example `list_captures,file_capture`). Any other call is refused with "This tool is not available in this session". Names that are no tool are ignored; unset, nothing changes. The brief session's config sets it to its seven tools (see [Brief session](agents.md#brief-session)).
+
 ## Safety rules
 
 - **No deletes.** No tool removes or drops anything. Task and subtask status can only be set to `todo` or `done`.
 - **Backups.** Before the first write per organisation in a session, the server takes a full copy of the database to `<data folder>/backups/agent/`. The 20 most recent per organisation are kept.
 - **Change log.** Every write adds a line to `<data folder>/agent-log.jsonl` (time, organisation, tool, summary); once it passes 1,000 lines it is cut back to the newest 500. Settings > Agents (Agent access card) shows the recent entries. The app watches this file: when an agent writes, open pages refresh within a couple of seconds.
-- **Captures.** `file_capture` only creates a task or a subtask (or leaves the capture in the inbox) and never changes an existing one. `set_brief` writes only the brief of the task or subtask it names.
+- **Captures.** `file_capture` only creates a task or a subtask (or leaves the capture in the inbox) and never changes an existing one. `set_brief` writes only the brief of the task or subtask it names (the brief session does not use it: `file_capture` carries the brief).
 - **Project folders.** `link_folder` and `update_project` accept only an existing folder inside Documents, Desktop, Downloads or `~/Library/CloudStorage` (not one of those places itself), and never an app or other bundle (`.app`, `.bundle`, `.framework`…).
 - **Size.** A title, name, note, link or article over 1 MB is refused.
 - **Test and presentation mode.** While either mode is active, writes are refused. Reads still work on the real data.

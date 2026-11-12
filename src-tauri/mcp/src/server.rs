@@ -62,6 +62,8 @@ pub struct Server {
     /// The data dir, or why it could not be found (every tool returns it).
     dir: Result<PathBuf, String>,
     tool_router: ToolRouter<Server>,
+    /// `STUDIOMANAGER_TOOLS`: the only tools this session may list and call.
+    session_tools: Option<Vec<String>>,
 }
 
 // ── Inputs ───────────────────────────────────────────────────
@@ -793,6 +795,13 @@ fn whats_due(dir: &Path, org: Option<&str>, days: Option<i64>) -> R<Value> {
 
 impl Server {
     pub fn new(dir: Result<PathBuf, String>) -> Server {
+        let raw = std::env::var(crate::env::TOOLS_ENV).ok();
+        Self::with_tools(dir, crate::env::parse_tools(raw.as_deref()))
+    }
+
+    /// `new` with the session's tool list given (`STUDIOMANAGER_TOOLS`): only those tools are
+    /// listed and called; None leaves every tool. Names that are no tool are ignored.
+    pub fn with_tools(dir: Result<PathBuf, String>, session_tools: Option<Vec<String>>) -> Server {
         let mut tool_router = Self::tool_router();
         let money = dir
             .as_ref()
@@ -803,7 +812,29 @@ impl Server {
                 tool_router.remove_route(name);
             }
         }
-        Server { dir, tool_router }
+        if let Some(list) = &session_tools {
+            let hidden: Vec<String> = tool_router
+                .list_all()
+                .into_iter()
+                .map(|t| t.name.to_string())
+                .filter(|n| !list.contains(n))
+                .collect();
+            for name in hidden {
+                tool_router.remove_route(&name);
+            }
+        }
+        Server { dir, tool_router, session_tools }
+    }
+
+    /// Refuses a tool the session's list leaves out.
+    fn allows(&self, name: &str) -> Result<(), rmcp::ErrorData> {
+        match &self.session_tools {
+            Some(list) if !list.iter().any(|n| n == name) => Err(rmcp::ErrorData::invalid_params(
+                "This tool is not available in this session",
+                None,
+            )),
+            _ => Ok(()),
+        }
     }
 
     /// Run `f` against the data dir on the blocking pool.
@@ -1465,6 +1496,16 @@ Titles that match nothing come back in unresolved_links and stay as text: write 
 
 #[tool_handler(router = self.tool_router)]
 impl ServerHandler for Server {
+    async fn call_tool(
+        &self,
+        request: rmcp::model::CallToolRequestParams,
+        context: rmcp::service::RequestContext<rmcp::RoleServer>,
+    ) -> Result<rmcp::model::CallToolResponse, rmcp::ErrorData> {
+        self.allows(&request.name)?;
+        let tcc = rmcp::handler::server::tool::ToolCallContext::new(self, request, context);
+        self.tool_router.call(tcc).await
+    }
+
     fn get_info(&self) -> ServerConfig {
         ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
             .with_server_info(Implementation::new(
@@ -1506,6 +1547,27 @@ mod tests {
             Server::new(Err("x".into())).tool_router.list_all().len(),
             39
         );
+    }
+
+    fn names(s: &Server) -> Vec<String> {
+        s.tool_router.list_all().into_iter().map(|t| t.name.to_string()).collect()
+    }
+
+    #[test]
+    fn a_session_tool_list_shows_and_allows_only_those_tools() {
+        let list = Some(vec!["list_captures".to_string(), "no_such_tool".to_string(), "get_project".to_string()]);
+        let s = Server::with_tools(Err("x".into()), list);
+        assert_eq!(names(&s), vec!["get_project", "list_captures"]);
+        assert!(s.allows("list_captures").is_ok());
+        let err = s.allows("create_client").unwrap_err();
+        assert_eq!(err.message, "This tool is not available in this session");
+    }
+
+    #[test]
+    fn without_a_session_tool_list_nothing_changes() {
+        let s = Server::with_tools(Err("x".into()), None);
+        assert_eq!(names(&s).len(), 39);
+        assert!(s.allows("create_client").is_ok());
     }
 
     #[test]

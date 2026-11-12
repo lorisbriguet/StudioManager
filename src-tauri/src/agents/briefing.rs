@@ -25,18 +25,43 @@ pub const FOLDER: &str = "briefing";
 /// The MCP config passed with `--mcp-config` (never `.mcp.json`: no approval prompt).
 pub const MCP_FILE: &str = "mcp.json";
 
-/// The tools a brief session may call: exactly these eight.
-pub const ALLOWED_TOOLS: [&str; 8] = [
+/// The prefix Claude Code gives the server's tools.
+const TOOL_PREFIX: &str = "mcp__studiomanager__";
+
+/// The tools a brief session may call: exactly these seven. `file_capture` writes the brief, so
+/// `set_brief` is not among them. The server itself lists and allows only these
+/// (`STUDIOMANAGER_TOOLS` in `mcp.json`); `--allowedTools` only pre-approves them.
+pub const ALLOWED_TOOLS: [&str; 7] = [
     "mcp__studiomanager__list_captures",
     "mcp__studiomanager__file_capture",
-    "mcp__studiomanager__set_brief",
     "mcp__studiomanager__list_projects",
     "mcp__studiomanager__get_project",
     "mcp__studiomanager__list_tasks",
     "mcp__studiomanager__list_wiki",
     "mcp__studiomanager__get_wiki_article",
 ];
-pub const DENIED_TOOLS: [&str; 6] = ["Bash", "Edit", "Write", "NotebookEdit", "WebFetch", "WebSearch"];
+/// Everything else a session could reach. (Not `--tools ""`: it removes the tool-search tool
+/// too, and the session then cannot reach the MCP tools at all.)
+pub const DENIED_TOOLS: [&str; 13] = [
+    "Bash",
+    "Edit",
+    "Write",
+    "NotebookEdit",
+    "WebFetch",
+    "WebSearch",
+    "Read",
+    "Glob",
+    "Grep",
+    "Agent",
+    "Task",
+    "Skill",
+    "mcp__claude-in-chrome",
+];
+
+/// `ALLOWED_TOOLS` as the server's own names, comma-separated (`STUDIOMANAGER_TOOLS`).
+fn server_tool_list() -> String {
+    ALLOWED_TOOLS.iter().map(|t| t.trim_start_matches(TOOL_PREFIX)).collect::<Vec<_>>().join(",")
+}
 
 fn to_json(v: &serde_json::Value) -> String {
     format!("{}\n", serde_json::to_string_pretty(v).unwrap_or_default())
@@ -58,7 +83,10 @@ pub fn prepare_folder(app_dir: &Path, mcp_path: &str) -> Result<PathBuf, String>
     let claude = folder.join(".claude");
     std::fs::create_dir_all(&claude)
         .map_err(|e| format!("Failed to create {}: {e}", claude.display()))?;
-    let mcp = json!({ "mcpServers": { "studiomanager": { "command": mcp_path } } });
+    let mcp = json!({ "mcpServers": { "studiomanager": {
+        "command": mcp_path,
+        "env": { "STUDIOMANAGER_TOOLS": server_tool_list() }
+    } } });
     write_if_changed(&folder.join(MCP_FILE), &to_json(&mcp))?;
     let settings = json!({ "permissions": { "deny": DENIED_TOOLS } });
     write_if_changed(&claude.join("settings.json"), &to_json(&settings))?;
@@ -122,6 +150,14 @@ pub struct BriefRun {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct PendingStart {
+    pub org_id: String,
+    pub name: String,
+    pub capture_ids: Vec<i64>,
+    pub started_at: i64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct LastRun {
     pub finished_at: i64,
     pub ok: bool,
@@ -133,6 +169,8 @@ pub struct LastRun {
 pub struct BriefState {
     pub last_start_at: Option<i64>,
     pub current: Option<BriefRun>,
+    /// A start that timed out: the session may exist; looked for in the poller's list by name.
+    pub pending: Option<PendingStart>,
     pub last: Option<LastRun>,
 }
 
@@ -216,6 +254,22 @@ pub fn count_try(db: &Path, ids: &[i64]) -> Result<usize, String> {
         params_from_iter(ids.iter()),
     )
     .map_err(|e| format!("Failed to count the try: {e}"))
+}
+
+/// How many of `ids` are still waiting (new, not left in the inbox).
+pub fn waiting_count(db: &Path, ids: &[i64]) -> Result<usize, String> {
+    if ids.is_empty() {
+        return Ok(0);
+    }
+    let conn = super::capture::open(db)?;
+    let marks = vec!["?"; ids.len()].join(", ");
+    conn.query_row(
+        &format!("SELECT COUNT(*) FROM captures WHERE status = 'new' AND inbox_reason IS NULL AND id IN ({marks})"),
+        params_from_iter(ids.iter()),
+        |r| r.get::<_, i64>(0),
+    )
+    .map(|n| n as usize)
+    .map_err(|e| format!("Failed to read captures: {e}"))
 }
 
 fn in_mode(db: &Path) -> bool {
@@ -321,11 +375,27 @@ pub fn session_name(now: DateTime<Local>) -> String {
     now.format("brief-%Y%m%d-%H%M").to_string()
 }
 
+/// Whether the poller's list is one to trust about a session started at `since`: a successful
+/// list made after `since` and after this scheduler started (a list from before says nothing).
+pub fn list_is_fresh(listed_at: Option<i64>, since: i64, scheduler_started: i64) -> bool {
+    listed_at.is_some_and(|t| t > since && t > scheduler_started)
+}
+
 /// What to do with the running session, from the poller's list. Not listed means it ended (or
-/// was removed), except right after the start, before the poller has seen it.
-pub fn verdict(agent: Option<&Agent>, run: &BriefRun, now: i64) -> Verdict {
+/// was removed) only once the poller has really looked after the start (and after this
+/// scheduler started); until then it waits, and the run limit still stops it.
+pub fn verdict(
+    agent: Option<&Agent>,
+    run: &BriefRun,
+    now: i64,
+    listed_at: Option<i64>,
+    scheduler_started: i64,
+) -> Verdict {
     let Some(agent) = agent else {
-        return if now - run.started_at < LISTED_GRACE_MS { Verdict::Wait } else { Verdict::Finished };
+        if list_is_fresh(listed_at, run.started_at + LISTED_GRACE_MS, scheduler_started) {
+            return Verdict::Finished;
+        }
+        return if now - run.started_at >= RUN_LIMIT_MS { Verdict::TimedOut } else { Verdict::Wait };
     };
     if now - run.started_at >= RUN_LIMIT_MS {
         return Verdict::TimedOut;
@@ -404,8 +474,11 @@ pub struct Deps<'a> {
     pub mcp_path: &'a str,
     pub demo: bool,
     pub now: i64,
-    /// The poller's last list.
+    /// The poller's last list, and when it last succeeded.
     pub agents: &'a [Agent],
+    pub listed_at: Option<i64>,
+    /// When this scheduler thread started.
+    pub scheduler_started: i64,
     pub cli: &'a dyn Fn() -> Result<Box<dyn Cli>, String>,
     /// Captures changed: the app refreshes.
     pub on_change: &'a dyn Fn(),
@@ -415,15 +488,14 @@ fn plural(n: usize) -> String {
     if n == 1 { "1 capture was not filed".into() } else { format!("{n} captures were not filed") }
 }
 
-fn fail(d: &Deps, s: &mut BriefState, org_id: &str, ids: &[i64], message: String) {
-    let db = org_dir(d.app_dir, org_id).join(DB_FILE);
-    if let Err(e) = count_try(&db, ids) {
-        log::warn!("[briefing] could not count the try: {e}");
-    }
+/// A start that did not happen (nothing was started, so no try is counted): the failure shows in
+/// Settings and the Inbox, and the next slot tries again.
+fn fail(d: &Deps, s: &mut BriefState, message: String) {
     s.last = Some(LastRun { finished_at: d.now, ok: false, message: Some(message) });
 }
 
-/// The running session has ended or went wrong: stop it, count the tries, record the result.
+/// The running session has ended or went wrong: stop it and record the result. The tries were
+/// counted when it started.
 fn settle(d: &Deps, s: &mut BriefState, run: BriefRun, verdict: Verdict) {
     let cli = (d.cli)().ok();
     if let Some(cli) = &cli {
@@ -431,7 +503,7 @@ fn settle(d: &Deps, s: &mut BriefState, run: BriefRun, verdict: Verdict) {
         let _ = actions::stop(cli.as_ref(), d.home, &run.short_id);
     }
     let db = org_dir(d.app_dir, &run.org_id).join(DB_FILE);
-    let left = count_try(&db, &run.capture_ids);
+    let left = waiting_count(&db, &run.capture_ids);
     let (ok, message, remove) = match (verdict, left) {
         (_, Err(e)) => (false, Some(e), false),
         (Verdict::Finished, Ok(0)) => (true, None, true),
@@ -450,12 +522,21 @@ fn settle(d: &Deps, s: &mut BriefState, run: BriefRun, verdict: Verdict) {
     (d.on_change)();
 }
 
+/// A session is running for `ids`: one more try for each, so every path is bounded by `MAX_TRIES`.
+fn started(d: &Deps, s: &mut BriefState, org_id: String, short_id: String, ids: Vec<i64>, started_at: i64) {
+    let db = org_dir(d.app_dir, &org_id).join(DB_FILE);
+    if let Err(e) = count_try(&db, &ids) {
+        log::warn!("[briefing] could not count the try: {e}");
+    }
+    s.current = Some(BriefRun { org_id, short_id, capture_ids: ids, started_at, waiting_since: None });
+}
+
 fn begin(d: &Deps, s: &mut BriefState, org: Organisation, ids: Vec<i64>) {
     let folder = match prepare_folder(d.app_dir, d.mcp_path) {
         Ok(f) => f,
         Err(e) => {
             s.last_start_at = Some(d.now);
-            return fail(d, s, &org.id, &ids, e);
+            return fail(d, s, e);
         }
     };
     let name = DateTime::from_timestamp_millis(d.now)
@@ -474,45 +555,102 @@ fn begin(d: &Deps, s: &mut BriefState, org: Organisation, ids: Vec<i64>) {
     });
     s.last_start_at = Some(d.now);
     match result {
-        Ok(short_id) => {
-            s.current = Some(BriefRun { org_id: org.id, short_id, capture_ids: ids, started_at: d.now, waiting_since: None });
+        Ok(short_id) => started(d, s, org.id, short_id, ids, d.now),
+        Err(e) if e == actions::START_TIMED_OUT => {
+            // The session may exist: no try yet; the next ticks look for it by name.
+            s.pending = Some(PendingStart { org_id: org.id, name, capture_ids: ids, started_at: d.now });
+            fail(d, s, e);
         }
-        Err(e) => fail(d, s, &org.id, &ids, e),
+        Err(e) => fail(d, s, e),
+    }
+}
+
+/// A start that timed out: adopt the session when the poller lists it; give up once a fresh
+/// list lacks it (or after the run limit).
+fn resolve_pending(d: &Deps, s: &mut BriefState, p: PendingStart) {
+    let found = d.agents.iter().find(|a| a.name == p.name).and_then(|a| a.short_id.clone());
+    if let Some(short_id) = found {
+        s.pending = None;
+        started(d, s, p.org_id, short_id, p.capture_ids, p.started_at);
+    } else if list_is_fresh(d.listed_at, p.started_at + LISTED_GRACE_MS, d.scheduler_started)
+        || d.now - p.started_at >= RUN_LIMIT_MS
+    {
+        s.pending = None;
     }
 }
 
 /// One scheduler check. Returns whether the state changed (the caller saves it). In the demo
-/// build it returns before anything is read.
-pub fn tick(d: &Deps, s: &mut BriefState) -> bool {
+/// build it returns before anything is read. `may_start`: false while the state could not be
+/// saved (a session started then would be forgotten after a restart).
+pub fn tick(d: &Deps, s: &mut BriefState, may_start: bool) -> bool {
     if d.demo {
         return false;
     }
     let before = s.clone();
     let settings = read_settings(d.app_dir);
-    if settings.enabled {
-        if let Some(run) = s.current.clone() {
-            let agent = d.agents.iter().find(|a| a.short_id.as_deref() == Some(run.short_id.as_str()));
-            match verdict(agent, &run, d.now) {
-                Verdict::Wait => {
-                    let waiting = agent.is_some_and(|a| a.group == Group::NeedsYou);
-                    if let Some(cur) = s.current.as_mut() {
-                        cur.waiting_since = match (waiting, cur.waiting_since) {
-                            (true, None) => Some(d.now),
-                            (true, since) => since,
-                            (false, _) => None,
-                        };
-                    }
-                }
-                v => settle(d, s, run, v),
+    if !settings.enabled {
+        // Agents went off: stop the session (best effort), count no try.
+        s.pending = None;
+        if let Some(run) = s.current.take() {
+            if let Ok(cli) = (d.cli)() {
+                let _ = actions::stop(cli.as_ref(), d.home, &run.short_id);
             }
-        } else if let Some((org, ids)) = evaluate(d.app_dir, s, &settings, false, d.now).work {
+            (d.on_change)();
+        }
+    } else if let Some(run) = s.current.clone() {
+        let agent = d.agents.iter().find(|a| a.short_id.as_deref() == Some(run.short_id.as_str()));
+        match verdict(agent, &run, d.now, d.listed_at, d.scheduler_started) {
+            Verdict::Wait => {
+                let waiting = agent.is_some_and(|a| a.group == Group::NeedsYou);
+                if let Some(cur) = s.current.as_mut() {
+                    cur.waiting_since = match (waiting, cur.waiting_since) {
+                        (true, None) => Some(d.now),
+                        (true, since) => since,
+                        (false, _) => None,
+                    };
+                }
+            }
+            v => settle(d, s, run, v),
+        }
+    } else if let Some(p) = s.pending.clone() {
+        resolve_pending(d, s, p);
+    } else if may_start {
+        if let Some((org, ids)) = evaluate(d.app_dir, s, &settings, false, d.now).work {
             begin(d, s, org, ids);
         }
     }
     *s != before
 }
 
-fn check(app: &AppHandle) {
+/// The scheduler's state, kept in memory: `briefing.json` is read once and saved after each
+/// change. While a save fails, no new session starts.
+pub struct Scheduler {
+    pub state: BriefState,
+    unsaved: bool,
+}
+
+impl Scheduler {
+    pub fn new(state: BriefState) -> Self {
+        Scheduler { state, unsaved: false }
+    }
+
+    pub fn step(&mut self, d: &Deps, save: &dyn Fn(&BriefState) -> Result<(), String>) {
+        if self.unsaved {
+            match save(&self.state) {
+                Ok(()) => self.unsaved = false,
+                Err(e) => log::warn!("[briefing] could not save {STATE_FILE}: {e}"),
+            }
+        }
+        if tick(d, &mut self.state, !self.unsaved) {
+            if let Err(e) = save(&self.state) {
+                log::warn!("[briefing] could not save {STATE_FILE}: {e}");
+                self.unsaved = true;
+            }
+        }
+    }
+}
+
+fn check(app: &AppHandle, sched: &mut Option<Scheduler>, scheduler_started: i64) {
     // First, before any file is read.
     if crate::host::is_demo(app) {
         return;
@@ -530,8 +668,8 @@ fn check(app: &AppHandle) {
             log::warn!("[briefing] emit {}: {e}", crate::agent_access::CHANGED_EVENT);
         }
     };
-    let mut s = read_state(&app_dir);
-    let changed = tick(
+    let sched = sched.get_or_insert_with(|| Scheduler::new(read_state(&app_dir)));
+    sched.step(
         &Deps {
             app_dir: &app_dir,
             home: &home,
@@ -540,16 +678,13 @@ fn check(app: &AppHandle) {
             demo: false,
             now: limits::now_ms(),
             agents: &agents,
+            listed_at: state.listed_at(),
+            scheduler_started,
             cli: &get_cli,
             on_change: &on_change,
         },
-        &mut s,
+        &|st| write_state(&app_dir, st),
     );
-    if changed {
-        if let Err(e) = write_state(&app_dir, &s) {
-            log::warn!("[briefing] could not save {STATE_FILE}: {e}");
-        }
-    }
 }
 
 /// The scheduler thread: a check every 30 s and right after a wake, as the routines'. The first
@@ -559,11 +694,15 @@ pub fn start(app: &AppHandle) {
     use super::routines::schedule::{next_since_check, wall_ms, CHECK_EVERY, SLICE};
     let app = app.clone();
     std::thread::spawn(move || {
+        let scheduler_started = limits::now_ms();
+        let mut sched: Option<Scheduler> = None;
         let mut last_wall = wall_ms();
         let mut since_check = Duration::ZERO;
         loop {
             if since_check >= CHECK_EVERY {
-                if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| check(&app))).is_err() {
+                if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| check(&app, &mut sched, scheduler_started)))
+                    .is_err()
+                {
                     log::error!("[briefing] check panicked; continuing");
                 }
                 since_check = Duration::ZERO;
@@ -616,11 +755,14 @@ mod tests {
         assert_eq!(folder, app.join("briefing").canonicalize().unwrap());
         assert_eq!(
             read(&folder.join("mcp.json")),
-            json!({ "mcpServers": { "studiomanager": { "command": "/opt/app/studiomanager-mcp" } } })
+            json!({ "mcpServers": { "studiomanager": {
+                "command": "/opt/app/studiomanager-mcp",
+                "env": { "STUDIOMANAGER_TOOLS": "list_captures,file_capture,list_projects,get_project,list_tasks,list_wiki,get_wiki_article" }
+            } } })
         );
         assert_eq!(
             read(&folder.join(".claude/settings.json")),
-            json!({ "permissions": { "deny": ["Bash", "Edit", "Write", "NotebookEdit", "WebFetch", "WebSearch"] } })
+            json!({ "permissions": { "deny": ["Bash", "Edit", "Write", "NotebookEdit", "WebFetch", "WebSearch", "Read", "Glob", "Grep", "Agent", "Task", "Skill", "mcp__claude-in-chrome"] } })
         );
         // No project-level server file: no approval prompt can appear.
         assert!(!folder.join(".mcp.json").exists());
@@ -651,8 +793,17 @@ mod tests {
         );
     }
 
+    fn read_env_tools() -> String {
+        let app = tmp("envtools");
+        let folder = prepare_folder(&app, "/x").unwrap();
+        read(&folder.join("mcp.json"))["mcpServers"]["studiomanager"]["env"]["STUDIOMANAGER_TOOLS"]
+            .as_str()
+            .unwrap()
+            .to_string()
+    }
+
     #[test]
-    fn briefing_args_carry_the_server_and_exactly_the_eight_tools() {
+    fn briefing_args_carry_the_server_and_exactly_the_seven_tools() {
         let a = briefing_args(std::path::Path::new("/data/briefing"));
         assert_eq!(&a[..3], ["--mcp-config", "/data/briefing/mcp.json", "--strict-mcp-config"]);
         let allowed_at = a.iter().position(|x| x == "--allowedTools").unwrap();
@@ -663,7 +814,6 @@ mod tests {
             [
                 "mcp__studiomanager__list_captures",
                 "mcp__studiomanager__file_capture",
-                "mcp__studiomanager__set_brief",
                 "mcp__studiomanager__list_projects",
                 "mcp__studiomanager__get_project",
                 "mcp__studiomanager__list_tasks",
@@ -671,7 +821,11 @@ mod tests {
                 "mcp__studiomanager__get_wiki_article",
             ]
         );
-        assert_eq!(a[denied_at + 1..], ["Bash", "Edit", "Write", "NotebookEdit", "WebFetch", "WebSearch"]);
+        assert_eq!(a[denied_at + 1..], ["Bash", "Edit", "Write", "NotebookEdit", "WebFetch", "WebSearch", "Read", "Glob", "Grep", "Agent", "Task", "Skill", "mcp__claude-in-chrome"]);
+        // The server's own list and the pre-approved list are the same tools.
+        let env = read_env_tools();
+        let allowed: Vec<String> = a[allowed_at + 1..denied_at].iter().map(|t| t.replace("mcp__studiomanager__", "")).collect();
+        assert_eq!(env, allowed.join(","));
         // Never a lone `--`: `start_with` would refuse it.
         assert!(!a.iter().any(|x| x == "--"));
     }
@@ -873,22 +1027,42 @@ mod tests {
         parse_agents(&json).unwrap().remove(0)
     }
 
+    /// A scheduler that started long before the runs below, and a list made at `at`.
+    const SCHED: i64 = T0 - 60 * MIN;
+
     #[test]
     fn verdict_follows_the_agent_state_and_the_limits() {
         let run = run_at(T0);
         let now = T0 + 5 * MIN;
-        assert_eq!(verdict(Some(&agent("busy")), &run, now), Verdict::Wait);
-        assert_eq!(verdict(Some(&agent("idle")), &run, now), Verdict::Finished);
-        assert_eq!(verdict(None, &run_at(T0 - 5 * MIN), now), Verdict::Finished);
+        let v = |a: Option<&Agent>, r: &BriefRun, now: i64| verdict(a, r, now, Some(now), SCHED);
+        assert_eq!(v(Some(&agent("busy")), &run, now), Verdict::Wait);
+        assert_eq!(v(Some(&agent("idle")), &run, now), Verdict::Finished);
+        assert_eq!(v(None, &run_at(T0 - 5 * MIN), now), Verdict::Finished);
         // A fresh start the poller has not listed yet is not a finished one.
-        assert_eq!(verdict(None, &run, T0 + 10_000), Verdict::Wait);
+        assert_eq!(v(None, &run, T0 + 10_000), Verdict::Wait);
         let waiting = |since: i64| BriefRun { waiting_since: Some(since), ..run_at(T0) };
-        assert_eq!(verdict(Some(&agent("waiting")), &waiting(now - MIN), now), Verdict::Wait);
-        assert_eq!(verdict(Some(&agent("waiting")), &waiting(now - 3 * MIN), now), Verdict::Stuck);
+        assert_eq!(v(Some(&agent("waiting")), &waiting(now - MIN), now), Verdict::Wait);
+        assert_eq!(v(Some(&agent("waiting")), &waiting(now - 3 * MIN), now), Verdict::Stuck);
         // Not yet noticed as waiting: wait (the tick records it).
-        assert_eq!(verdict(Some(&agent("waiting")), &run, now), Verdict::Wait);
-        assert_eq!(verdict(Some(&agent("busy")), &run, T0 + 21 * MIN), Verdict::TimedOut);
-        assert_eq!(verdict(Some(&agent("waiting")), &waiting(T0 + 20 * MIN), T0 + 21 * MIN), Verdict::TimedOut);
+        assert_eq!(v(Some(&agent("waiting")), &run, now), Verdict::Wait);
+        assert_eq!(v(Some(&agent("busy")), &run, T0 + 21 * MIN), Verdict::TimedOut);
+        assert_eq!(v(Some(&agent("waiting")), &waiting(T0 + 20 * MIN), T0 + 21 * MIN), Verdict::TimedOut);
+    }
+
+    #[test]
+    fn not_listed_means_finished_only_after_a_list_newer_than_the_start_and_the_scheduler() {
+        let run = run_at(T0);
+        let now = T0 + 5 * MIN;
+        // No list yet, or one from before the start (or inside the grace): wait.
+        assert_eq!(verdict(None, &run, now, None, SCHED), Verdict::Wait);
+        assert_eq!(verdict(None, &run, now, Some(T0 - MIN), SCHED), Verdict::Wait);
+        assert_eq!(verdict(None, &run, now, Some(T0 + LISTED_GRACE_MS), SCHED), Verdict::Wait);
+        assert_eq!(verdict(None, &run, now, Some(T0 + LISTED_GRACE_MS + 1), SCHED), Verdict::Finished);
+        // A list from before this scheduler thread started says nothing (an old run, a restart).
+        assert_eq!(verdict(None, &run, now, Some(T0 + 2 * MIN), T0 + 3 * MIN), Verdict::Wait);
+        assert_eq!(verdict(None, &run, now, Some(T0 + 4 * MIN), T0 + 3 * MIN), Verdict::Finished);
+        // Without a trusted list the run limit still stops it.
+        assert_eq!(verdict(None, &run, T0 + 20 * MIN, None, SCHED), Verdict::TimedOut);
     }
 
     #[test]
@@ -913,6 +1087,7 @@ mod tests {
     struct FakeCli {
         calls: Arc<Mutex<Vec<Call>>>,
         start_error: Arc<Mutex<Option<String>>>,
+        start_timeout: Arc<Mutex<bool>>,
     }
 
     impl Cli for FakeCli {
@@ -920,6 +1095,10 @@ mod tests {
             self.calls.lock().unwrap().push((a.to_vec(), cwd.to_path_buf()));
             let ok = |s: &str| CliOutput { code: 0, stdout: s.into(), stderr: String::new() };
             match a[0].as_str() {
+                "agents" => ok("[]"),
+                "--bg" if *self.start_timeout.lock().unwrap() => {
+                    CliOutput { code: -1, stdout: String::new(), stderr: "timed out".into() }
+                }
                 "--bg" => match self.start_error.lock().unwrap().clone() {
                     Some(e) => CliOutput { code: 1, stdout: String::new(), stderr: e },
                     None => ok("backgrounded · 0a1b2c3d\n"),
@@ -951,6 +1130,17 @@ mod tests {
             Harness { dir: app(name, &["aaa111"], &["aaa111"]), cli: FakeCli::default(), changed: RefCell::new(0) }
         }
         fn tick_with(&self, st: &mut BriefState, now: i64, agents: &[Agent], demo: bool) -> bool {
+            self.tick_full(st, now, agents, demo, Some(now), true)
+        }
+        fn tick_full(
+            &self,
+            st: &mut BriefState,
+            now: i64,
+            agents: &[Agent],
+            demo: bool,
+            listed_at: Option<i64>,
+            may_start: bool,
+        ) -> bool {
             let dir = self.dir.canonicalize().unwrap_or_else(|_| self.dir.clone());
             let trusted = vec![dir.to_string_lossy().into_owned()];
             let cli = self.cli.clone();
@@ -965,10 +1155,13 @@ mod tests {
                     demo,
                     now,
                     agents,
+                    listed_at,
+                    scheduler_started: SCHED,
                     cli: &get_cli,
                     on_change: &on_change,
                 },
                 st,
+                may_start,
             )
         }
         fn tick(&self, st: &mut BriefState, now: i64, agents: &[Agent]) -> bool {
@@ -1075,23 +1268,252 @@ mod tests {
         assert!(!st.last.unwrap().ok);
     }
 
+    fn tries_of(h: &Harness, id: i64) -> i64 {
+        count_of(&db_of(&h.dir, "aaa111"), &format!("SELECT brief_tries FROM captures WHERE id={id}"))
+    }
+
     #[test]
-    fn a_start_error_counts_a_try_and_three_failures_end_the_sending() {
-        let h = Harness::new("fail3");
+    fn a_start_that_failed_counts_no_try_and_is_shown_as_the_last_failure() {
+        let h = Harness::new("fail-nocount");
         let id = add_capture(&h.dir, "aaa111", "one", "2026-11-01 10:00:00");
         *h.cli.start_error.lock().unwrap() = Some("boom".into());
         let mut st = BriefState::default();
-        for round in 0..3 {
-            assert_eq!(eligible_ids(&h.dir, "aaa111"), vec![id], "round {round}");
+        for round in 0..5 {
             h.tick(&mut st, T0 + round * 15 * MIN, &[]);
             assert!(st.current.is_none());
             assert_eq!(st.last.as_ref().unwrap().message.as_deref(), Some("boom"));
+            assert_eq!(tries_of(&h, id), 0, "round {round}");
+        }
+        // Each slot tried again, none was used up.
+        assert_eq!(h.cli.starts().len(), 5);
+        assert_eq!(eligible_ids(&h.dir, "aaa111"), vec![id]);
+    }
+
+    #[test]
+    fn a_folder_that_is_not_trusted_counts_no_try() {
+        let h = Harness::new("untrusted");
+        let id = add_capture(&h.dir, "aaa111", "one", "2026-11-01 10:00:00");
+        let mut st = BriefState::default();
+        // Same tick as the harness's, with nothing trusted.
+        let get_cli = || Ok(Box::new(h.cli.clone()) as Box<dyn Cli>);
+        let on_change = || {};
+        tick(
+            &Deps {
+                app_dir: &h.dir,
+                home: &h.dir,
+                trusted: &[],
+                mcp_path: "/x",
+                demo: false,
+                now: T0,
+                agents: &[],
+                listed_at: Some(T0),
+                scheduler_started: SCHED,
+                cli: &get_cli,
+                on_change: &on_change,
+            },
+            &mut st,
+            true,
+        );
+        assert!(h.cli.starts().is_empty());
+        assert!(st.last.as_ref().unwrap().message.as_deref().unwrap().starts_with("Folder not trusted"));
+        assert_eq!(tries_of(&h, id), 0);
+        assert_eq!(st.last_start_at, Some(T0), "waits for the next slot");
+    }
+
+    #[test]
+    fn a_started_session_counts_its_try_at_once_so_three_unfiled_sessions_end_the_sending() {
+        let h = Harness::new("three");
+        let id = add_capture(&h.dir, "aaa111", "one", "2026-11-01 10:00:00");
+        let mut st = BriefState::default();
+        for round in 0..3 {
+            assert_eq!(eligible_ids(&h.dir, "aaa111"), vec![id], "round {round}");
+            let at = T0 + round * 15 * MIN;
+            h.tick(&mut st, at, &[]);
+            assert_eq!(tries_of(&h, id), round + 1, "counted right after the start");
+            // It never ends by itself: the 20-minute limit stops it (no list says it is gone).
+            h.tick_full(&mut st, at + 20 * MIN, &[agent("busy")], false, Some(at + 20 * MIN), true);
+            assert!(st.current.is_none());
+            assert_eq!(tries_of(&h, id), round + 1, "settling counts nothing more");
         }
         assert_eq!(h.cli.starts().len(), 3);
         assert_eq!(eligible_ids(&h.dir, "aaa111"), Vec::<i64>::new());
-        // Nothing left to send: a fourth slot starts nothing.
-        h.tick(&mut st, T0 + 60 * MIN, &[]);
+        h.tick(&mut st, T0 + 90 * MIN, &[]);
         assert_eq!(h.cli.starts().len(), 3);
+    }
+
+    #[test]
+    fn a_start_that_timed_out_counts_no_try_until_the_session_is_found_by_name() {
+        let h = Harness::new("timeout-adopt");
+        let id = add_capture(&h.dir, "aaa111", "one", "2026-11-01 10:00:00");
+        *h.cli.start_timeout.lock().unwrap() = true;
+        let mut st = BriefState::default();
+        h.tick(&mut st, T0, &[]);
+        assert!(st.current.is_none());
+        let pending = st.pending.clone().unwrap();
+        assert!(pending.name.starts_with("brief-"));
+        assert_eq!(tries_of(&h, id), 0);
+        // The poller's list has no such session yet (and its list is old): keep waiting, start
+        // nothing else.
+        h.tick_full(&mut st, T0 + 30_000, &[], false, Some(T0), true);
+        assert!(st.pending.is_some());
+        assert_eq!(h.cli.starts().len(), 1);
+        h.tick_full(&mut st, T0 + 20 * MIN, &[], false, Some(T0), true);
+        assert!(st.pending.is_none(), "given up after the run limit");
+        // Found: adopted as the current run, and its try is counted then.
+        let h2 = Harness::new("timeout-adopt2");
+        let id2 = add_capture(&h2.dir, "aaa111", "one", "2026-11-01 10:00:00");
+        *h2.cli.start_timeout.lock().unwrap() = true;
+        let mut st2 = BriefState::default();
+        h2.tick(&mut st2, T0, &[]);
+        let name = st2.pending.clone().unwrap().name;
+        let mut found = agent("busy");
+        found.name = name;
+        h2.tick(&mut st2, T0 + 40_000, &[found]);
+        assert!(st2.pending.is_none());
+        let run = st2.current.clone().unwrap();
+        assert_eq!((run.short_id.as_str(), run.capture_ids), ("0a1b2c3d", vec![id2]));
+        assert_eq!(tries_of(&h2, id2), 1);
+    }
+
+    #[test]
+    fn a_timed_out_start_a_fresh_list_does_not_show_is_dropped() {
+        let h = Harness::new("timeout-gone");
+        add_capture(&h.dir, "aaa111", "one", "2026-11-01 10:00:00");
+        *h.cli.start_timeout.lock().unwrap() = true;
+        let mut st = BriefState::default();
+        h.tick(&mut st, T0, &[]);
+        assert!(st.pending.is_some());
+        h.tick_full(&mut st, T0 + 2 * MIN, &[], false, Some(T0 + 2 * MIN), true);
+        assert!(st.pending.is_none());
+        assert!(st.current.is_none());
+    }
+
+    #[test]
+    fn a_stale_list_never_finishes_a_run_but_the_limit_still_stops_it() {
+        let h = Harness::new("stale");
+        let id = add_capture(&h.dir, "aaa111", "one", "2026-11-01 10:00:00");
+        let mut st = BriefState::default();
+        h.tick(&mut st, T0, &[]);
+        // Not listed, and the last good list is from before the start: it waits.
+        h.tick_full(&mut st, T0 + 5 * MIN, &[], false, Some(T0 - MIN), true);
+        assert!(st.current.is_some());
+        h.tick_full(&mut st, T0 + 6 * MIN, &[], false, None, true);
+        assert!(st.current.is_some());
+        // A real list after the start without it: finished.
+        h.tick_full(&mut st, T0 + 7 * MIN, &[], false, Some(T0 + 7 * MIN), true);
+        assert!(st.current.is_none());
+        assert_eq!(st.last.as_ref().unwrap().message.as_deref(), Some("1 capture was not filed"));
+        assert_eq!(tries_of(&h, id), 1);
+        // And with no list at all, 20 minutes stop a run.
+        let h = Harness::new("stale2");
+        add_capture(&h.dir, "aaa111", "one", "2026-11-01 10:00:00");
+        let mut st = BriefState::default();
+        h.tick(&mut st, T0, &[]);
+        h.tick_full(&mut st, T0 + 20 * MIN, &[], false, None, true);
+        assert!(st.current.is_none());
+        assert_eq!(st.last.as_ref().unwrap().message.as_deref(), Some("The session ran longer than 20 minutes"));
+    }
+
+    #[test]
+    fn switching_agents_off_stops_the_run_clears_it_and_counts_no_more_tries() {
+        let h = Harness::new("agents-off");
+        let id = add_capture(&h.dir, "aaa111", "one", "2026-11-01 10:00:00");
+        let mut st = BriefState::default();
+        h.tick(&mut st, T0, &[]);
+        assert_eq!(tries_of(&h, id), 1);
+        write_settings(&h.dir, &AgentsSettings { enabled: false, briefing: false, ..Default::default() }).unwrap();
+        assert!(h.tick(&mut st, T0 + MIN, &[agent("busy")]));
+        assert!(st.current.is_none());
+        assert_eq!(h.cli.verbs(), vec!["--bg", "stop"]);
+        assert_eq!(tries_of(&h, id), 1, "no further try");
+        // Nothing more happens while it stays off.
+        h.tick(&mut st, T0 + 30 * MIN, &[]);
+        assert_eq!(h.cli.starts().len(), 1);
+    }
+
+    #[test]
+    fn no_session_starts_while_the_state_cannot_be_saved() {
+        let h = Harness::new("save-fails");
+        add_capture(&h.dir, "aaa111", "one", "2026-11-01 10:00:00");
+        let saves = RefCell::new(Vec::<BriefState>::new());
+        let broken = std::cell::Cell::new(true);
+        let save = |s: &BriefState| {
+            if broken.get() {
+                Err("disk full".to_string())
+            } else {
+                saves.borrow_mut().push(s.clone());
+                Ok(())
+            }
+        };
+        let mut sched = Scheduler::new(BriefState::default());
+        let trusted = vec![h.dir.canonicalize().unwrap().to_string_lossy().into_owned()];
+        let cli = h.cli.clone();
+        let get_cli = move || Ok(Box::new(cli.clone()) as Box<dyn Cli>);
+        let on_change = || {};
+        let step = |sched: &mut Scheduler, now: i64| {
+            sched.step(
+                &Deps {
+                    app_dir: &h.dir,
+                    home: &h.dir,
+                    trusted: &trusted,
+                    mcp_path: "/x",
+                    demo: false,
+                    now,
+                    agents: &[],
+                    listed_at: Some(now),
+                    scheduler_started: SCHED,
+                    cli: &get_cli,
+                    on_change: &on_change,
+                },
+                &save,
+            )
+        };
+        // The first start works (the state was fine to begin with), but its save fails.
+        step(&mut sched, T0);
+        assert_eq!(h.cli.starts().len(), 1);
+        // It ends unfiled; saving still fails: the next slot starts nothing.
+        sched.state.current = None;
+        step(&mut sched, T0 + 16 * MIN);
+        assert_eq!(h.cli.starts().len(), 1, "no new session while a save fails");
+        // Saving works again: the pending state is saved first, then a session may start.
+        broken.set(false);
+        step(&mut sched, T0 + 32 * MIN);
+        assert_eq!(h.cli.starts().len(), 2);
+        assert!(!saves.borrow().is_empty());
+        assert_eq!(saves.borrow().last().unwrap(), &sched.state);
+    }
+
+    #[test]
+    fn the_scheduler_keeps_its_state_in_memory() {
+        let h = Harness::new("memory");
+        add_capture(&h.dir, "aaa111", "one", "2026-11-01 10:00:00");
+        let mut st = BriefState::default();
+        h.tick(&mut st, T0, &[]);
+        let mut sched = Scheduler::new(st.clone());
+        write_state(&h.dir, &st).unwrap();
+        // The file is gone or changed on disk: the thread's own copy is what counts.
+        std::fs::remove_file(h.dir.join(STATE_FILE)).unwrap();
+        let trusted: Vec<String> = vec![];
+        let get_cli = || Err("claude not found".to_string());
+        let on_change = || {};
+        sched.step(
+            &Deps {
+                app_dir: &h.dir,
+                home: &h.dir,
+                trusted: &trusted,
+                mcp_path: "/x",
+                demo: false,
+                now: T0 + MIN,
+                agents: &[agent("busy")],
+                listed_at: Some(T0 + MIN),
+                scheduler_started: SCHED,
+                cli: &get_cli,
+                on_change: &on_change,
+            },
+            &|s| write_state(&h.dir, s),
+        );
+        assert_eq!(sched.state, st);
+        assert!(sched.state.current.is_some());
     }
 
     #[test]

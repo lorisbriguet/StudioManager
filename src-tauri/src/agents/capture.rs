@@ -149,6 +149,15 @@ pub async fn capture_add(
     Ok(id)
 }
 
+/// The projects the panel offers; none in test or presentation mode (the panel cannot save
+/// there, and the production projects are not shown).
+fn projects_for_org(org: &ActiveOrg) -> Result<Vec<CaptureProject>, String> {
+    if org.in_mode() {
+        return Ok(Vec::new());
+    }
+    open_projects(&org.prod_db_path())
+}
+
 #[tauri::command]
 pub async fn capture_projects(
     app: tauri::AppHandle,
@@ -158,7 +167,7 @@ pub async fn capture_projects(
     blocking(move || {
         let _guard = crate::org_shared();
         let org = crate::active_org(&app)?;
-        open_projects(&org.prod_db_path())
+        projects_for_org(&org)
     })
     .await
 }
@@ -291,6 +300,16 @@ mod tests {
         let org = ActiveOrg { id: "abc123".into(), dir, db_name: "studiomanager_test.db".into() };
         assert_eq!(add_for_org(&org, "idea", None, "hotkey").unwrap_err(), CAPTURE_MODE);
         assert_eq!((count(&prod), count(&test)), (0, 0));
+    }
+
+    #[test]
+    fn in_a_mode_the_project_list_is_empty_never_the_production_projects() {
+        let dir = tmp("mode-projects");
+        migrated(&dir, crate::DB_FILE);
+        migrated(&dir, "studiomanager_test.db");
+        let org = |db: &str| ActiveOrg { id: "abc123".into(), dir: dir.clone(), db_name: db.into() };
+        assert_eq!(projects_for_org(&org("studiomanager_test.db")).unwrap(), vec![]);
+        assert_eq!(projects_for_org(&org(crate::DB_FILE)).unwrap().len(), 1);
     }
 
     #[test]

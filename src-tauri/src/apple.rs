@@ -198,12 +198,18 @@ on run argv
       return "NOTFOUND" & fieldSep & accName & recSep
     end try
     set output to "OK" & fieldSep & accName & recSep
-    repeat with r in (every reminder of theList whose completed is false)
-      set theBody to body of r
-      if theBody is missing value then set theBody to ""
-      set theName to name of r
+    -- Three bulk reads (one Apple Event each), joined by position.
+    set theIds to id of (every reminder of theList whose completed is false)
+    set theNames to name of (every reminder of theList whose completed is false)
+    set theBodies to body of (every reminder of theList whose completed is false)
+    set n to count of theIds
+    if (count of theNames) is not n or (count of theBodies) is not n then error "The list changed while it was read"
+    repeat with i from 1 to n
+      set theName to item i of theNames
       if theName is missing value then set theName to ""
-      set output to output & (id of r) & fieldSep & theName & fieldSep & theBody & recSep
+      set theBody to item i of theBodies
+      if theBody is missing value then set theBody to ""
+      set output to output & (item i of theIds) & fieldSep & theName & fieldSep & theBody & recSep
     end repeat
     return output
   end tell
@@ -885,5 +891,15 @@ mod tests {
             assert!(!script.contains("make new list"));
         }
         assert!(REM_COMPLETE.contains("item 2 of argv"));
+        // Read in bulk, not one Apple Event per reminder.
+        assert!(!REM_LIST_OPEN.contains("repeat with r in"));
+        for bulk in [
+            "set theIds to id of (every reminder of theList whose completed is false)",
+            "set theNames to name of (every reminder of theList whose completed is false)",
+            "set theBodies to body of (every reminder of theList whose completed is false)",
+        ] {
+            assert!(REM_LIST_OPEN.contains(bulk), "{bulk}");
+        }
+        assert!(!REM_LIST_OPEN.contains("of r"));
     }
 }
