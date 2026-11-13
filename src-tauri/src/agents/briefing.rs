@@ -143,7 +143,7 @@ const BATCH: i64 = 20;
 pub const STATE_FILE: &str = "briefing.json";
 /// Files an organisation in test or presentation mode has beside its database (the MCP
 /// server's `guard::MODE_FILES`).
-const MODE_FILES: [&str; 2] = ["studiomanager_test.db", "studiomanager_presentation.db"];
+pub(crate) const MODE_FILES: [&str; 2] = ["studiomanager_test.db", "studiomanager_presentation.db"];
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct BriefRun {
@@ -277,7 +277,7 @@ pub fn waiting_count(db: &Path, ids: &[i64]) -> Result<usize, String> {
     .map_err(|e| format!("Failed to read captures: {e}"))
 }
 
-fn in_mode(db: &Path) -> bool {
+pub(crate) fn in_mode(db: &Path) -> bool {
     MODE_FILES.iter().any(|f| db.with_file_name(f).exists())
 }
 

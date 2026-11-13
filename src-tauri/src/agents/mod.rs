@@ -3,6 +3,7 @@ pub mod briefing;
 pub mod brief;
 pub mod capture;
 pub mod cli;
+pub mod links;
 pub mod login;
 pub mod model;
 pub mod poller;
@@ -82,6 +83,7 @@ pub fn init(handle: &tauri::AppHandle) {
     poller::start(handle);
     routines::schedule::start(handle);
     briefing::start(handle);
+    links::start(handle);
     reminders::start(handle);
     // The morning brief's comments (see brief.rs); started by the Agents switch otherwise.
     if cli::read_settings(&handle.state::<AgentsState>().app_dir).enabled {
