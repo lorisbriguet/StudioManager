@@ -236,6 +236,18 @@ pub fn load(dir: &Path, now_ms: i64) -> Option<(Vec<Meter>, i64)> {
     Some((meters(&text, &read_history(&dir.join(HISTORY_FILE)), now_ms), saved_ms))
 }
 
+/// Like `load`, but the save time is None when the file has no numeric `savedAt` (`load` then
+/// says "now"). For the budget rule, which must not take a made-up save time for a fresh one.
+pub fn load_dated(dir: &Path, now_ms: i64) -> Option<(Vec<Meter>, Option<i64>)> {
+    let text = std::fs::read_to_string(dir.join(LIMITS_FILE)).ok()?;
+    let saved_ms = serde_json::from_str::<Value>(&text)
+        .ok()
+        .and_then(|v| v.get("savedAt").and_then(Value::as_f64))
+        .filter(|s| s.is_finite())
+        .map(|s| (s * 1000.0) as i64);
+    Some((meters(&text, &read_history(&dir.join(HISTORY_FILE)), now_ms), saved_ms))
+}
+
 /// Sent alert keys with when each was sent (epoch ms).
 fn read_sent(dir: &Path) -> BTreeMap<String, i64> {
     std::fs::read_to_string(dir.join(ALERTS_FILE))

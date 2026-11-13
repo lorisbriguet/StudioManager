@@ -40,10 +40,11 @@ pub fn week_line(resets_at: i64, now: i64) -> Option<f64> {
     Some(WEEK_LINE * elapsed as f64 / WEEK_MS as f64)
 }
 
-/// `limits` is what `limits::load` gives (meters, when the file was saved). `limits::meters`
-/// already drops a window that has reset, so a missing window means no usable reading.
-pub fn budget(limits: Option<(Vec<Meter>, i64)>, now: i64) -> Budget {
-    let Some((meters, saved_at)) = limits else { return Budget::NoData };
+/// `limits` is what `limits::load_dated` gives (meters, when the file was saved). A file with no
+/// save time cannot be shown fresh, so it is `NoData`. `limits::meters` already drops a window
+/// that has reset, so a missing window means no usable reading.
+pub fn budget(limits: Option<(Vec<Meter>, Option<i64>)>, now: i64) -> Budget {
+    let Some((meters, Some(saved_at))) = limits else { return Budget::NoData };
     if now - saved_at > STALE_MS || saved_at - now > FUTURE_SLACK_MS {
         return Budget::Stale { saved_at };
     }
@@ -97,11 +98,11 @@ mod tests {
 
     /// Fresh readings, half the week gone (the line stands at 42.5%).
     fn at_half(five: f64, week: f64) -> Budget {
-        budget(Some((meters(five, NOW + HOUR, week, NOW + 3 * DAY + DAY / 2), NOW)), NOW)
+        budget(Some((meters(five, NOW + HOUR, week, NOW + 3 * DAY + DAY / 2), Some(NOW))), NOW)
     }
 
     fn saved(saved_at: i64) -> Budget {
-        budget(Some((meters(10.0, NOW + HOUR, 10.0, NOW + 3 * DAY), saved_at)), NOW)
+        budget(Some((meters(10.0, NOW + HOUR, 10.0, NOW + 3 * DAY), Some(saved_at))), NOW)
     }
 
     #[test]
@@ -126,6 +127,36 @@ mod tests {
         assert_eq!(at_half(80.0, 10.0), Budget::FiveHour(80.0));
         // The 5-hour cap is checked before the week.
         assert_eq!(at_half(90.0, 99.0), Budget::FiveHour(90.0));
+    }
+
+    /// `limits.json` text with fresh-looking windows and the given `savedAt` JSON (or none),
+    /// read through the budget's own loader.
+    fn loaded(saved_at_json: Option<&str>) -> Budget {
+        let dir = std::env::temp_dir().join(format!("sm-budget-{}-{}", std::process::id(), saved_at_json.map_or(0, |s| s.len())));
+        std::fs::create_dir_all(&dir).unwrap();
+        let saved = saved_at_json.map(|v| format!(r#""savedAt":{v},"#)).unwrap_or_default();
+        let (five, week) = (NOW / 1000 + 3600, NOW / 1000 + 3 * 86_400);
+        std::fs::write(
+            dir.join(limits::LIMITS_FILE),
+            format!(
+                r#"{{{saved}"rate_limits":{{"five_hour":{{"used_percentage":10,"resets_at":{five}}},"seven_day":{{"used_percentage":10,"resets_at":{week}}}}}}}"#
+            ),
+        )
+        .unwrap();
+        budget(limits::load_dated(&dir, NOW), NOW)
+    }
+
+    #[test]
+    fn budget_no_saved_at_is_no_data() {
+        assert_eq!(loaded(None), Budget::NoData);
+        // Control: the same file with a fresh `savedAt` is fine.
+        assert_eq!(loaded(Some(&(NOW / 1000).to_string())), Budget::Ok);
+    }
+
+    #[test]
+    fn budget_non_numeric_saved_at_is_no_data() {
+        assert_eq!(loaded(Some(r#""soon""#)), Budget::NoData);
+        assert_eq!(loaded(Some("null")), Budget::NoData);
     }
 
     #[test]
@@ -153,19 +184,19 @@ mod tests {
     #[test]
     fn budget_week_reset_already() {
         // The weekly window reset in the past: `limits::meters` drops it.
-        let b = budget(Some((meters(10.0, NOW + HOUR, 10.0, NOW - 1000), NOW)), NOW);
+        let b = budget(Some((meters(10.0, NOW + HOUR, 10.0, NOW - 1000), Some(NOW))), NOW);
         assert_eq!(b, Budget::NoData);
         // So does a five-hour window that reset.
-        let b = budget(Some((meters(10.0, NOW - 1000, 10.0, NOW + 3 * DAY), NOW)), NOW);
+        let b = budget(Some((meters(10.0, NOW - 1000, 10.0, NOW + 3 * DAY), Some(NOW))), NOW);
         assert_eq!(b, Budget::NoData);
         // A file with no windows at all.
-        assert_eq!(budget(Some((vec![], NOW)), NOW), Budget::NoData);
+        assert_eq!(budget(Some((vec![], Some(NOW))), NOW), Budget::NoData);
     }
 
     #[test]
     fn budget_week_more_than_7_days_ahead() {
         // The week ends more than 7 days from now: no line to stand under, so it pauses.
-        let b = budget(Some((meters(10.0, NOW + HOUR, 1.0, NOW + WEEK_MS + 2000), NOW)), NOW);
+        let b = budget(Some((meters(10.0, NOW + HOUR, 1.0, NOW + WEEK_MS + 2000), Some(NOW))), NOW);
         assert_eq!(b, Budget::AheadOfWeek { percent: 1.0, line: 0.0 });
     }
 

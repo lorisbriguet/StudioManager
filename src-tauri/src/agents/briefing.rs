@@ -427,7 +427,7 @@ fn evaluate(app_dir: &Path, limits_dir: &Path, s: &BriefState, settings: &Agents
         return Evaluation { paused: early, work: None };
     }
     // Read only: in the dev build `limits_dir` is the installed app's folder.
-    let rule = budget::budget(limits::load(limits_dir, now), now);
+    let rule = budget::budget(limits::load_dated(limits_dir, now), now);
     if let Some(p) = paused(s, settings, demo, Some(rule), true, now) {
         return Evaluation { paused: Some(p), work: None };
     }
@@ -479,15 +479,15 @@ fn status_of(
             Some(Budget::AheadOfWeek { percent, .. }) | Some(Budget::FiveHour(percent)) => Some(*percent),
             _ => None,
         },
-        reason: why.map(|b| {
-            match b {
-                Budget::AheadOfWeek { .. } => "ahead_of_week",
-                Budget::FiveHour(_) => "five_hour",
-                Budget::NoData | Budget::Ok => "no_data",
-                Budget::Stale { .. } => "stale",
-            }
-            .to_string()
-        }),
+        // `Paused::Budget` never holds `Budget::Ok` (`paused` only pauses on the other four).
+        reason: why.and_then(|b| match b {
+            Budget::AheadOfWeek { .. } => Some("ahead_of_week"),
+            Budget::FiveHour(_) => Some("five_hour"),
+            Budget::NoData => Some("no_data"),
+            Budget::Stale { .. } => Some("stale"),
+            Budget::Ok => None,
+        })
+        .map(String::from),
         line: match why {
             Some(Budget::AheadOfWeek { line, .. }) => Some(*line),
             _ => None,
@@ -1665,6 +1665,23 @@ mod tests {
         write_limits_at(&h.dir, T0 - 30 * MIN, 10.0, 10.0);
         let mut st = BriefState::default();
         assert!(h.tick(&mut st, T0, &[]));
+    }
+
+    #[test]
+    fn a_limits_file_without_a_save_time_pauses_the_brief_session() {
+        let (h, id) = budget_harness("budget-nosave");
+        // Fresh-looking windows, but no `savedAt`: nothing says how old the reading is.
+        let (five, week) = ((T0 + 3_600_000) / 1000, (T0 + 302_400_000) / 1000);
+        std::fs::write(
+            h.dir.join("limits.json"),
+            format!(
+                r#"{{"rate_limits":{{"five_hour":{{"used_percentage":10,"resets_at":{five}}},"seven_day":{{"used_percentage":10,"resets_at":{week}}}}}}}"#
+            ),
+        )
+        .unwrap();
+        let status = paused_status(&h, id);
+        assert_eq!(status.paused.as_deref(), Some("budget"));
+        assert_eq!(status.reason.as_deref(), Some("no_data"));
     }
 
     #[test]

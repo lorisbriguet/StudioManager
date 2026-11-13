@@ -184,7 +184,7 @@ pub fn outlook(d: &Deps, locked: bool) -> Outlook {
     }
     let running = links_of(d).len();
     // Read only: in the dev build `limits_dir` is the installed app's folder.
-    let rule = budget::budget(limits::load(d.limits_dir, d.now), d.now);
+    let rule = budget::budget(limits::load_dated(d.limits_dir, d.now), d.now);
     if rule != Budget::Ok {
         return Outlook { paused: Some(Paused::Budget(rule)), running, cap, would_start: None };
     }
