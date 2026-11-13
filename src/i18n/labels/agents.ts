@@ -201,6 +201,7 @@ export const agents = {
     agents_answer_failed: "Couldn't send the answer",
     agents_folders_load_failed: "Couldn't load the folders",
     agents_start_failed: "Couldn't start the agent",
+    agents_started_not_linked: "The agent started, but the task does not show it",
     agents_trust_failed: "Couldn't trust the folder",
     routines_action_failed: "Couldn't complete this action",
     // Screen-reader hint on an agent prompt's pre-selected option
@@ -406,6 +407,7 @@ export const agents = {
     agents_answer_failed: "Impossible d'envoyer la réponse",
     agents_folders_load_failed: "Impossible de charger les dossiers",
     agents_start_failed: "Impossible de démarrer l'agent",
+    agents_started_not_linked: "L'agent a démarré, mais la tâche ne l'affiche pas",
     agents_trust_failed: "Impossible d'approuver le dossier",
     routines_action_failed: "Impossible d'effectuer cette action",
     agents_prompt_default: "par défaut",
