@@ -45,7 +45,7 @@ Upkeep, reading: `list_machines` (machines and equipment with their next upkeep)
 
 Upkeep, writing: `add_service_log` (a dated repair, upgrade or part on a machine, such as new RAM in a NAS), `add_machine_link` (a web page or remote-access link on a machine, which the Network page shows), `create_machine`, `update_machine`, `add_upkeep_item` (a repeating task such as "clean the filter every 6 months"), `mark_upkeep_done`, `create_consumable`, `update_consumable` (set the stock or add a restock), `create_subscription`, `update_subscription` (plan, vendor, link, cost, notes, or cancel; a subscription's name, renewal date and period change in the app). Each of these tells the agent to ask you first and say what it will save. An organisation that uses another organisation's machines and consumables (Settings > Studio upkeep) reads and writes them in that organisation, which agent access must allow too; subscriptions always stay with the organisation itself.
 
-Captures and briefs: `capture` (save a thought in the inbox, with an optional project hint), `list_captures` (the latest 50 new ones, a given status, or exactly the `ids` you pass, at most 50), `file_capture` (file a capture under a project as a task or subtask with a brief, or leave it in the inbox with a reason), `set_brief` (write the brief of a task or subtask), `report_result` (write the result of a task or subtask, with an optional branch and pull request link, when the work is done). See [Capture and briefs](agents.md#inbox-and-briefs).
+Captures and briefs: `capture` (save a thought in the inbox, with an optional project hint), `list_captures` (the latest 50 new ones, a given status, or exactly the `ids` you pass, at most 50), `file_capture` (file a capture under a project as a task or subtask with a brief, or leave it in the inbox with a reason), `set_brief` (write the brief of a task or subtask), `report_result` (write the result of a task or subtask, with an optional branch and pull request link, when the work is done), `ask` (put a question with a recommendation to the user, on a task or subtask), `list_needs_you` (what waits on the user or was decided, at most 100, newest first). See [Capture and briefs](agents.md#inbox-and-briefs).
 
 Wiki and tools: `list_wiki`, `get_wiki_article`, `put_wiki_article`, `add_decision`, `link_tool`.
 
@@ -55,11 +55,13 @@ A project's own Markdown files (README, design system, release notes, docs) show
 
 Money (hidden unless allowed in Settings): `list_invoices`, `get_invoice`, `list_quotes`, `list_expenses`, `pnl_summary`.
 
-That is 45 tools, 5 of them money tools. Names given to the tools (projects, clients, articles) match regardless of accents and case; if several match, the server returns the candidates instead of picking one. Agents are asked to check with you before creating projects or clients and before every upkeep write.
+That is 47 tools, 5 of them money tools, not counting the three lead-only tools below. Names given to the tools (projects, clients, articles) match regardless of accents and case; if several match, the server returns the candidates instead of picking one. Agents are asked to check with you before creating projects or clients and before every upkeep write.
 
 ### Limiting a session to some tools
 
 If the environment variable `STUDIOMANAGER_TOOLS` is set and not empty, the server lists and allows only the tools it names (comma-separated, without the `mcp__studiomanager__` prefix, for example `list_captures,file_capture`). Any other call is refused with "This tool is not available in this session". Names that are no tool are ignored; unset, nothing changes. The brief session's config sets it to its seven tools (see [Brief session](agents.md#brief-session)).
+
+Three tools are for the lead session only: `get_needs_you` (one entry with its task, project and, for a check, the stored diff, at most 200 KB), `resolve` (answer an entry the lead is working on, with the reason) and `hand_over` (pass it to the user with a recommendation; it stays open). They are neither listed nor allowed unless `STUDIOMANAGER_TOOLS` names them. They only act on an open entry whose `lead_state` is `running`, and never write a stage, a task status or `delivered_at`.
 
 ## Safety rules
 
