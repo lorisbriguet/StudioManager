@@ -3,6 +3,7 @@ pub mod briefing;
 pub mod brief;
 pub mod capture;
 pub mod cli;
+pub mod hubs;
 pub mod links;
 pub mod login;
 pub mod model;

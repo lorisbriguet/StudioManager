@@ -1,0 +1,1 @@
+Demo hub: a made-up hub for StudioManager's tests.
