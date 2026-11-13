@@ -62,6 +62,7 @@ permissions = [
   "allow-agents-set-reminders",
   "allow-agents-briefing-folder",
   "allow-briefing-status",
+  "allow-watcher-status",
   "allow-agents-status-line-preview",
   "allow-agents-status-line-install",
   "allow-agents-status-line-remove",

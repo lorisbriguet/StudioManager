@@ -68,13 +68,13 @@ pub enum Judgement {
     End(&'static str),
 }
 
-fn parse_utc_ms(text: &str) -> i64 {
+pub(super) fn parse_utc_ms(text: &str) -> i64 {
     NaiveDateTime::parse_from_str(text, "%Y-%m-%d %H:%M:%S")
         .map(|t| t.and_utc().timestamp_millis())
         .unwrap_or(0)
 }
 
-fn has_table(conn: &Connection) -> bool {
+pub(super) fn has_table(conn: &Connection) -> bool {
     conn.query_row("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'task_agents'", [], |_| Ok(()))
         .is_ok()
 }
@@ -88,7 +88,7 @@ fn read_open(conn: &Connection) -> Result<Vec<OpenLink>, String> {
             "SELECT id, task_id, subtask_id, short_id, session_id, model, started_at, reported_at IS NOT NULL,
                     COALESCE((SELECT TRIM(result) <> '' FROM tasks WHERE id = task_agents.task_id),
                              (SELECT TRIM(result) <> '' FROM subtasks WHERE id = task_agents.subtask_id), 0)
-             FROM task_agents WHERE ended_at IS NULL ORDER BY id",
+             FROM task_agents WHERE ended_at IS NULL AND started_by IS NULL ORDER BY id",
         )
         .map_err(|e| format!("Failed to read links: {e}"))?;
     let rows = st
@@ -777,6 +777,22 @@ mod tests {
         assert!(links[0].reported);
         assert_eq!(links[0].kind, ItemKind::Task);
         assert_eq!(links[0].started_at, 1_800_000_000_000);
+    }
+
+    #[test]
+    fn a_link_the_watcher_started_is_left_open_by_the_tracker() {
+        let dir = app("watcher-owned", &["a"], true);
+        let db = db_of(&dir, "a");
+        let t = add_task(&db, "todo", Some("running"));
+        let id = add_link(&db, "task_id", t, "0a1b2c3d", Some(SESSION), true);
+        Connection::open(&db).unwrap().execute("UPDATE task_agents SET started_by = 'watcher' WHERE id = ?1", [id]).unwrap();
+        assert_eq!(open_links(&db).unwrap(), vec![]);
+        // A finished agent would end a hand link; this one is the watcher's.
+        let done = agent("idle", Some("done"), SESSION, "0a1b2c3d", "opus");
+        let mut m = Misses::new();
+        assert!(!pass(&dir, &[done], Some(T0 + 13 * MIN), SCHED, &mut m));
+        assert_eq!(ended(&db, id), (false, None));
+        assert_eq!(stage_of(&db, "tasks", t).as_deref(), Some("running"));
     }
 
     #[test]

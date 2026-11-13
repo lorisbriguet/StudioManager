@@ -1070,6 +1070,7 @@ pub fn run() {
             agents::cli::agents_set_reminders,
             agents::briefing::agents_briefing_folder,
             agents::briefing::briefing_status,
+            agents::watcher::watcher_status,
             agents::statusline::agents_status_line_preview,
             agents::statusline::agents_status_line_install,
             agents::statusline::agents_status_line_remove,

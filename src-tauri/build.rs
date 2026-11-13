@@ -58,6 +58,7 @@ const COMMANDS: &[&str] = &[
     "agents_set_reminders",
     "agents_briefing_folder",
     "briefing_status",
+    "watcher_status",
     "agents_status_line_preview",
     "agents_status_line_install",
     "agents_status_line_remove",

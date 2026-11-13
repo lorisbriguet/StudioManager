@@ -6,6 +6,8 @@ import { useAloneEntries, useOpenEntries, useReopenEntry } from "../../db/hooks/
 import type { BriefEntry } from "../../db/queries/captures";
 import type { NeedsYouEntry } from "../../db/queries/needsYou";
 import { useStartAgentOn } from "../../hooks/useStartAgentOn";
+import { useWatcherStatus } from "../../hooks/useWatcherStatus";
+import { watcherLine } from "../../lib/agents";
 import { formatDisplayDateTime } from "../../utils/formatDate";
 import { Button, EmptyState, ICONS, ICON_SIZE, SECTION_LABEL, Textarea } from "../ui";
 import { CheckEntry } from "./CheckEntry";
@@ -25,11 +27,17 @@ export function NeedsYouTab() {
   const check = open.filter((e) => e.kind !== "decide");
 
   if (open.length === 0 && briefs.length === 0 && alone.length === 0) {
-    return <EmptyState icon={ICONS.agents} message={t.needs_you_empty} />;
+    return (
+      <>
+        <WatcherLine />
+        <EmptyState icon={ICONS.agents} message={t.needs_you_empty} />
+      </>
+    );
   }
 
   return (
     <section aria-label={t.agents_tab_needs_you} className="flex-1 min-w-0 min-h-0 overflow-y-auto">
+      <WatcherLine />
       {decide.length > 0 && (
         <Group label={t.needs_decide_group} count={decide.length}>
           {decide.map((e) => (
@@ -60,6 +68,14 @@ export function NeedsYouTab() {
       )}
     </section>
   );
+}
+
+/** One muted line while the watcher switch is on: why it waits, or the item it would start. */
+function WatcherLine() {
+  const t = useT();
+  const text = watcherLine(useWatcherStatus(), t);
+  if (!text) return null;
+  return <p className="text-xs text-muted mb-2">{text}</p>;
 }
 
 /** The group row as on the All agents list: SectionLabel and a muted count over a hairline. */

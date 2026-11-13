@@ -382,6 +382,70 @@ export interface BriefingLine {
   warn: boolean;
 }
 
+type BudgetLabels = Record<
+  "briefing_paused_week" | "briefing_paused_five_hour" | "briefing_paused_no_data" | "briefing_paused_stale",
+  string
+>;
+
+/** The budget pause in words (the brief session's and the watcher's share it). */
+function budgetText(
+  reason: string | null | undefined,
+  n: { percent?: number | null; line?: number | null; minutesOld?: number | null },
+  t: BudgetLabels,
+): string {
+  const whole = (v: number | null | undefined) => String(Math.round(v ?? 0));
+  return reason === "ahead_of_week"
+    ? t.briefing_paused_week.replace("{percent}", whole(n.percent)).replace("{line}", whole(n.line))
+    : reason === "five_hour"
+      ? t.briefing_paused_five_hour.replace("{percent}", whole(n.percent))
+      : reason === "stale"
+        ? t.briefing_paused_stale.replace("{min}", whole(n.minutesOld))
+        : t.briefing_paused_no_data;
+}
+
+export interface WatcherStatus {
+  /** `demo`, `off`, `agents_off`, `mode`, `locked`, `budget`, `cap`, `nothing`; null when it would start something. */
+  paused: string | null;
+  /** With `budget`: `ahead_of_week`, `five_hour`, `no_data` or `stale`. */
+  budget: string | null;
+  percent: number | null;
+  line: number | null;
+  minutesOld: number | null;
+  running: number;
+  cap: number;
+  /** The title of the item it would start. */
+  wouldStart: string | null;
+  lead: string | null;
+}
+
+/** Why the watcher waits, or what it would start. In this version it starts nothing. */
+export function watcherStatus(): Promise<WatcherStatus> {
+  return invoke<WatcherStatus>("watcher_status");
+}
+
+/** The watcher's one muted line for the Needs you tab; null while the watcher is off (or in the demo build). */
+export function watcherLine(
+  status: WatcherStatus | null,
+  t: BudgetLabels &
+    Record<"watcher_paused_mode" | "watcher_paused_locked" | "watcher_paused_cap" | "watcher_nothing" | "watcher_would_start", string>,
+): string | null {
+  if (!status || ["demo", "off", "agents_off"].includes(status.paused ?? "")) return null;
+  switch (status.paused) {
+    case "mode":
+      return t.watcher_paused_mode;
+    case "locked":
+      return t.watcher_paused_locked;
+    case "budget":
+      return budgetText(status.budget, status, t);
+    case "cap":
+      return t.watcher_paused_cap.replace("{n}", String(status.running)).replace("{cap}", String(status.cap));
+    case "nothing":
+      return t.watcher_nothing;
+    default:
+      return status.wouldStart ? t.watcher_would_start.replace("{title}", status.wouldStart) : null;
+  }
+}
+
 /** The muted lines under the brief session switch and in the Inbox: the next slot or why it waits, and the last failure. */
 export function briefingLines(
   status: BriefingStatus | null,
@@ -403,16 +467,7 @@ export function briefingLines(
     const min = Math.max(1, Math.ceil((status.nextAt - now) / 60_000));
     lines.push({ text: t.briefing_next.replace("{min}", String(min)), warn: false });
   } else if (status.paused === "budget") {
-    const whole = (n: number | null | undefined) => String(Math.round(n ?? 0));
-    const text =
-      status.reason === "ahead_of_week"
-        ? t.briefing_paused_week.replace("{percent}", whole(status.percent)).replace("{line}", whole(status.line))
-        : status.reason === "five_hour"
-          ? t.briefing_paused_five_hour.replace("{percent}", whole(status.percent))
-          : status.reason === "stale"
-            ? t.briefing_paused_stale.replace("{min}", whole(status.minutesOld))
-            : t.briefing_paused_no_data;
-    lines.push({ text, warn: true });
+    lines.push({ text: budgetText(status.reason, status, t), warn: true });
   } else if (status.paused === "access_off") {
     lines.push({ text: t.briefing_access_off, warn: true });
   }
