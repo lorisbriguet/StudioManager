@@ -37,6 +37,10 @@ pub struct Env<'a> {
     pub trusted: &'a dyn Fn() -> Vec<String>,
     pub dev: bool,
     pub mcp_path: &'a str,
+    /// Types a message into a worker (`pty::send_message`); tests record instead.
+    pub send: &'a dyn Fn(&Agent, &str) -> Result<(), String>,
+    /// The login shell's `PATH` for the check command, looked up only when one runs.
+    pub path_env: &'a dyn Fn() -> String,
 }
 
 // ---------------------------------------------------------------- the pending start
@@ -392,6 +396,13 @@ mod tests {
 
     const MCP: &str = "/opt/app/studiomanager-mcp";
 
+    fn no_send(_: &Agent, _: &str) -> Result<(), String> {
+        panic!("a start test types nothing");
+    }
+    fn no_path() -> String {
+        "/usr/bin:/bin".to_string()
+    }
+
     struct FakeCli {
         calls: Mutex<Vec<(Vec<String>, PathBuf)>>,
         replies: Mutex<Vec<CliOutput>>,
@@ -465,7 +476,7 @@ mod tests {
     fn go_with(f: &Fx, d: &Deps, mem: &mut Memory) -> Report {
         let get_cli = || Ok(Box::new(Shared(f.cli.clone())) as Box<dyn Cli>);
         let trusted = || vec![f.folder.clone()];
-        let env = Env { git: &f.git, cli: &get_cli, trusted: &trusted, dev: false, mcp_path: MCP };
+        let env = Env { git: &f.git, cli: &get_cli, trusted: &trusted, dev: false, mcp_path: MCP, send: &no_send, path_env: &no_path };
         tick(d, mem, Some(&env))
     }
 
@@ -697,7 +708,7 @@ mod tests {
         let f = fx("untrusted", vec![]);
         let get_cli = || Ok(Box::new(Shared(f.cli.clone())) as Box<dyn Cli>);
         let trusted = || vec!["/somewhere/else".to_string()];
-        let env = Env { git: &f.git, cli: &get_cli, trusted: &trusted, dev: false, mcp_path: MCP };
+        let env = Env { git: &f.git, cli: &get_cli, trusted: &trusted, dev: false, mcp_path: MCP, send: &no_send, path_env: &no_path };
         tick(&deps(&f.dir, &[]), &mut Memory::default(), Some(&env));
         assert_eq!(adds(&f), 0);
         let title: String = one(&f.db, "SELECT title FROM needs_you");
@@ -1020,7 +1031,7 @@ mod tests {
         Connection::open(&f.db).unwrap().execute("UPDATE projects SET folder_path = 'repo'", []).unwrap();
         let get_cli = || Ok(Box::new(Shared(f.cli.clone())) as Box<dyn Cli>);
         let trusted = || vec!["repo".to_string()];
-        let env = Env { git: &f.git, cli: &get_cli, trusted: &trusted, dev: false, mcp_path: MCP };
+        let env = Env { git: &f.git, cli: &get_cli, trusted: &trusted, dev: false, mcp_path: MCP, send: &no_send, path_env: &no_path };
         tick(&deps(&f.dir, &[]), &mut Memory::default(), Some(&env));
         assert_eq!(adds(&f), 0);
         let title: String = one(&f.db, "SELECT title FROM needs_you");

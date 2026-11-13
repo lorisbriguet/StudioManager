@@ -8,6 +8,7 @@
 //! `watcher.json` holds only a start that timed out (`start::Pending`).
 
 pub mod budget;
+pub mod check;
 pub mod events;
 pub mod git;
 pub mod start;
@@ -350,6 +351,12 @@ pub struct Memory {
     repos: HashMap<String, bool>,
     /// Items whose entry could not be written: skipped for this process.
     skip: start::Skip,
+    /// Per (organisation, link id): the time of the list that first lacked a finished-looking
+    /// worker's agent (two lists made at different times must lack it before the watcher acts).
+    misses: HashMap<(String, i64), i64>,
+    /// Per link whose failed check was sent back: when the watcher first saw it waiting for the
+    /// worker's next report, and whether the agent was seen working since.
+    awaiting: HashMap<(String, i64), (i64, bool)>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -434,6 +441,10 @@ pub fn tick(d: &Deps, mem: &mut Memory, env: Option<&start::Env>) -> Report {
             }
             if mem.pending != before {
                 save_pending(d, mem);
+            }
+            // A finished worker's check: not gated by the budget (no model is used).
+            if check::step(env, d, mem, &pass.links) {
+                pass = fresh(d, lock, mem);
             }
         }
     }
@@ -567,7 +578,19 @@ fn check(app: &AppHandle, mem: &mut Memory) {
     // The same list `agents_start` checks a folder against.
     let trusted = || super::projects::read_trusted(&actions::home_dir());
     let mcp_path = crate::agent_access::mcp_path();
-    let env = start::Env { git: &real_git, cli: &get_cli, trusted: &trusted, dev: crate::host::running_dev(), mcp_path: &mcp_path };
+    // The same path `agents_send` types a message through.
+    let send = |agent: &Agent, text: &str| super::pty::send_message(&state.hub, agent, text);
+    // The login shell's `PATH`, resolved only when a check is about to run.
+    let path_env = || super::pty::cached_login_env(&login).path.clone();
+    let env = start::Env {
+        git: &real_git,
+        cli: &get_cli,
+        trusted: &trusted,
+        dev: crate::host::running_dev(),
+        mcp_path: &mcp_path,
+        send: &send,
+        path_env: &path_env,
+    };
     let report = tick(
         &Deps {
             app_dir: &app_dir,

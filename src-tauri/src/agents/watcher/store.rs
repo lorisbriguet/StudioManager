@@ -168,7 +168,7 @@ fn table_of(kind: ItemKind) -> (&'static str, &'static str) {
     }
 }
 
-/// A Decide entry on an item with no link (status open, no lead state). Task 10 extends this.
+/// A Decide entry on an item with no link (status open, no lead state). A Check entry is `add_check`.
 pub fn add_entry(db: &Path, kind: ItemKind, item_id: i64, title: &str, body: &str) -> Result<i64, String> {
     let conn = super::super::capture::open(db)?;
     let (task, sub) = match kind {
@@ -184,6 +184,231 @@ pub fn add_entry(db: &Path, kind: ItemKind, item_id: i64, title: &str, body: &st
     )
     .map_err(|e| format!("Failed to write the entry: {e}"))?;
     Ok(conn.last_insert_rowid())
+}
+
+/// One of the counters of `task_agents`: each is bumped in the same transaction as the decision
+/// it limits, before the message or the start.
+// Only `CheckFails` is bumped yet (through `decide_send_back`); Tasks 11 and 12 bump the others.
+#[allow(dead_code)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Counter {
+    Resumes,
+    CheckFails,
+    SentBack,
+    QuestionSessions,
+    CheckSessions,
+}
+
+impl Counter {
+    fn column(self) -> &'static str {
+        match self {
+            Counter::Resumes => "resumes",
+            Counter::CheckFails => "check_fails",
+            Counter::SentBack => "sent_back",
+            Counter::QuestionSessions => "question_sessions",
+            Counter::CheckSessions => "check_sessions",
+        }
+    }
+}
+
+fn bump_in(conn: &Connection, link_id: i64, c: Counter) -> Result<i64, String> {
+    let col = c.column();
+    let e = |e: rusqlite::Error| format!("Failed to bump {col}: {e}");
+    let n = conn.execute(&format!("UPDATE task_agents SET {col} = {col} + 1 WHERE id = ?1"), [link_id]).map_err(e)?;
+    if n == 0 {
+        return Err(format!("No link {link_id}"));
+    }
+    conn.query_row(&format!("SELECT {col} FROM task_agents WHERE id = ?1"), [link_id], |r| r.get(0)).map_err(e)
+}
+
+/// Adds one to a counter of a link and returns the new value. The callers hold `crate::org_shared()`.
+#[allow(dead_code)] // Tasks 11 and 12 call it; Task 10 bumps inside `decide_send_back`.
+pub fn bump(db: &Path, link_id: i64, c: Counter) -> Result<i64, String> {
+    let mut conn = super::super::capture::open(db)?;
+    let tx = conn
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|e| format!("Failed to lock the database: {e}"))?;
+    let n = bump_in(&tx, link_id, c)?;
+    tx.commit().map_err(|e| format!("Failed to save the counter: {e}"))?;
+    Ok(n)
+}
+
+/// `check_state` of a link (running, passed, failed, none, error; None clears it).
+pub fn set_check_state(db: &Path, link_id: i64, state: Option<&str>) -> Result<(), String> {
+    let conn = super::super::capture::open(db)?;
+    conn.execute("UPDATE task_agents SET check_state = ?1 WHERE id = ?2", params![state, link_id])
+        .map_err(|e| format!("Failed to write the check state: {e}"))?;
+    Ok(())
+}
+
+/// The decision to send a failed check back to the worker, in one transaction: the failure is
+/// counted and the check state cleared. Returns the new `check_fails`. The message is typed only
+/// after this returned, so a crash in between loses the message and never allows a second one.
+pub fn decide_send_back(db: &Path, link_id: i64) -> Result<i64, String> {
+    let mut conn = super::super::capture::open(db)?;
+    let tx = conn
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|e| format!("Failed to lock the database: {e}"))?;
+    let n = bump_in(&tx, link_id, Counter::CheckFails)?;
+    tx.execute("UPDATE task_agents SET check_state = NULL WHERE id = ?1", [link_id])
+        .map_err(|e| format!("Failed to write the check state: {e}"))?;
+    tx.commit().map_err(|e| format!("Failed to save the decision: {e}"))?;
+    Ok(n)
+}
+
+/// Forgets that the worker reported, so its next `report_result` is a new report (the MCP server
+/// writes `reported_at` again).
+pub fn clear_report(db: &Path, link_id: i64) -> Result<(), String> {
+    let conn = super::super::capture::open(db)?;
+    conn.execute("UPDATE task_agents SET reported_at = NULL WHERE id = ?1 AND ended_at IS NULL", [link_id])
+        .map_err(|e| format!("Failed to clear the report: {e}"))?;
+    Ok(())
+}
+
+/// Something the app did by itself that the owner should see: an answered `alone` entry decided
+/// by the app, with its reason (the "Decided alone" group of the Needs you tab).
+pub fn record_alone(
+    db: &Path,
+    kind: ItemKind,
+    item_id: i64,
+    link_id: Option<i64>,
+    text: &str,
+    reason: &str,
+) -> Result<i64, String> {
+    let conn = super::super::capture::open(db)?;
+    let (task, sub) = match kind {
+        ItemKind::Task => (Some(item_id), None),
+        ItemKind::Subtask => (None, Some(item_id)),
+    };
+    let text: String = text.chars().take(200).collect();
+    let reason: String = reason.chars().take(1000).collect();
+    conn.execute(
+        "INSERT INTO needs_you (kind, task_id, subtask_id, link_id, title, status, decided_by, reason, answered_at)
+         VALUES ('alone', ?1, ?2, ?3, ?4, 'answered', 'app', ?5, datetime('now'))",
+        params![task, sub, link_id, text, reason],
+    )
+    .map_err(|e| format!("Failed to write the entry: {e}"))?;
+    Ok(conn.last_insert_rowid())
+}
+
+/// What a finished item tells the check: its title, the result its worker reported and the
+/// project's check command.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ItemFacts {
+    pub title: String,
+    pub result: String,
+    pub check_command: Option<String>,
+}
+
+pub fn item_facts(db: &Path, kind: ItemKind, item_id: i64) -> Result<ItemFacts, String> {
+    let conn = open(db)?;
+    let sql = match kind {
+        ItemKind::Task => {
+            "SELECT t.title, t.result, p.check_command FROM tasks t JOIN projects p ON p.id = t.project_id WHERE t.id = ?1"
+        }
+        ItemKind::Subtask => {
+            "SELECT s.title, s.result, p.check_command FROM subtasks s JOIN tasks t ON t.id = s.task_id
+             JOIN projects p ON p.id = t.project_id WHERE s.id = ?1"
+        }
+    };
+    conn.query_row(sql, [item_id], |r| {
+        let result: Option<String> = r.get(1)?;
+        let command: Option<String> = r.get(2)?;
+        Ok(ItemFacts {
+            title: r.get(0)?,
+            result: result.unwrap_or_default(),
+            check_command: command.filter(|c| !c.trim().is_empty()),
+        })
+    })
+    .map_err(|e| format!("Failed to read the item: {e}"))
+}
+
+/// A Check entry (kind `check`, open, `lead_state` waiting) for a link, with what the check found.
+#[derive(Clone, Debug, PartialEq)]
+pub struct NewCheck {
+    pub kind: ItemKind,
+    pub item_id: i64,
+    pub link_id: i64,
+    pub title: String,
+    pub body: String,
+    /// None: no check command, or not run.
+    pub check_passed: Option<bool>,
+    pub check_output: Option<String>,
+    pub change_lines: Option<i64>,
+    /// JSON array of the always-asks rules the change touches; None when the change was not measured.
+    pub touches: Option<String>,
+    /// What the link's `check_state` becomes in the same transaction.
+    pub check_state: Option<&'static str>,
+    /// Close the link with this outcome (`no_result`).
+    pub close: Option<&'static str>,
+}
+
+/// Writes a Check entry in one transaction: the entry, the link's check state (and its end, when
+/// closing) and the item's stage To check. A link has at most one open Check entry: with one
+/// already open nothing is inserted and None comes back (the state is still written, so the same
+/// finished state is not handled again).
+pub fn add_check(db: &Path, c: &NewCheck) -> Result<Option<i64>, String> {
+    let mut conn = super::super::capture::open(db)?;
+    let tx = conn
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|e| format!("Failed to lock the database: {e}"))?;
+    let e = |e: rusqlite::Error| format!("Failed to write the entry: {e}");
+    let open: i64 = tx
+        .query_row(
+            "SELECT COUNT(*) FROM needs_you WHERE link_id = ?1 AND kind = 'check' AND status = 'open'",
+            [c.link_id],
+            |r| r.get(0),
+        )
+        .map_err(e)?;
+    let mut id = None;
+    if open == 0 {
+        let (task, sub) = match c.kind {
+            ItemKind::Task => (Some(c.item_id), None),
+            ItemKind::Subtask => (None, Some(c.item_id)),
+        };
+        let title: String = c.title.chars().take(200).collect();
+        let body: String = c.body.chars().take(8000).collect();
+        tx.execute(
+            "INSERT INTO needs_you (kind, task_id, subtask_id, link_id, title, body, status, lead_state,
+                                    check_passed, check_output, change_lines, touches)
+             VALUES ('check', ?1, ?2, ?3, ?4, ?5, 'open', 'waiting', ?6, ?7, ?8, ?9)",
+            params![task, sub, c.link_id, title, body, c.check_passed, c.check_output, c.change_lines, c.touches],
+        )
+        .map_err(e)?;
+        id = Some(tx.last_insert_rowid());
+    }
+    if c.check_state.is_some() {
+        tx.execute("UPDATE task_agents SET check_state = ?1 WHERE id = ?2", params![c.check_state, c.link_id])
+            .map_err(e)?;
+    }
+    let (table, col) = table_of(c.kind);
+    if let Some(outcome) = c.close {
+        tx.execute(
+            "UPDATE task_agents SET ended_at = datetime('now'), outcome = ?1 WHERE id = ?2 AND ended_at IS NULL",
+            params![outcome, c.link_id],
+        )
+        .map_err(e)?;
+    }
+    let others: i64 = tx
+        .query_row(
+            &format!("SELECT COUNT(*) FROM task_agents WHERE {col} = ?1 AND ended_at IS NULL AND id <> ?2"),
+            params![c.item_id, c.link_id],
+            |r| r.get(0),
+        )
+        .map_err(e)?;
+    // With another open link the item keeps running when this one closes.
+    if c.close.is_none() || others == 0 {
+        tx.execute(
+            &format!(
+                "UPDATE {table} SET stage = 'to_check', updated_at = datetime('now')
+                 WHERE id = ?1 AND stage = 'running' AND status <> 'done'"
+            ),
+            [c.item_id],
+        )
+        .map_err(e)?;
+    }
+    tx.commit().map_err(|e| format!("Failed to save the entry: {e}"))?;
+    Ok(id)
 }
 
 /// What a started worker is recorded as.

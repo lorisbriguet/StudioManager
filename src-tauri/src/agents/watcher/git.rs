@@ -36,16 +36,16 @@ fn argv(a: &[&str]) -> Vec<String> {
     a.iter().map(|s| s.to_string()).collect()
 }
 
-fn succeeded(o: &CommandOutcome) -> bool {
+pub(super) fn succeeded(o: &CommandOutcome) -> bool {
     o.code == Some(0) && !o.timed_out && o.error.is_none()
 }
 
-fn git(g: &dyn Git, folder: &str, a: &[&str]) -> CommandOutcome {
+pub(super) fn git(g: &dyn Git, folder: &str, a: &[&str]) -> CommandOutcome {
     g.run("git", &argv(a), folder)
 }
 
 /// The first line of what a failed call said.
-fn first_line(o: &CommandOutcome, fallback: &str) -> String {
+pub(super) fn first_line(o: &CommandOutcome, fallback: &str) -> String {
     if let Some(e) = &o.error {
         return e.clone();
     }
@@ -61,7 +61,7 @@ pub fn is_repo(g: &dyn Git, folder: &str) -> bool {
     succeeded(&o) && o.tail.trim() == "true"
 }
 
-fn ref_ok(r: &str) -> bool {
+pub(super) fn ref_ok(r: &str) -> bool {
     !r.is_empty() && !r.starts_with('-') && !r.chars().any(|c| c.is_whitespace() || c.is_control())
 }
 
