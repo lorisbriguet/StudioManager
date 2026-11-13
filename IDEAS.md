@@ -229,8 +229,23 @@ Design: [specs/2026-11-12-agent-orchestrator-design.md](docs/superpowers/specs/2
 
 - [ ] Capture and briefing (built, awaiting a hand check in the app: shortcut, menu bar field, Inbox, brief session, Reminders import; see [the Agents guide](docs/agents.md#capture)): a hotkey field, an inbox, briefs written from the project's wiki ([plan](docs/superpowers/plans/2026-11-12-agent-orchestrator-1-capture.md))
 - [ ] A task carries its agent (built, awaiting a hand check in the dev build: stage, linked agents, brief and result, `report_result`; see [the Agents guide](docs/agents.md#a-task-carries-its-agent)): ([plan](docs/superpowers/plans/2026-11-13-agent-orchestrator-2-task-agent.md))
-- [ ] The watcher, the lead and "Needs you": worker cap, check command, budget rule
+- [ ] The watcher, the lead and "Needs you" (built, not released; hand checks of merging alone and of the resume of a worker with no process still running; see [the Agents guide](docs/agents.md#the-watcher-and-the-lead)): workers on Ready tasks in their own worktree, the cap, the budget rule, the check command, the Stop hook, lead sessions, merging alone per project ([plan](docs/superpowers/plans/2026-11-13-agent-orchestrator-3-watcher-lead.md))
+  - For the release notes of the version that ships it:
+    - Starting an agent by hand in a repository that sits under a trusted folder now needs the repository itself trusted in Claude Code ([New agent](docs/agents.md#new-agent)).
+    - Open StudioManager once with each organisation after updating: the agent tools refuse a database the app has not upgraded yet ([Agent access](docs/agent-access.md#turning-it-on)).
+    - The brief session now follows the budget rule and pauses when there is no usage reading from the last 30 minutes, or when the week is ahead of its pace ([the budget](docs/agents.md#the-budget)).
+    - The watcher is off by default. Its workers get a worktree under `<project>/.claude/worktrees/`, which shows as untracked unless the project ignores it, and worktrees and branches are never removed by the app.
+    - Finished lead sessions (`sm-lead-…`) are kept in the agent list until removed by hand.
+    - Merging alone is off by default per project, and never available for a project marked "Belongs to a hub". Tick that flag on every hub project.
+    - A number beside the menu bar icon counts what waits in Needs you ([Menu bar](docs/menu-bar.md#turning-it-on)).
 - [ ] Hubs: a connector for another store of work, its count in "Needs you", its timeline in the calendar
+
+Candidates, not decided (2026-11-13, from comparing the orchestrator with another project's public contribution process). None is part of the hubs part; each needs its own small design:
+
+- [ ] Numbered, testable behaviours in a brief: a short numbered list of statements from the user's side that a test or a screenshot can confirm. The worker reports against each number (`report_result`) and the lead reads the result against each. Today a brief is free text ([A task carries its agent](docs/agents.md#a-task-carries-its-agent)).
+- [ ] Proof attached to a result: `report_result` can carry proof (the test added for a bug fix, the path of a before/after screenshot) and the Check entry shows it. Limits to keep: the watcher never touches the screen, nothing in the demo build, real app data never touched; the proof is the worker's own, made in its worktree.
+- [ ] "Needs mocks" as a state: for visual work, a stage or a flag that keeps a task from being started by [the watcher](docs/agents.md#the-watcher-and-the-lead) until a design exists.
+- [ ] A terminal pane inside StudioManager showing an agent's live session next to its task (a standard web terminal component plus a shell run by the Rust side; no code from a terminal app under a copyleft licence). Costs: a shell command exposed to the window needs the same care as [Agent access](docs/agent-access.md) and must do nothing in the demo build; an agent started there has the app's screen permissions, not those of the terminal app it is usually started from. The Agents page already attaches a terminal to an agent only, with no free shell ([Terminal](docs/agents.md#terminal)).
 
 ## VAT and rounding (studio review D16, 2026-11-06)
 

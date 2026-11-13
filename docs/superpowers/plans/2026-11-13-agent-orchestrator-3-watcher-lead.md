@@ -521,3 +521,9 @@ To know before switching merging alone on for a project:
 - The check command must leave the worktree clean: build output that is not git-ignored makes the worktree dirty, and the change then waits for the owner.
 - Reopen on a merged entry does not undo the merge.
 - The merge is a squash through `gh`; a repository whose rules refuse it (required reviews, checks) gives "the merge failed" and the entry waits for the owner.
+
+## Changed while writing the docs (Task 14)
+
+- **The guide is one section of [the Agents guide](../../agents.md#the-watcher-and-the-lead)**, written from the code on main after Task 13, with the Needs you groups under [Needs you](../../agents.md#needs-you). [Agent access](../../agent-access.md#safety-rules) already listed the five tools and the count (PR A wrote them); Task 14 added the safety rule. [Menu bar](../../menu-bar.md#turning-it-on) has the count.
+- **The points for the release notes** are kept under the orchestrator entry of [IDEAS.md](../../../IDEAS.md) until the release that ships part 3 writes its section of the changelog ([RELEASING.md, step 5](../../../RELEASING.md#5-changelog--docs)).
+- **Seen, not changed (code, not docs):** the description under the watcher switch in Settings (`watcher_desc` in `src/i18n/labels/agents.ts`) still ends with "It never merges anything", which was true until Task 13.
