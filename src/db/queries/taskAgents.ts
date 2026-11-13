@@ -67,22 +67,22 @@ export async function wasCaptured(kind: ItemKind, id: number): Promise<boolean> 
   return (rows[0]?.n ?? 0) > 0;
 }
 
-/**
- * Set the stage by hand: none, Briefed or Ready. Running is the app's: refused
- * while the item is running. To check can be cleared or changed.
- */
-export async function setStage(kind: ItemKind, id: number, stage: null | "briefed" | "ready"): Promise<void> {
+/** The item's current stage, read fresh. */
+export async function getStage(kind: ItemKind, id: number): Promise<string | null> {
   const db = await getDb();
   const rows = await db.select<{ stage: string | null }[]>(`SELECT stage FROM ${table(kind)} WHERE id = $1`, [id]);
-  if (rows[0]?.stage === "running") throw new Error("The app sets this stage");
-  await db.execute(
-    `UPDATE ${table(kind)} SET stage = $2, updated_at = datetime('now') WHERE id = $1 AND (stage IS NULL OR stage <> 'running')`,
-    [id, stage],
-  );
+  return rows[0]?.stage ?? null;
 }
 
-/** Accept a result: done, no stage, in one statement. */
-export async function acceptResult(kind: ItemKind, id: number): Promise<void> {
+/**
+ * Set the stage by hand: none, Briefed or Ready. Running and To check are the app's: refused
+ * while the item is in either, except clearing To check. Guarded in SQL too, so a stage the
+ * app wrote after the read is never overwritten.
+ */
+export async function setStage(kind: ItemKind, id: number, stage: null | "briefed" | "ready"): Promise<void> {
+  const current = await getStage(kind, id);
+  if (current === "running" || (current === "to_check" && stage !== null)) throw new Error("The app sets this stage");
+  const guard = stage === null ? "(stage IS NULL OR stage <> 'running')" : "(stage IS NULL OR stage NOT IN ('running', 'to_check'))";
   const db = await getDb();
-  await db.execute(`UPDATE ${table(kind)} SET status = 'done', stage = NULL, updated_at = datetime('now') WHERE id = $1`, [id]);
+  await db.execute(`UPDATE ${table(kind)} SET stage = $2, updated_at = datetime('now') WHERE id = $1 AND ${guard}`, [id, stage]);
 }

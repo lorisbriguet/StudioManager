@@ -47,7 +47,7 @@ import { useStartAgentOn } from "../hooks/useStartAgentOn";
 import { agentMenuItems } from "../lib/agentStart";
 import { qk } from "../db/queryKeys";
 import { TaskAgentPanel } from "../components/project/TaskAgentPanel";
-import { StageChip } from "../components/project/StageChip";
+import { StageChip, AgentResultButton } from "../components/project/StageChip";
 
 export function TasksPage() {
   const t = useT();
@@ -526,6 +526,7 @@ export function TasksPage() {
                               </span>
                             )}
                             <StageChip kind="subtask" id={s.id} stage={s.stage} status={s.status} onClick={() => toggleSubPanel(s.id)} />
+                            <AgentResultButton id={s.id} stage={s.stage} status={s.status} result={s.result} onClick={() => toggleSubPanel(s.id)} />
                             <TaskDatePicker
                               dueDate={s.due_date}
                               endDate={s.end_date}

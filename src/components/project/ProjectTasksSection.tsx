@@ -34,7 +34,7 @@ import { AddRow, Checkbox, ICONS, IconButton, FilterChip, InlineRename, EmptySta
 import { useDraftKeys } from "../../stores/draft-store";
 import { ContextMenu, type ContextMenuState } from "../ui/ContextMenu";
 import { useStartAgentOn } from "../../hooks/useStartAgentOn";
-import { StageChip } from "./StageChip";
+import { StageChip, AgentResultButton } from "./StageChip";
 import { TaskAgentPanel } from "./TaskAgentPanel";
 import { agentMenuItems, type AgentTarget } from "../../lib/agentStart";
 
@@ -261,6 +261,7 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
                         </span>
                       )}
                       <StageChip kind="subtask" id={s.id} stage={s.stage} status={s.status} onClick={() => toggleSubPanel(s.id)} />
+                      <AgentResultButton id={s.id} stage={s.stage} status={s.status} result={s.result} onClick={() => toggleSubPanel(s.id)} />
                       <TaskDatePicker
                         dueDate={s.due_date} endDate={s.end_date} startTime={s.start_time}
                         endTime={s.end_time} reminder={s.reminder}

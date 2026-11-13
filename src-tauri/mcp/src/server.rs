@@ -1097,7 +1097,7 @@ impl Server {
     }
 
     #[tool(
-        description = "Write the result of your work on a task or subtask before you stop: what was done, what is left open, how to check it. Add the branch and the pull request link if there are any."
+        description = "Write the result of your work on a task or subtask before you stop: what was done, what is left open, how to check it. Add the branch and the pull request link if there are any. They are saved on the task's agent link only when exactly one agent is linked to it."
     )]
     async fn report_result(&self, Parameters(p): Parameters<ReportResultInput>) -> CallToolResult {
         self.run(move |d| {

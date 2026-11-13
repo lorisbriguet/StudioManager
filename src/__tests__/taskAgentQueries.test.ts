@@ -14,7 +14,6 @@ import {
   getOpenLinks,
   wasCaptured,
   setStage,
-  acceptResult,
 } from "../db/queries/taskAgents";
 
 const prep = (sql: string) => rawDb().prepare(sql.replace(/\$(\d+)/g, "?$1"));
@@ -85,7 +84,7 @@ describe("getItemAgents, getOpenLinks, wasCaptured", () => {
   });
 });
 
-describe("setStage and acceptResult", () => {
+describe("setStage", () => {
   it("refuses to change a running item and writes nothing", async () => {
     prep("UPDATE tasks SET stage = 'running' WHERE id = $1").run(taskId);
     await expect(setStage("task", taskId, "briefed")).rejects.toThrow("The app sets this stage");
@@ -100,9 +99,11 @@ describe("setStage and acceptResult", () => {
     expect(one("SELECT stage FROM subtasks WHERE id = $1", subId)?.stage).toBeNull();
   });
 
-  it("acceptResult sets done and clears the stage", async () => {
+  it("refuses a hand-set stage over To check but allows clearing it", async () => {
     prep("UPDATE tasks SET stage = 'to_check' WHERE id = $1").run(taskId);
-    await acceptResult("task", taskId);
-    expect(one("SELECT status, stage FROM tasks WHERE id = $1", taskId)).toMatchObject({ status: "done", stage: null });
+    await expect(setStage("task", taskId, "briefed")).rejects.toThrow("The app sets this stage");
+    expect(one("SELECT stage FROM tasks WHERE id = $1", taskId)?.stage).toBe("to_check");
+    await setStage("task", taskId, null);
+    expect(one("SELECT stage FROM tasks WHERE id = $1", taskId)?.stage).toBeNull();
   });
 });

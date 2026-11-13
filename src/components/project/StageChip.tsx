@@ -1,11 +1,12 @@
 import { useT } from "../../i18n/useT";
 import { useAppStore } from "../../stores/app-store";
-import { useOpenLinks } from "../../db/hooks/useTaskAgents";
+import { Bot } from "lucide-react";
+import { useOpenLinks, useItemAgents } from "../../db/hooks/useTaskAgents";
 import { useAgents } from "../agents/useAgents";
 import type { ItemKind } from "../../db/queries/taskAgents";
 import type { TaskStage } from "../../types/task";
 import { stageVariant, waitingOnYou } from "../../lib/stage";
-import { Badge } from "../ui";
+import { Badge, IconButton } from "../ui";
 
 type T = ReturnType<typeof useT>;
 
@@ -61,4 +62,23 @@ export function StageWord({ stage, status }: { stage: TaskStage | null | undefin
   const on = useAppStore((s) => s.agentsEnabled);
   if (!on || !stage || status === "done") return null;
   return <span className="font-semibold mr-1">{stageLabel(stage, t)}</span>;
+}
+
+/**
+ * A subtask row's way to its panel when the chip is not shown (no stage, or done) but a result
+ * or an agent link is stored. Nothing while Agents is off or while the chip shows.
+ */
+export function AgentResultButton({ id, stage, status, result, onClick }: {
+  id: number;
+  stage: TaskStage | null | undefined;
+  status: string;
+  result: string | null | undefined;
+  onClick: () => void;
+}) {
+  const t = useT();
+  const on = useAppStore((s) => s.agentsEnabled);
+  const { data: links = [] } = useItemAgents("subtask", id);
+  if (!on || (stage && status !== "done")) return null;
+  if (!result && links.length === 0) return null;
+  return <IconButton size="xs" icon={Bot} label={t.task_agent_result_open} onClick={onClick} />;
 }

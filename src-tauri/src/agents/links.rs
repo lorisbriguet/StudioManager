@@ -6,6 +6,7 @@
 //! starts, stops and deletes no agent. Plan:
 //! docs/superpowers/plans/2026-11-13-agent-orchestrator-2-task-agent.md (Task 4).
 
+use super::actions::{read_state, CopyOf};
 use super::briefing::{in_mode, list_is_fresh, LISTED_GRACE_MS};
 use super::capture::open;
 use super::cli::read_settings;
@@ -14,6 +15,7 @@ use super::usage::limits;
 use crate::orgs::{org_dir, Registry, DB_FILE};
 use chrono::NaiveDateTime;
 use rusqlite::{params, Connection, TransactionBehavior};
+use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
@@ -39,7 +41,15 @@ pub struct OpenLink {
     pub started_at: i64,
     /// `report_result` wrote to this link.
     pub reported: bool,
+    /// The item's result is not empty.
+    pub item_has_result: bool,
+    /// How many open links the item has (this one included).
+    pub item_open_links: usize,
 }
+
+/// Per (organisation, link id): the time of the list that first lacked the link's agent. An agent
+/// counts as gone only when a second list, made at another time, lacks it too.
+pub type Misses = HashMap<(String, i64), i64>;
 
 /// What the list knows that the row does not: only what differs.
 #[derive(Clone, Debug, PartialEq, Default)]
@@ -52,6 +62,9 @@ pub struct Fill {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Judgement {
     Keep { fill: Option<Fill> },
+    /// A fresh list lacks the agent, but it is the first one (or the same one again): keep the
+    /// link and remember the miss.
+    Missing,
     End(&'static str),
 }
 
@@ -72,7 +85,9 @@ fn read_open(conn: &Connection) -> Result<Vec<OpenLink>, String> {
     }
     let mut st = conn
         .prepare(
-            "SELECT id, task_id, subtask_id, short_id, session_id, model, started_at, reported_at IS NOT NULL
+            "SELECT id, task_id, subtask_id, short_id, session_id, model, started_at, reported_at IS NOT NULL,
+                    COALESCE((SELECT TRIM(result) <> '' FROM tasks WHERE id = task_agents.task_id),
+                             (SELECT TRIM(result) <> '' FROM subtasks WHERE id = task_agents.subtask_id), 0)
              FROM task_agents WHERE ended_at IS NULL ORDER BY id",
         )
         .map_err(|e| format!("Failed to read links: {e}"))?;
@@ -81,19 +96,35 @@ fn read_open(conn: &Connection) -> Result<Vec<OpenLink>, String> {
             let task: Option<i64> = r.get(1)?;
             let sub: Option<i64> = r.get(2)?;
             let started: String = r.get(6)?;
-            Ok((r.get::<_, i64>(0)?, task, sub, r.get(3)?, r.get(4)?, r.get(5)?, started, r.get::<_, bool>(7)?))
+            Ok((r.get::<_, i64>(0)?, task, sub, r.get(3)?, r.get(4)?, r.get(5)?, started, r.get::<_, bool>(7)?, r.get::<_, bool>(8)?))
         })
         .map_err(|e| format!("Failed to read links: {e}"))?;
     let mut out = Vec::new();
     for row in rows {
-        let (id, task, sub, short_id, session_id, model, started, reported) =
+        let (id, task, sub, short_id, session_id, model, started, reported, has_result) =
             row.map_err(|e| format!("Failed to read links: {e}"))?;
         let (kind, item_id) = match (task, sub) {
             (Some(t), None) => (ItemKind::Task, t),
             (None, Some(s)) => (ItemKind::Subtask, s),
             _ => continue,
         };
-        out.push(OpenLink { id, kind, item_id, short_id, session_id, model, started_at: parse_utc_ms(&started), reported });
+        out.push(OpenLink {
+            id,
+            kind,
+            item_id,
+            short_id,
+            session_id,
+            model,
+            started_at: parse_utc_ms(&started),
+            reported,
+            item_has_result: has_result,
+            item_open_links: 0,
+        });
+    }
+    let counts: Vec<usize> =
+        out.iter().map(|l| out.iter().filter(|o| o.kind == l.kind && o.item_id == l.item_id).count()).collect();
+    for (l, n) in out.iter_mut().zip(counts) {
+        l.item_open_links = n;
     }
     Ok(out)
 }
@@ -111,25 +142,66 @@ fn outcome(reported: bool) -> &'static str {
     }
 }
 
-/// What to do with one open link, from the poller's list. An idle agent without a result keeps
-/// its link (it may be waiting for the reply it asked for); "not listed" counts only after a list
-/// newer than the link's start plus the grace and than this tracker's start.
-pub fn judge(link: &OpenLink, agents: &[Agent], listed_at: Option<i64>, tracker_started: i64) -> Judgement {
-    let found = match &link.session_id {
-        Some(s) => agents.iter().find(|a| &a.session_id == s),
-        None => agents.iter().find(|a| a.short_id.as_deref() == Some(link.short_id.as_str())),
+fn short_of(session_id: &str) -> String {
+    session_id.chars().take(8).collect()
+}
+
+/// The short id of the newest copy of the link's agent (a model switch resumes the session as a
+/// new agent, with a new session id and short id), following a chain of switches; None when
+/// the agent was never switched.
+fn follow_copies(link: &OpenLink, copies: &BTreeMap<String, CopyOf>) -> Option<String> {
+    let mut current = link.session_id.as_deref().map(short_of).unwrap_or_else(|| link.short_id.clone());
+    let mut followed = false;
+    for _ in 0..8 {
+        match copies.iter().find(|(_, c)| short_of(&c.session_id) == current) {
+            Some((short, _)) if *short != current => {
+                current = short.clone();
+                followed = true;
+            }
+            _ => break,
+        }
+    }
+    followed.then_some(current)
+}
+
+/// What to do with one open link, from the poller's list and the app's record of model-switch
+/// copies. An idle agent without a result keeps its link (it may be waiting for the reply it
+/// asked for). "Not listed" counts only after a list newer than the link's start plus the grace
+/// and than this tracker's start, and only when a second list made at another time lacks the
+/// agent too (`first_miss` is the time of the first one). After a model switch the copy is the
+/// agent: the link follows it.
+pub fn judge(
+    link: &OpenLink,
+    agents: &[Agent],
+    copies: &BTreeMap<String, CopyOf>,
+    listed_at: Option<i64>,
+    tracker_started: i64,
+    first_miss: Option<i64>,
+) -> Judgement {
+    let copy = follow_copies(link, copies);
+    let found = match (&copy, &link.session_id) {
+        (Some(short), _) => agents.iter().find(|a| a.short_id.as_deref() == Some(short.as_str()) || short_of(&a.session_id) == *short),
+        (None, Some(s)) => agents.iter().find(|a| &a.session_id == s),
+        (None, None) => agents.iter().find(|a| a.short_id.as_deref() == Some(link.short_id.as_str())),
     };
     let Some(a) = found else {
-        return if list_is_fresh(listed_at, link.started_at + LISTED_GRACE_MS, tracker_started) {
-            Judgement::End(outcome(link.reported))
-        } else {
-            Judgement::Keep { fill: None }
+        if !list_is_fresh(listed_at, link.started_at + LISTED_GRACE_MS, tracker_started) {
+            return Judgement::Keep { fill: None };
+        }
+        return match first_miss {
+            Some(t) if Some(t) != listed_at => Judgement::End(outcome(link.reported)),
+            _ => Judgement::Missing,
         };
     };
     if a.group == Group::Done {
         return Judgement::End(outcome(link.reported));
     }
     if link.reported && a.group != Group::Working {
+        return Judgement::End(OUTCOMES[0]);
+    }
+    // Several agents on one item and a result written: the report could not be tied to one
+    // link, so an idle agent's link closes (otherwise the item could stay Running for ever).
+    if link.item_has_result && link.item_open_links > 1 && a.group == Group::Idle {
         return Judgement::End(OUTCOMES[0]);
     }
     let fill = Fill {
@@ -153,7 +225,7 @@ pub fn apply(db: &Path, link: &OpenLink, j: &Judgement) -> Result<bool, String> 
         .map_err(|e| format!("Failed to lock the database: {e}"))?;
     let e = |e: rusqlite::Error| format!("Failed to write the link: {e}");
     let changed = match j {
-        Judgement::Keep { fill: None } => false,
+        Judgement::Keep { fill: None } | Judgement::Missing => false,
         Judgement::Keep { fill: Some(f) } => {
             let n = tx
                 .execute(
@@ -208,8 +280,10 @@ pub fn pass_report(
     agents: &[Agent],
     listed_at: Option<i64>,
     tracker_started: i64,
+    misses: &mut Misses,
 ) -> Vec<(String, Result<bool, String>)> {
     let Ok(Some(reg)) = Registry::load(app_dir) else { return vec![] };
+    let copies = read_state(app_dir).copies;
     let mut out = Vec::new();
     for org in reg.organisations {
         let db = org_dir(app_dir, &org.id).join(DB_FILE);
@@ -219,8 +293,19 @@ pub fn pass_report(
         let _shared = crate::org_shared();
         let result = (|| -> Result<bool, String> {
             let mut changed = false;
-            for link in open_links(&db)? {
-                let j = judge(&link, agents, listed_at, tracker_started);
+            let links = open_links(&db)?;
+            misses.retain(|(o, id), _| *o != org.id || links.iter().any(|l| l.id == *id));
+            for link in links {
+                let key = (org.id.clone(), link.id);
+                let j = judge(&link, agents, &copies, listed_at, tracker_started, misses.get(&key).copied());
+                match (&j, listed_at) {
+                    (Judgement::Missing, Some(t)) => {
+                        misses.entry(key).or_insert(t);
+                    }
+                    _ => {
+                        misses.remove(&key);
+                    }
+                }
                 changed |= apply(&db, &link, &j)?;
             }
             Ok(changed)
@@ -231,8 +316,8 @@ pub fn pass_report(
 }
 
 /// Whether anything changed; an error in one organisation is logged and the others go on.
-pub fn pass(app_dir: &Path, agents: &[Agent], listed_at: Option<i64>, tracker_started: i64) -> bool {
-    pass_report(app_dir, agents, listed_at, tracker_started)
+pub fn pass(app_dir: &Path, agents: &[Agent], listed_at: Option<i64>, tracker_started: i64, misses: &mut Misses) -> bool {
+    pass_report(app_dir, agents, listed_at, tracker_started, misses)
         .into_iter()
         .fold(false, |any, (org, r)| match r {
             Ok(c) => any || c,
@@ -244,20 +329,27 @@ pub fn pass(app_dir: &Path, agents: &[Agent], listed_at: Option<i64>, tracker_st
 }
 
 /// One check: nothing in the demo build (decided before any file is read) or while Agents is off.
-pub fn tick(app_dir: &Path, demo: bool, agents: &[Agent], listed_at: Option<i64>, tracker_started: i64) -> bool {
+pub fn tick(
+    app_dir: &Path,
+    demo: bool,
+    agents: &[Agent],
+    listed_at: Option<i64>,
+    tracker_started: i64,
+    misses: &mut Misses,
+) -> bool {
     if demo {
         return false;
     }
     if !read_settings(app_dir).enabled {
         return false;
     }
-    pass(app_dir, agents, listed_at, tracker_started)
+    pass(app_dir, agents, listed_at, tracker_started, misses)
 }
 
-fn check(app: &AppHandle, tracker_started: i64) {
+fn check(app: &AppHandle, tracker_started: i64, misses: &mut Misses) {
     let demo = crate::host::is_demo(app);
     let state = app.state::<super::AgentsState>();
-    if tick(&state.app_dir, demo, &state.cached(), state.listed_at(), tracker_started) {
+    if tick(&state.app_dir, demo, &state.cached(), state.listed_at(), tracker_started, misses) {
         if let Err(e) = app.emit(crate::agent_access::CHANGED_EVENT, ["task_links"]) {
             log::warn!("[links] emit {}: {e}", crate::agent_access::CHANGED_EVENT);
         }
@@ -271,11 +363,12 @@ pub fn start(app: &AppHandle) {
     let app = app.clone();
     std::thread::spawn(move || {
         let tracker_started = limits::now_ms();
+        let mut misses = Misses::new();
         let mut last_wall = wall_ms();
         let mut since_check = Duration::ZERO;
         loop {
             if since_check >= CHECK_EVERY {
-                if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| check(&app, tracker_started))).is_err() {
+                if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| check(&app, tracker_started, &mut misses))).is_err() {
                     log::error!("[links] check panicked; continuing");
                 }
                 since_check = Duration::ZERO;
@@ -415,7 +508,22 @@ mod tests {
             model: Some("opus".into()),
             started_at: T0,
             reported,
+            item_has_result: false,
+            item_open_links: 1,
         }
+    }
+
+    /// `judge` with no copies and a miss already seen in an earlier list (so one fresh list that
+    /// lacks the agent ends the link, as in the cases that are not about the miss count).
+    fn judge4(link: &OpenLink, agents: &[Agent], listed_at: Option<i64>, tracker_started: i64) -> Judgement {
+        judge(link, agents, &BTreeMap::new(), listed_at, tracker_started, Some(1))
+    }
+
+    /// The miss state after a first list (at T0 + 9 min) that lacks every agent.
+    fn primed(dir: &Path) -> Misses {
+        let mut m = Misses::new();
+        pass_report(dir, &[], Some(T0 + 9 * MIN), SCHED, &mut m);
+        m
     }
 
     fn listed() -> Option<i64> {
@@ -425,67 +533,212 @@ mod tests {
     #[test]
     fn working_without_a_result_keeps_the_link() {
         let a = agent("busy", None, SESSION, "0a1b2c3d", "opus");
-        assert_eq!(judge(&link(false), &[a], listed(), SCHED), Judgement::Keep { fill: None });
+        assert_eq!(judge4(&link(false), &[a], listed(), SCHED), Judgement::Keep { fill: None });
     }
 
     #[test]
     fn an_idle_agent_without_a_result_keeps_its_link() {
         let a = agent("idle", None, SESSION, "0a1b2c3d", "opus");
-        assert_eq!(judge(&link(false), &[a], listed(), SCHED), Judgement::Keep { fill: None });
+        assert_eq!(judge4(&link(false), &[a], listed(), SCHED), Judgement::Keep { fill: None });
     }
 
     #[test]
     fn idle_or_waiting_with_a_result_ends_with_result() {
         let idle = agent("idle", None, SESSION, "0a1b2c3d", "opus");
-        assert_eq!(judge(&link(true), &[idle], listed(), SCHED), Judgement::End("result"));
+        assert_eq!(judge4(&link(true), &[idle], listed(), SCHED), Judgement::End("result"));
         let waiting = agent("waiting", None, SESSION, "0a1b2c3d", "opus");
-        assert_eq!(judge(&link(true), &[waiting], listed(), SCHED), Judgement::End("result"));
+        assert_eq!(judge4(&link(true), &[waiting], listed(), SCHED), Judgement::End("result"));
     }
 
     #[test]
     fn a_working_agent_with_a_result_keeps_its_link() {
         let a = agent("busy", None, SESSION, "0a1b2c3d", "opus");
-        assert_eq!(judge(&link(true), &[a], listed(), SCHED), Judgement::Keep { fill: None });
+        assert_eq!(judge4(&link(true), &[a], listed(), SCHED), Judgement::Keep { fill: None });
     }
 
     #[test]
     fn done_without_a_result_ends_with_no_result_and_with_one_with_result() {
         let a = agent("idle", Some("done"), SESSION, "0a1b2c3d", "opus");
-        assert_eq!(judge(&link(false), std::slice::from_ref(&a), listed(), SCHED), Judgement::End("no_result"));
-        assert_eq!(judge(&link(true), &[a], listed(), SCHED), Judgement::End("result"));
+        assert_eq!(judge4(&link(false), std::slice::from_ref(&a), listed(), SCHED), Judgement::End("no_result"));
+        assert_eq!(judge4(&link(true), &[a], listed(), SCHED), Judgement::End("result"));
     }
 
     #[test]
     fn not_listed_counts_only_with_a_fresh_list() {
         let l = link(false);
         // before the start plus the grace
-        assert_eq!(judge(&l, &[], Some(T0 + LISTED_GRACE_MS), SCHED), Judgement::Keep { fill: None });
+        assert_eq!(judge4(&l, &[], Some(T0 + LISTED_GRACE_MS), SCHED), Judgement::Keep { fill: None });
         // after the grace but before the tracker started
-        assert_eq!(judge(&l, &[], Some(T0 + LISTED_GRACE_MS + 1), T0 + 5 * MIN), Judgement::Keep { fill: None });
+        assert_eq!(judge4(&l, &[], Some(T0 + LISTED_GRACE_MS + 1), T0 + 5 * MIN), Judgement::Keep { fill: None });
         // after both
-        assert_eq!(judge(&l, &[], Some(T0 + LISTED_GRACE_MS + 1), SCHED), Judgement::End("no_result"));
-        assert_eq!(judge(&link(true), &[], Some(T0 + LISTED_GRACE_MS + 1), SCHED), Judgement::End("result"));
+        assert_eq!(judge4(&l, &[], Some(T0 + LISTED_GRACE_MS + 1), SCHED), Judgement::End("no_result"));
+        assert_eq!(judge4(&link(true), &[], Some(T0 + LISTED_GRACE_MS + 1), SCHED), Judgement::End("result"));
         // never listed
-        assert_eq!(judge(&l, &[], None, SCHED), Judgement::Keep { fill: None });
+        assert_eq!(judge4(&l, &[], None, SCHED), Judgement::Keep { fill: None });
     }
 
     #[test]
     fn a_clock_that_jumped_back_never_closes_a_link_early() {
         // The list time is earlier than the link's start: the tracker keeps waiting.
-        assert_eq!(judge(&link(false), &[], Some(T0 - 3 * MIN), SCHED), Judgement::Keep { fill: None });
-        assert_eq!(judge(&link(true), &[], Some(T0 - 3 * MIN), SCHED), Judgement::Keep { fill: None });
+        assert_eq!(judge4(&link(false), &[], Some(T0 - 3 * MIN), SCHED), Judgement::Keep { fill: None });
+        assert_eq!(judge4(&link(true), &[], Some(T0 - 3 * MIN), SCHED), Judgement::Keep { fill: None });
+    }
+
+    const COPY: &str = "11111111-aaaa-bbbb-cccc-dddddddddddd";
+    const COPY2: &str = "22222222-aaaa-bbbb-cccc-dddddddddddd";
+
+    fn copies(pairs: &[(&str, &str, &str)]) -> BTreeMap<String, CopyOf> {
+        pairs
+            .iter()
+            .map(|(short, from, model)| (short.to_string(), CopyOf { session_id: from.to_string(), model: model.to_string() }))
+            .collect()
     }
 
     #[test]
-    fn a_model_switch_keeps_the_link_and_follows_the_new_short_id() {
-        let a = agent("busy", None, SESSION, "ffff0000", "sonnet");
-        let j = judge(&link(false), &[a], listed(), SCHED);
+    fn after_a_model_switch_the_link_stays_open_and_follows_the_copy() {
+        let c = copies(&[("11111111", SESSION, "sonnet")]);
+        // the stopped original is still listed as done: the copy is what counts
+        let original = agent("idle", Some("done"), SESSION, "0a1b2c3d", "opus");
+        let copy = agent("busy", None, COPY, "11111111", "sonnet");
+        let j = judge(&link(false), &[original, copy], &c, listed(), SCHED, None);
         assert_eq!(
             j,
             Judgement::Keep {
-                fill: Some(Fill { session_id: None, short_id: Some("ffff0000".into()), model: Some("sonnet".into()) })
+                fill: Some(Fill { session_id: Some(COPY.into()), short_id: Some("11111111".into()), model: Some("sonnet".into()) })
             }
         );
+    }
+
+    #[test]
+    fn after_two_switches_the_link_follows_the_last_copy() {
+        let c = copies(&[("11111111", SESSION, "sonnet"), ("22222222", COPY, "haiku")]);
+        let last = agent("busy", None, COPY2, "22222222", "haiku");
+        // the row still holds the original; the first copy is not even listed
+        let j = judge(&link(false), std::slice::from_ref(&last), &c, listed(), SCHED, None);
+        assert_eq!(
+            j,
+            Judgement::Keep {
+                fill: Some(Fill { session_id: Some(COPY2.into()), short_id: Some("22222222".into()), model: Some("haiku".into()) })
+            }
+        );
+        // once the row holds the first copy, the same
+        let mut l = link(false);
+        l.session_id = Some(COPY.into());
+        l.short_id = "11111111".into();
+        assert!(matches!(judge(&l, &[last], &c, listed(), SCHED, None), Judgement::Keep { fill: Some(_) }));
+    }
+
+    #[test]
+    fn a_copy_not_listed_yet_waits_like_any_agent_not_listed() {
+        let c = copies(&[("11111111", SESSION, "sonnet")]);
+        let original = agent("idle", Some("done"), SESSION, "0a1b2c3d", "opus");
+        let l = link(false);
+        // the original is done, but it is not the agent any more: first miss, then two lists
+        assert_eq!(judge(&l, std::slice::from_ref(&original), &c, listed(), SCHED, None), Judgement::Missing);
+        assert_eq!(
+            judge(&l, std::slice::from_ref(&original), &c, Some(T0 + 11 * MIN), SCHED, listed()),
+            Judgement::End("no_result")
+        );
+        // a list older than the grace changes nothing
+        assert_eq!(judge(&l, &[original], &c, Some(T0 + LISTED_GRACE_MS), SCHED, None), Judgement::Keep { fill: None });
+    }
+
+    #[test]
+    fn a_link_that_followed_a_copy_is_found_by_the_copys_later_report() {
+        // The row now holds the copy's ids: it is found directly, and a reported idle copy ends.
+        let mut l = link(true);
+        l.session_id = Some(COPY.into());
+        l.short_id = "11111111".into();
+        let c = copies(&[("11111111", SESSION, "sonnet")]);
+        let copy = agent("idle", None, COPY, "11111111", "opus");
+        assert_eq!(judge(&l, &[copy], &c, listed(), SCHED, None), Judgement::End("result"));
+    }
+
+    #[test]
+    fn one_list_without_the_agent_closes_nothing() {
+        // e.g. `claude agents` answered with an empty list
+        assert_eq!(judge(&link(false), &[], &BTreeMap::new(), listed(), SCHED, None), Judgement::Missing);
+        let dir = app("empty", &["a"], true);
+        let db = db_of(&dir, "a");
+        let t = add_task(&db, "todo", Some("running"));
+        let id = add_link(&db, "task_id", t, "0a1b2c3d", Some(SESSION), false);
+        let mut m = Misses::new();
+        assert!(!pass(&dir, &[], Some(T0 + 10 * MIN), SCHED, &mut m));
+        assert!(!ended(&db, id).0);
+        // the same list read again is not a second list
+        assert!(!pass(&dir, &[], Some(T0 + 10 * MIN), SCHED, &mut m));
+        assert!(!ended(&db, id).0);
+        assert_eq!(stage_of(&db, "tasks", t).as_deref(), Some("running"));
+    }
+
+    #[test]
+    fn two_different_lists_without_the_agent_close_the_link() {
+        let dir = app("twolists", &["a"], true);
+        let db = db_of(&dir, "a");
+        let t = add_task(&db, "todo", Some("running"));
+        let id = add_link(&db, "task_id", t, "0a1b2c3d", Some(SESSION), false);
+        let mut m = Misses::new();
+        assert!(!pass(&dir, &[], Some(T0 + 10 * MIN), SCHED, &mut m));
+        assert!(pass(&dir, &[], Some(T0 + 11 * MIN), SCHED, &mut m));
+        assert_eq!(ended(&db, id), (true, Some("no_result".into())));
+        assert_eq!(stage_of(&db, "tasks", t).as_deref(), Some("to_check"));
+    }
+
+    #[test]
+    fn the_agent_reappearing_between_two_lists_resets_the_count() {
+        let dir = app("reset", &["a"], true);
+        let db = db_of(&dir, "a");
+        let t = add_task(&db, "todo", Some("running"));
+        let id = add_link(&db, "task_id", t, "0a1b2c3d", Some(SESSION), false);
+        let mut m = Misses::new();
+        let seen = [agent("busy", None, SESSION, "0a1b2c3d", "opus")];
+        assert!(!pass(&dir, &[], Some(T0 + 10 * MIN), SCHED, &mut m));
+        assert!(!pass(&dir, &seen, Some(T0 + 11 * MIN), SCHED, &mut m));
+        assert!(m.is_empty());
+        assert!(!pass(&dir, &[], Some(T0 + 12 * MIN), SCHED, &mut m));
+        assert!(!ended(&db, id).0);
+        assert!(pass(&dir, &[], Some(T0 + 13 * MIN), SCHED, &mut m));
+        assert!(ended(&db, id).0);
+    }
+
+    fn two_links(name: &str, result: Option<&str>) -> (Vec<OpenLink>, PathBuf, i64) {
+        let dir = app(name, &["a"], true);
+        let db = db_of(&dir, "a");
+        let t = add_task(&db, "todo", Some("running"));
+        if let Some(r) = result {
+            Connection::open(&db).unwrap().execute("UPDATE tasks SET result = ?1 WHERE id = ?2", params![r, t]).unwrap();
+        }
+        add_link(&db, "task_id", t, "0a1b2c3d", Some(SESSION), false);
+        add_link(&db, "task_id", t, "1b2c3d4e", None, false);
+        (open_links(&db).unwrap(), db, t)
+    }
+
+    #[test]
+    fn two_open_links_and_one_report_end_the_idle_one_and_keep_the_working_one() {
+        let (links, db, t) = two_links("several-a", Some("Done: sheet exported"));
+        assert!(links.iter().all(|l| l.item_has_result && l.item_open_links == 2));
+        let idle = agent("idle", None, SESSION, "0a1b2c3d", "opus");
+        let worker = agent("busy", None, "1b2c3d4e-1111-2222-3333-444444444444", "1b2c3d4e", "opus");
+        let all = [idle, worker];
+        assert_eq!(judge(&links[0], &all, &BTreeMap::new(), listed(), SCHED, None), Judgement::End("result"));
+        assert_eq!(judge(&links[1], &all, &BTreeMap::new(), listed(), SCHED, None), Judgement::Keep { fill: Some(Fill { session_id: Some("1b2c3d4e-1111-2222-3333-444444444444".into()), ..Default::default() }) });
+        // the first one ends; the item stays Running while the worker's link is open
+        assert!(apply(&db, &links[0], &Judgement::End("result")).unwrap());
+        assert_eq!(stage_of(&db, "tasks", t).as_deref(), Some("running"));
+        // the worker idles, now alone on the item: with no link-level report it keeps its link
+        let l = open_links(&db).unwrap().remove(0);
+        assert_eq!(l.item_open_links, 1);
+    }
+
+    #[test]
+    fn two_open_links_without_a_result_keep_both_idle_links() {
+        let (links, _, _) = two_links("several-b", None);
+        let idle = agent("idle", None, SESSION, "0a1b2c3d", "opus");
+        assert_eq!(judge(&links[0], &[idle], &BTreeMap::new(), listed(), SCHED, None), Judgement::Keep { fill: None });
+        // an agent that needs the owner is never closed by this rule
+        let (links, _, _) = two_links("several-c", Some("x"));
+        let waiting = agent("waiting", None, SESSION, "0a1b2c3d", "opus");
+        assert_eq!(judge(&links[0], &[waiting], &BTreeMap::new(), listed(), SCHED, None), Judgement::Keep { fill: None });
     }
 
     #[test]
@@ -494,20 +747,20 @@ mod tests {
         l.session_id = None;
         let a = agent("busy", None, SESSION, "0a1b2c3d", "opus");
         assert_eq!(
-            judge(&l, &[a], listed(), SCHED),
+            judge4(&l, &[a], listed(), SCHED),
             Judgement::Keep { fill: Some(Fill { session_id: Some(SESSION.into()), ..Default::default() }) }
         );
         // another agent with another short id is not it
         let other = agent("busy", None, "99999999-1111-2222-3333-444444444444", "bbbbbbbb", "opus");
         // (not found, and no fresh list yet: the link waits)
-        assert_eq!(judge(&l, &[other], None, SCHED), Judgement::Keep { fill: None });
+        assert_eq!(judge4(&l, &[other], None, SCHED), Judgement::Keep { fill: None });
     }
 
     #[test]
     fn a_session_id_match_beats_a_look_alike_short_id() {
         let other = agent("idle", Some("done"), "99999999-1111-2222-3333-444444444444", "0a1b2c3d", "opus");
         // the look-alike is done, but it is not this session: no list yet that says otherwise
-        assert_eq!(judge(&link(false), &[other], None, SCHED), Judgement::Keep { fill: None });
+        assert_eq!(judge4(&link(false), &[other], None, SCHED), Judgement::Keep { fill: None });
     }
 
     #[test]
@@ -611,8 +864,9 @@ mod tests {
     }
 
     fn gone_pass(dir: &Path) -> bool {
-        // An empty list made long after the link started: every open link ends.
-        pass(dir, &[], Some(T0 + 10 * MIN), SCHED)
+        // Two empty lists made long after the link started: every open link ends.
+        let mut misses = primed(dir);
+        pass(dir, &[], Some(T0 + 10 * MIN), SCHED, &mut misses)
     }
 
     #[test]
@@ -658,7 +912,7 @@ mod tests {
         let db = db_of(&dir, "b");
         let tb = add_task(&db, "todo", Some("running"));
         let lb = add_link(&db, "task_id", tb, "0a1b2c3d", None, false);
-        let report = pass_report(&dir, &[], Some(T0 + 10 * MIN), SCHED);
+        let report = pass_report(&dir, &[], Some(T0 + 10 * MIN), SCHED, &mut primed(&dir));
         assert_eq!(report.len(), 2);
         assert!(report.iter().all(|(_, r)| r.is_ok()));
         assert!(ended(&db, lb).0);
@@ -670,10 +924,10 @@ mod tests {
         let db = db_of(&dir, "a");
         let t = add_task(&db, "todo", Some("running"));
         let id = add_link(&db, "task_id", t, "0a1b2c3d", None, false);
-        assert!(!tick(&dir, false, &[], Some(T0 + 10 * MIN), SCHED));
+        assert!(!tick(&dir, false, &[], Some(T0 + 10 * MIN), SCHED, &mut primed(&dir)));
         assert!(!ended(&db, id).0);
         write_settings(&dir, &AgentsSettings { enabled: true, ..Default::default() }).unwrap();
-        assert!(tick(&dir, false, &[], Some(T0 + 10 * MIN), SCHED));
+        assert!(tick(&dir, false, &[], Some(T0 + 10 * MIN), SCHED, &mut primed(&dir)));
         assert!(ended(&db, id).0);
     }
 
@@ -681,7 +935,7 @@ mod tests {
     fn a_tick_in_the_demo_reads_no_file() {
         let dir = std::env::temp_dir().join(format!("sm-links-demo-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
-        assert!(!tick(&dir, true, &[], Some(T0 + 10 * MIN), SCHED));
+        assert!(!tick(&dir, true, &[], Some(T0 + 10 * MIN), SCHED, &mut Misses::new()));
         assert!(!dir.exists(), "nothing was created or read");
     }
 
@@ -694,6 +948,7 @@ mod tests {
         let db = db_of(&dir, "b");
         let tb = add_task(&db, "todo", Some("running"));
         let lb = add_link(&db, "task_id", tb, "0a1b2c3d", None, false);
+        let mut misses = primed(&dir);
         let (held_tx, held_rx) = std::sync::mpsc::channel::<()>();
         let (done_tx, done_rx) = std::sync::mpsc::channel::<()>();
         let da2 = da.clone();
@@ -706,7 +961,7 @@ mod tests {
         });
         held_rx.recv().unwrap();
         let start = std::time::Instant::now();
-        let report = pass_report(&dir, &[], Some(T0 + 10 * MIN), SCHED);
+        let report = pass_report(&dir, &[], Some(T0 + 10 * MIN), SCHED, &mut misses);
         let took = start.elapsed();
         done_tx.send(()).unwrap();
         holder.join().unwrap();

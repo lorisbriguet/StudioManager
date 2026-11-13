@@ -72,7 +72,7 @@ A Running item says **waiting on you** next to its stage when its agent asks you
 
 ### `report_result`
 
-The agent started from a task is asked to call `report_result` when it is done, or when it stops with work left. It is one of the tools of [Agent access](agent-access.md#tools). The agent writes a short result: what was done, what is left open and how to check it (at most 4,000 characters). It can add the branch and the pull request link. The result shows on the item. `report_result` never changes the stage or the status: that stays with you and the app. It writes the branch and pull request link on the item's newest open link. With no open link (an agent started by hand) it writes the result only.
+The agent started from a task is asked to call `report_result` when it is done, or when it stops with work left. It is one of the tools of [Agent access](agent-access.md#tools). The agent writes a short result: what was done, what is left open and how to check it (at most 4,000 characters). It can add the branch and the pull request link. The result shows on the item. `report_result` never changes the stage or the status: that stays with you and the app. It writes the branch and pull request link on the item's open link only when the item has exactly one. With no open link (an agent started by hand) or with several (more than one agent started on the same item) it writes the result only.
 
 ### When an item goes to To check
 
@@ -80,9 +80,10 @@ Every 30 seconds the app looks at the agents linked to your items. An item goes 
 
 - the agent has reported a result and is no longer working;
 - the agent shows as done;
-- the agent is gone from the list: stopped and removed, or it never started.
+- the agent is gone from the list: stopped and removed, or it never started (it has to be missing from two successive lists);
+- the item has a result and more than one open link: the agents that are idle close their links (the result cannot be tied to one of them).
 
-An agent that is idle without a result keeps the item in Running. It may simply be waiting for your answer, and the list shows that the same way as a finished agent. The link closes at the same time and notes how it ended: with a result, or without one.
+An agent that is idle without a result keeps the item in Running (unless the previous rule applies). It may simply be waiting for your answer, and the list shows that the same way as a finished agent. The link closes at the same time and notes how it ended: with a result, or without one.
 
 ### The panel
 
@@ -93,7 +94,7 @@ Open a task (it expands to show its subtasks) and a **panel** sits at the top. O
 - **Agents:** each linked agent with its state (working, waiting on you, finished, or "ended without a result"), its model, its branch and pull request link, and **Open** to go to it on this page.
 - **Result:** the agent's last result, read-only, or a note that there is none yet.
 
-On an item in To check, **Accept** marks the task or subtask done and clears its stage. **Clear stage** removes the stage and leaves the item open.
+On an item in To check, **Accept** marks the task or subtask done the usual way (calendar event removed, due date moved to today, undo entry) and clears its stage; it does nothing if the item is no longer in To check. A subtask without a chip (stage cleared, or done) that still has a result or an agent shows a small agent button on its row that opens the same panel. **Clear stage** removes the stage and leaves the item open.
 
 ### Where it does not apply
 

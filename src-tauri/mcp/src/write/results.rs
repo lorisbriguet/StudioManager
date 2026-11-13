@@ -13,12 +13,13 @@ pub struct ReportedResult {
     pub kind: String,
     pub id: i64,
     pub title: String,
-    /// True when an open agent link of the item got the branch and pull request link.
+    /// True when the item's only open agent link got the branch and pull request link.
     pub linked: bool,
 }
 
-/// Write the result of a task or subtask, and the branch and pull request link on the
-/// item's newest open agent link. Never writes the stage, the status or `ended_at`.
+/// Write the result of a task or subtask, and, when the item has exactly one open agent link,
+/// the branch and pull request link on it. With none or several, only the result is written.
+/// Never writes the stage, the status or `ended_at`.
 pub fn report_result(
     dir: &Path,
     org: &Org,
@@ -62,21 +63,31 @@ pub fn report_result(
             _ => return Err(ONE_ID.to_string()),
         };
         update_row(tx, table, id, vec![("result", Value::Text(result))])?;
-        let open: Option<i64> = db(tx
-            .query_row(
-                &format!(
-                    "SELECT id FROM task_agents WHERE {link_col} = ?1 AND ended_at IS NULL \
-                     ORDER BY started_at DESC, id DESC LIMIT 1"
-                ),
-                [id],
-                |r| r.get(0),
-            )
-            .optional())?;
-        if let Some(link) = open {
+        // The branch and pull request link go on a link only when the item has exactly one
+        // open link: with several, the caller cannot be told from the others.
+        let open: Vec<i64> = {
+            let mut st = db(tx.prepare(&format!(
+                "SELECT id FROM task_agents WHERE {link_col} = ?1 AND ended_at IS NULL ORDER BY id"
+            )))?;
+            let rows = db(st.query_map([id], |r| r.get(0)))?;
+            db(rows.collect::<Result<Vec<i64>, _>>())?
+        };
+        let linked = open.len() == 1;
+        if let [link] = open[..] {
             db(tx.execute(
                 "UPDATE task_agents SET reported_at = datetime('now'), \
                  branch = COALESCE(?2, branch), pr_url = COALESCE(?3, pr_url) WHERE id = ?1",
                 params![link, branch, pr_url],
+            ))?;
+        } else if !open.is_empty() {
+            // Several agents on one item: every open link learns that a result came in, so
+            // each closes once its agent stops working and the item cannot stay Running.
+            db(tx.execute(
+                &format!(
+                    "UPDATE task_agents SET reported_at = datetime('now') \
+                     WHERE {link_col} = ?1 AND ended_at IS NULL"
+                ),
+                [id],
             ))?;
         }
         let summary = format!("Reported the result of {kind} \"{title}\" (id {id})");
@@ -85,7 +96,7 @@ pub fn report_result(
             kind: kind.to_string(),
             id,
             title,
-            linked: open.is_some(),
+            linked,
         };
         Ok((r, Some(summary)))
     })
@@ -165,16 +176,35 @@ mod tests {
     }
 
     #[test]
-    fn only_the_newest_open_link_is_written() {
+    fn several_open_links_get_the_result_only() {
         let (dir, org, conn) = fixture();
         let closed = link(&conn, "task_id", 1, "2026-11-13 10:00:00", Some("2026-11-13 10:30:00"));
         let old = link(&conn, "task_id", 1, "2026-11-13 08:00:00", None);
         let new = link(&conn, "task_id", 1, "2026-11-13 09:00:00", None);
+        let r = report_result(&dir, &org, Some(1), None, "Done", Some("work"), Some("https://example.test/pr/1"))
+            .unwrap();
+        assert!(!r.linked);
+        let res: String = one(&conn, "SELECT result FROM tasks WHERE id = 1");
+        assert_eq!(res, "Done");
+        // The closed link is untouched; the open ones know a result came in, without a
+        // branch or pull request link (the caller cannot be told from the other agent).
+        assert_eq!(link_row(&conn, closed), (None, None, None));
+        for l in [old, new] {
+            let (reported, branch, pr) = link_row(&conn, l);
+            assert!(reported.is_some());
+            assert_eq!((branch, pr), (None, None));
+        }
+    }
+
+    #[test]
+    fn the_only_open_link_is_written_and_closed_ones_are_not() {
+        let (dir, org, conn) = fixture();
+        let closed = link(&conn, "task_id", 1, "2026-11-13 10:00:00", Some("2026-11-13 10:30:00"));
+        let open = link(&conn, "task_id", 1, "2026-11-13 09:00:00", None);
         let r = report_result(&dir, &org, Some(1), None, "Done", Some("work"), None).unwrap();
         assert!(r.linked);
-        assert!(link_row(&conn, new).0.is_some());
-        assert_eq!(link_row(&conn, new).1.as_deref(), Some("work"));
-        assert_eq!(link_row(&conn, old), (None, None, None));
+        assert!(link_row(&conn, open).0.is_some());
+        assert_eq!(link_row(&conn, open).1.as_deref(), Some("work"));
         assert_eq!(link_row(&conn, closed), (None, None, None));
     }
 
