@@ -8,6 +8,7 @@
 
 use super::budget::Budget;
 use super::git::{self, kind_word, Git, Worktree};
+use super::lead::{LeadPending, LeadRun};
 use super::store::{self, NewLink, ReadyItem, COULD_NOT_START, NOT_LINKED};
 use super::{pick, Deps, Paused, Pass};
 use crate::agent_access::write_atomic;
@@ -67,28 +68,40 @@ pub struct Pending {
     pub short_id: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Default, Debug, PartialEq)]
+/// What `watcher.json` keeps across a restart: a worker start that timed out, the running lead
+/// session and a lead start that timed out.
+#[derive(Serialize, Deserialize, Default, Debug, PartialEq, Clone)]
 #[serde(default)]
-struct WatcherFile {
-    pending: Option<Pending>,
+pub struct WatcherState {
+    pub pending: Option<Pending>,
+    pub lead: Option<LeadRun>,
+    pub lead_pending: Option<LeadPending>,
+}
+
+/// `watcher.json`; a missing or damaged file is empty.
+pub fn read_state(app_dir: &Path) -> WatcherState {
+    let Ok(raw) = std::fs::read_to_string(app_dir.join(FILE)) else { return WatcherState::default() };
+    serde_json::from_str::<WatcherState>(&raw).unwrap_or_else(|e| {
+        log::warn!("[watcher] {FILE} does not parse: {e}");
+        WatcherState::default()
+    })
+}
+
+pub fn save_state(app_dir: &Path, state: &WatcherState) -> Result<(), String> {
+    std::fs::create_dir_all(app_dir).map_err(|e| format!("Failed to create {}: {e}", app_dir.display()))?;
+    let json = serde_json::to_string_pretty(state).map_err(|e| e.to_string())?;
+    write_atomic(&app_dir.join(FILE), &format!("{json}\n"))
 }
 
 /// The pending start of `watcher.json`; a missing or damaged file is none.
+#[cfg(test)]
 pub fn read_pending(app_dir: &Path) -> Option<Pending> {
-    let raw = std::fs::read_to_string(app_dir.join(FILE)).ok()?;
-    match serde_json::from_str::<WatcherFile>(&raw) {
-        Ok(f) => f.pending,
-        Err(e) => {
-            log::warn!("[watcher] {FILE} does not parse: {e}");
-            None
-        }
-    }
+    read_state(app_dir).pending
 }
 
+/// Saves the pending start and keeps the lead's part of the file as it is.
 pub fn save_pending(app_dir: &Path, pending: &Option<Pending>) -> Result<(), String> {
-    std::fs::create_dir_all(app_dir).map_err(|e| format!("Failed to create {}: {e}", app_dir.display()))?;
-    let json = serde_json::to_string_pretty(&WatcherFile { pending: pending.clone() }).map_err(|e| e.to_string())?;
-    write_atomic(&app_dir.join(FILE), &format!("{json}\n"))
+    save_state(app_dir, &WatcherState { pending: pending.clone(), ..read_state(app_dir) })
 }
 
 fn kind_of(word: &str) -> Option<ItemKind> {
@@ -99,7 +112,7 @@ fn kind_of(word: &str) -> Option<ItemKind> {
     }
 }
 
-fn same_dir(a: &str, b: &str) -> bool {
+pub(super) fn same_dir(a: &str, b: &str) -> bool {
     let trim = |s: &str| s.trim_end_matches('/').to_string();
     if trim(a) == trim(b) {
         return true;

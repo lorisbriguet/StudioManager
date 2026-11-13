@@ -9,6 +9,7 @@ let hotkeyError: string | null = null;
 let info: { enabled: boolean; claudePath: string | null; menuBar: boolean; limitAlerts: boolean; briefing?: boolean; watcher?: boolean; workerCap?: number; dev?: boolean };
 let folderTrusted = false;
 const BRIEFING = "/data/briefing";
+const LEAD = "/data/lead";
 let status: unknown = null;
 
 beforeEach(() => {
@@ -26,6 +27,7 @@ beforeEach(() => {
     if (cmd === "capture_hotkey_status") return hotkeyError;
     if (cmd === "briefing_status") return status;
     if (cmd === "agents_briefing_folder") return BRIEFING;
+    if (cmd === "agents_lead_folder") return LEAD;
     if (cmd === "agents_start_folders") return folderTrusted ? [{ path: "/data", label: null, trusted: true, home: false }] : [];
     if (cmd === "agents_trust_folder") return args.folder;
     if (cmd === "agents_set_briefing") {
@@ -239,13 +241,45 @@ describe("AgentsCard", () => {
   });
 
   describe("watcher", () => {
+    const cmds = () => invokedCommands.map((c) => c.cmd);
+    const renderCard = () =>
+      render(
+        <>
+          <AgentsCard />
+          <ConfirmHost />
+        </>,
+      );
+
     it("is disabled while Agents is off", async () => {
       info = { enabled: false, claudePath: "/bin/claude", menuBar: false, limitAlerts: true, watcher: false, workerCap: 3 };
       render(<AgentsCard />);
       expect(await screen.findByRole("switch", { name: "Start work on Ready tasks by itself" })).toBeDisabled();
     });
 
+    it("asks to trust the lead's folder when switching on; declining writes nothing and leaves the switch off", async () => {
+      info = { enabled: true, claudePath: "/bin/claude", menuBar: false, limitAlerts: true, watcher: false, workerCap: 3 };
+      renderCard();
+      const sw = await screen.findByRole("switch", { name: "Start work on Ready tasks by itself" });
+      fireEvent.click(sw);
+      fireEvent.click(await screen.findByRole("button", { name: "Cancel" }));
+      await waitFor(() => expect(cmds()).toContain("agents_start_folders"));
+      expect(cmds()).not.toContain("agents_trust_folder");
+      expect(cmds()).not.toContain("agents_set_watcher");
+      expect(sw).not.toBeChecked();
+    });
+
+    it("trusts the lead's folder, then switches on", async () => {
+      info = { enabled: true, claudePath: "/bin/claude", menuBar: false, limitAlerts: true, watcher: false, workerCap: 3 };
+      renderCard();
+      fireEvent.click(await screen.findByRole("switch", { name: "Start work on Ready tasks by itself" }));
+      fireEvent.click(await screen.findByRole("button", { name: "Trust and start" }));
+      await waitFor(() => expect(cmds()).toContain("agents_set_watcher"));
+      expect(invokedCommands.find((c) => c.cmd === "agents_trust_folder")?.args).toEqual({ folder: LEAD });
+      expect(cmds().indexOf("agents_trust_folder")).toBeLessThan(cmds().indexOf("agents_set_watcher"));
+    });
+
     it("switches on with the cap", async () => {
+      folderTrusted = true;
       info = { enabled: true, claudePath: "/bin/claude", menuBar: false, limitAlerts: true, watcher: false, workerCap: 3 };
       render(<AgentsCard />);
       fireEvent.click(await screen.findByRole("switch", { name: "Start work on Ready tasks by itself" }));

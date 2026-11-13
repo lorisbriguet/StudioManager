@@ -70,14 +70,16 @@ export const useReopenEntry = () => useEntryMutation((id: number) => q.reopenEnt
 export function useSendBack() {
   const updateTask = useUpdateTask();
   const updateSubtask = useUpdateSubtask();
-  const answer = useAnswerEntry();
+  const sendBack = useEntryMutation((a: { id: number; note: string; delivered: boolean }) =>
+    q.sendBackEntry(a.id, a.note, { delivered: a.delivered }),
+  );
   return useMutation({
     meta: { errorLabel: "error_save_task" },
     mutationFn: async (a: { kind: ItemKind; id: number; entryId: number; note: string; delivered: boolean }) => {
       const data = { stage: "running" } as const;
       if (a.kind === "task") await updateTask.mutateAsync({ id: a.id, data });
       else await updateSubtask.mutateAsync({ id: a.id, data });
-      await answer.mutateAsync({ id: a.entryId, answer: a.note, delivered: a.delivered });
+      await sendBack.mutateAsync({ id: a.entryId, note: a.note, delivered: a.delivered });
     },
   });
 }

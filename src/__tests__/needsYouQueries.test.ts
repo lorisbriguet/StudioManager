@@ -13,6 +13,7 @@ import {
   getAloneEntries,
   countOpen,
   answerEntry,
+  sendBackEntry,
   dismissEntry,
   reopenEntry,
 } from "../db/queries/needsYou";
@@ -114,6 +115,14 @@ describe("answer, dismiss and reopen", () => {
     const id = entry("decide", { status: "answered", decided_by: "lead" });
     await answerEntry(id, "late", { delivered: true });
     expect(one("SELECT answer, decided_by FROM needs_you WHERE id = $1", id)).toMatchObject({ answer: null, decided_by: "lead" });
+  });
+
+  it("sending a check back clears the link's check so the next report is checked afresh", async () => {
+    run("UPDATE task_agents SET check_state = 'passed', reported_at = datetime('now') WHERE id = $1", linkId);
+    const id = entry("check");
+    await sendBackEntry(id, "fix the margins", { delivered: true });
+    expect(one("SELECT status, answer, decided_by FROM needs_you WHERE id = $1", id)).toMatchObject({ status: "answered", answer: "fix the margins", decided_by: "user" });
+    expect(one("SELECT check_state, reported_at FROM task_agents WHERE id = $1", linkId)).toMatchObject({ check_state: null, reported_at: null });
   });
 
   it("dismisses an entry", async () => {

@@ -224,6 +224,16 @@ describe("Needs you: Decide", () => {
     }
   });
 
+  it("says the lead is reading it only while the lead is running", () => {
+    hooks.open = [row({ lead_state: "running" })];
+    const { unmount } = setup([]);
+    expect(screen.getByText("The lead is reading this")).toBeInTheDocument();
+    unmount();
+    hooks.open = [row({ lead_state: "waiting" })];
+    setup([]);
+    expect(screen.queryByText("The lead is reading this")).not.toBeInTheDocument();
+  });
+
   it("a link with no session keeps the entry open and shows the error; Dismiss lets it go", async () => {
     hooks.open = [row({ session_id: null })];
     setup([]);

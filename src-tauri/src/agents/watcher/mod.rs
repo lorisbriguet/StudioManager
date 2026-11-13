@@ -12,6 +12,7 @@ pub mod budget;
 pub mod check;
 pub mod events;
 pub mod git;
+pub mod lead;
 pub mod start;
 pub mod store;
 
@@ -365,6 +366,11 @@ pub struct Memory {
     noted: HashSet<(String, i64, &'static str, i64)>,
     /// Per link: when a stuck worker was last asked to continue.
     resumed_at: HashMap<(String, i64), i64>,
+    /// The running lead session and a lead start that timed out (also in `watcher.json`).
+    lead: Option<lead::LeadRun>,
+    lead_pending: Option<lead::LeadPending>,
+    /// `watcher.json` could not be saved: no lead starts until it can.
+    lead_dirty: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -378,10 +384,15 @@ static LOCK: AtomicU8 = AtomicU8::new(0);
 static PENDING: AtomicBool = AtomicBool::new(false);
 static REPOS: Mutex<Vec<(String, bool)>> = Mutex::new(Vec::new());
 static LAST_NOTICED: Mutex<Vec<Noticed>> = Mutex::new(Vec::new());
+/// The entry the lead session is on (its title), for `watcher_status`.
+static LEAD: Mutex<Option<String>> = Mutex::new(None);
 
 fn remember(lock: LockState, mem: &Memory) {
     LOCK.store(lock.to_u8(), Ordering::Relaxed);
     PENDING.store(mem.pending.is_some(), Ordering::Relaxed);
+    if let Ok(mut l) = LEAD.lock() {
+        *l = mem.lead.as_ref().map(|r| r.title.clone()).or_else(|| mem.lead_pending.as_ref().map(|p| p.title.clone()));
+    }
     if let Ok(mut r) = REPOS.lock() {
         *r = mem.repos.iter().map(|(k, v)| (k.clone(), *v)).collect();
     }
@@ -412,7 +423,10 @@ pub fn tick(d: &Deps, mem: &mut Memory, env: Option<&start::Env>) -> Report {
     if !mem.loaded {
         mem.loaded = true;
         mem.started = d.now;
-        mem.pending = start::read_pending(d.app_dir);
+        let saved = start::read_state(d.app_dir);
+        mem.pending = saved.pending;
+        mem.lead = saved.lead;
+        mem.lead_pending = saved.lead_pending;
     }
     // The lock is taken only once the switches and modes allow the watcher, and let go when they
     // do not, so a paused copy never keeps another copy out.
@@ -456,6 +470,10 @@ pub fn tick(d: &Deps, mem: &mut Memory, env: Option<&start::Env>) -> Report {
             }
             // Stuck, at a prompt, idle or old: resume, an entry for the owner, or wrap up.
             if act::step(env, d, mem, &pass.budget, &pass.links) {
+                pass = fresh(d, lock, mem);
+            }
+            // A short lead session for one waiting entry, and what the lead wrote carried out.
+            if lead::step(env, d, mem, &pass) {
                 pass = fresh(d, lock, mem);
             }
         }
@@ -529,7 +547,7 @@ pub struct WatcherStatus {
     pub running: usize,
     pub cap: u32,
     pub would_start: Option<String>,
-    /// The lead session (a later task).
+    /// The lead session: the title of the entry it is on.
     pub lead: Option<String>,
 }
 
@@ -674,7 +692,9 @@ pub async fn watcher_status(
             pending: usize::from(PENDING.load(Ordering::Relaxed)),
             repos: &repos,
         };
-        Ok(status_of(&outlook(&d, &known), now))
+        let mut status = status_of(&outlook(&d, &known), now);
+        status.lead = LEAD.lock().ok().and_then(|l| l.clone());
+        Ok(status)
     })
     .await
 }

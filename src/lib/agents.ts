@@ -92,6 +92,11 @@ export function briefingFolder(): Promise<string> {
   return invoke<string>("agents_briefing_folder");
 }
 
+/** Makes the lead session's folder (its files included) and returns its path. */
+export function leadFolder(): Promise<string> {
+  return invoke<string>("agents_lead_folder");
+}
+
 export function setAgentsLimitAlerts(on: boolean): Promise<AgentsInfo> {
   return invoke<AgentsInfo>("agents_set_limit_alerts", { on });
 }

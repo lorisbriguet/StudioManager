@@ -301,8 +301,6 @@ pub fn ask_wrap_up(db: &Path, link_id: i64, at_ms: i64) -> Result<(), String> {
 
 /// One of the counters of `task_agents`: each is bumped in the same transaction as the decision
 /// it limits, before the message or the start.
-// Task 12 bumps the last two.
-#[allow(dead_code)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Counter {
     Resumes,
@@ -368,6 +366,201 @@ pub fn decide_send_back(db: &Path, link_id: i64) -> Result<i64, String> {
         .map_err(|e| format!("Failed to write the check state: {e}"))?;
     tx.commit().map_err(|e| format!("Failed to save the decision: {e}"))?;
     Ok(n)
+}
+
+// ---------------------------------------------------------------- the lead's entries
+
+/// A Decide or Check entry the lead works on, or whose resolution the app carries out.
+#[derive(Clone, Debug, PartialEq)]
+pub struct LeadEntry {
+    pub id: i64,
+    /// `decide` or `check`.
+    pub kind: String,
+    pub link_id: Option<i64>,
+    pub item_kind: ItemKind,
+    pub item_id: i64,
+    pub title: String,
+    pub status: String,
+    pub lead_state: Option<String>,
+    pub answer: Option<String>,
+    pub reason: Option<String>,
+    pub created_at: String,
+}
+
+/// The entries in play, oldest first: open ones waiting for the lead or with it (`waiting`,
+/// `running`), and the ones the lead resolved that the app has not carried out yet (`done`,
+/// answered, decided by the lead, not delivered).
+pub fn lead_entries(db: &Path) -> Result<Vec<LeadEntry>, String> {
+    let conn = open(db)?;
+    let has = conn
+        .query_row("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'needs_you'", [], |_| Ok(()))
+        .is_ok();
+    if !has {
+        return Ok(vec![]);
+    }
+    let e = |e: rusqlite::Error| format!("Failed to read entries: {e}");
+    let mut st = conn
+        .prepare(
+            "SELECT id, kind, link_id, task_id, subtask_id, title, status, lead_state, answer, reason, created_at
+             FROM needs_you
+             WHERE kind IN ('decide', 'check')
+               AND ((lead_state IN ('waiting', 'running') AND status = 'open')
+                 OR (lead_state = 'done' AND status = 'answered' AND decided_by = 'lead' AND delivered_at IS NULL))
+             ORDER BY created_at, id",
+        )
+        .map_err(e)?;
+    let rows = st
+        .query_map([], |r| {
+            let task: Option<i64> = r.get(3)?;
+            let sub: Option<i64> = r.get(4)?;
+            let (item_kind, item_id) = match (task, sub) {
+                (Some(t), None) => (ItemKind::Task, t),
+                (None, Some(s)) => (ItemKind::Subtask, s),
+                _ => return Ok(None),
+            };
+            Ok(Some(LeadEntry {
+                id: r.get(0)?,
+                kind: r.get(1)?,
+                link_id: r.get(2)?,
+                item_kind,
+                item_id,
+                title: r.get(5)?,
+                status: r.get(6)?,
+                lead_state: r.get(7)?,
+                answer: r.get(8)?,
+                reason: r.get(9)?,
+                created_at: r.get(10)?,
+            }))
+        })
+        .map_err(e)?;
+    let mut out = Vec::new();
+    for row in rows {
+        out.extend(row.map_err(e)?);
+    }
+    Ok(out)
+}
+
+/// The `lead_state` of one entry.
+pub fn lead_state_of(db: &Path, entry_id: i64) -> Result<Option<String>, String> {
+    let conn = open(db)?;
+    match conn.query_row("SELECT lead_state FROM needs_you WHERE id = ?1", [entry_id], |r| r.get(0)) {
+        Ok(s) => Ok(s),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(format!("Failed to read the entry: {e}")),
+    }
+}
+
+/// The decision to start a lead session, in one transaction before `claude` is started: the
+/// link's session counter is bumped and the entry goes from `waiting` to `running`. Nothing is
+/// written when the entry is no longer waiting.
+pub fn begin_lead(db: &Path, entry_id: i64, link_id: i64, counter: Counter) -> Result<(), String> {
+    let mut conn = super::super::capture::open(db)?;
+    let tx = conn
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|e| format!("Failed to lock the database: {e}"))?;
+    let n = tx
+        .execute(
+            "UPDATE needs_you SET lead_state = 'running' WHERE id = ?1 AND status = 'open' AND lead_state = 'waiting'",
+            [entry_id],
+        )
+        .map_err(|e| format!("Failed to save the decision: {e}"))?;
+    if n == 0 {
+        return Err(format!("Entry {entry_id} is no longer waiting for the lead"));
+    }
+    bump_in(&tx, link_id, counter)?;
+    tx.commit().map_err(|e| format!("Failed to save the decision: {e}"))?;
+    Ok(())
+}
+
+/// `lead_state` from `from` to `to` on an open entry (one the lead did not settle goes from
+/// `running` or `waiting` to `skipped`). True when it changed.
+pub fn move_lead_state(db: &Path, entry_id: i64, from: &str, to: &str) -> Result<bool, String> {
+    let conn = super::super::capture::open(db)?;
+    let n = conn
+        .execute(
+            "UPDATE needs_you SET lead_state = ?3 WHERE id = ?1 AND lead_state = ?2 AND status = 'open'",
+            params![entry_id, from, to],
+        )
+        .map_err(|e| format!("Failed to write the entry: {e}"))?;
+    Ok(n == 1)
+}
+
+/// The lead's answer goes back to the owner: the entry is open again with nobody's decision on
+/// it and `text` as its recommendation. Only an entry the lead answered is touched.
+pub fn reopen_for_owner(db: &Path, entry_id: i64, text: &str) -> Result<bool, String> {
+    let text: String = text.chars().take(2000).collect();
+    let conn = super::super::capture::open(db)?;
+    let n = conn
+        .execute(
+            "UPDATE needs_you SET status = 'open', decided_by = NULL, answered_at = NULL, answer = NULL,
+                    delivered_at = NULL, recommendation = ?2, lead_state = 'done'
+             WHERE id = ?1 AND status = 'answered' AND decided_by = 'lead'",
+            params![entry_id, text],
+        )
+        .map_err(|e| format!("Failed to reopen the entry: {e}"))?;
+    Ok(n == 1)
+}
+
+/// Marks the lead's answer as delivered before it is typed, so a crash in between never types
+/// it twice. False when it was already delivered or is no longer the lead's answer.
+pub fn claim_delivery(db: &Path, entry_id: i64) -> Result<bool, String> {
+    let conn = super::super::capture::open(db)?;
+    let n = conn
+        .execute(
+            "UPDATE needs_you SET delivered_at = datetime('now')
+             WHERE id = ?1 AND status = 'answered' AND decided_by = 'lead' AND delivered_at IS NULL",
+            [entry_id],
+        )
+        .map_err(|e| format!("Failed to save the delivery: {e}"))?;
+    Ok(n == 1)
+}
+
+/// The lead's send back of a Check entry, decided in one transaction before the notes are typed:
+/// the delivery is marked, the send back counted (`sent_back` was 0), the check forgotten
+/// (`check_state` and `reported_at` cleared, as `decide_send_back`) and the item back to Running.
+/// False, with nothing written, when the link already sent a result back, has ended, or the
+/// entry was handled.
+pub fn claim_send_back(db: &Path, entry_id: i64, link_id: i64, kind: ItemKind, item_id: i64) -> Result<bool, String> {
+    let mut conn = super::super::capture::open(db)?;
+    let tx = conn
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|e| format!("Failed to lock the database: {e}"))?;
+    let e = |e: rusqlite::Error| format!("Failed to save the decision: {e}");
+    let sent: Option<i64> = match tx.query_row(
+        "SELECT sent_back FROM task_agents WHERE id = ?1 AND ended_at IS NULL",
+        [link_id],
+        |r| r.get(0),
+    ) {
+        Ok(n) => Some(n),
+        Err(rusqlite::Error::QueryReturnedNoRows) => None,
+        Err(err) => return Err(e(err)),
+    };
+    if sent != Some(0) {
+        return Ok(false);
+    }
+    let claimed = tx
+        .execute(
+            "UPDATE needs_you SET delivered_at = datetime('now')
+             WHERE id = ?1 AND status = 'answered' AND decided_by = 'lead' AND delivered_at IS NULL",
+            [entry_id],
+        )
+        .map_err(e)?;
+    if claimed == 0 {
+        return Ok(false);
+    }
+    bump_in(&tx, link_id, Counter::SentBack)?;
+    tx.execute("UPDATE task_agents SET check_state = NULL, reported_at = NULL WHERE id = ?1", [link_id]).map_err(e)?;
+    let (table, _) = table_of(kind);
+    tx.execute(
+        &format!(
+            "UPDATE {table} SET stage = 'running', updated_at = datetime('now')
+             WHERE id = ?1 AND stage = 'to_check' AND status <> 'done'"
+        ),
+        [item_id],
+    )
+    .map_err(e)?;
+    tx.commit().map_err(|err| format!("Failed to save the decision: {err}"))?;
+    Ok(true)
 }
 
 /// Something the app did by itself that the owner should see: an answered `alone` entry decided

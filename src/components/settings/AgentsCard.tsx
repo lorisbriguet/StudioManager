@@ -14,6 +14,7 @@ import { useNow } from "../../hooks/useNow";
 import { useBriefingStatus } from "../../hooks/useBriefingStatus";
 import {
   briefingFolder,
+  leadFolder,
   briefingLines,
   getAgentsSettings,
   isInside,
@@ -177,6 +178,21 @@ export function AgentsCard() {
   /** The watcher switch, or another cap (1 to 5; Rust clamps it too). */
   const saveWatcher = async (on: boolean, value: string) => {
     const n = Math.min(5, Math.max(1, Math.round(Number(value)) || (info?.workerCap ?? 3)));
+    if (on && !(info?.watcher ?? false)) {
+      // Switching on: the lead's folder must be trusted too (a decline leaves the switch off).
+      setError(null);
+      try {
+        const folder = await leadFolder();
+        const folders = await startFolders();
+        if (!folders.some((f) => f.trusted && isInside(folder, f.path))) {
+          if (!(await confirmTrust(folder, false))) return;
+          await trustFolder(folder);
+        }
+      } catch (e) {
+        setError(msg(e));
+        return;
+      }
+    }
     setCap(String(n));
     await run(() => setAgentsWatcher(on, n));
   };
