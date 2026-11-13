@@ -28,6 +28,17 @@ fn main() {
         });
         std::process::exit(0);
     }
+    // Claude Code's Stop hook for the watcher's workers: prints only the
+    // decision, never panics out, always exits 0.
+    if std::env::args().any(|a| a == "--stop-hook") {
+        std::panic::set_hook(Box::new(|_| {}));
+        let _ = std::panic::catch_unwind(|| {
+            if let Ok(dir) = studiomanager_mcp::env::data_dir() {
+                studiomanager_mcp::stophook::run(&dir);
+            }
+        });
+        std::process::exit(0);
+    }
     serve();
 }
 
