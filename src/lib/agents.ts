@@ -142,8 +142,10 @@ export function startAgent(
   task: string,
   model: string,
   name: string,
+  /** From a task: in the dev build the agent gets the dev build's own StudioManager server. */
+  ownServer = false,
 ): Promise<string> {
-  return invoke<string>("agents_start", { folder, task, model, name });
+  return invoke<string>("agents_start", { folder, task, model, name, ownServer });
 }
 
 export function stopAgent(shortId: string): Promise<void> {

@@ -28,9 +28,13 @@ export interface AgentItem {
   orgId: string;
 }
 
-const TAIL =
-  "Then tell me briefly what you found and ask me what to do. Don't change anything before I answer. " +
-  "If the StudioManager tools aren't available, say so and ask me to describe the work.";
+const ASK = "Then tell me briefly what you found and ask me what to do. Don't change anything before I answer. ";
+const FALLBACK = "If the StudioManager tools aren't available, say so and ask me to describe the work.";
+const TAIL = ASK + FALLBACK;
+/** For a task or subtask: its agent is linked to it, and the result shows on the item. */
+const REPORT =
+  "When the work is done, or you stop with work left, call report_result once with what was done, " +
+  "what is left open and how to check it, and the branch and pull request link if there are any. ";
 
 /** The agent's first message: what to work on, read it first, ask before acting. */
 export function agentPrompt(item: AgentItem): string {
@@ -50,8 +54,10 @@ export function agentPrompt(item: AgentItem): string {
   ].filter(Boolean);
   return (
     `Work on StudioManager ${item.kind} ${item.id} "${item.title}" (${parents.join(", ")}). ` +
-    "First read it and its context with the StudioManager tools: the task, its subtasks and notes, the project and its wiki. " +
-    TAIL
+    "First read it and its context with the StudioManager tools: the task, its brief, its subtasks and notes, the project and its wiki. " +
+    ASK +
+    REPORT +
+    FALLBACK
   );
 }
 

@@ -101,7 +101,7 @@ pub fn get_project(conn: &Connection, project: &str) -> R<ProjectDetail> {
     ))?;
 
     let mut tstmt = db(conn.prepare(
-        "SELECT id, title, status, priority, due_date, brief, stage FROM tasks WHERE project_id = ?1 \
+        "SELECT id, title, status, priority, due_date, brief, stage, result FROM tasks WHERE project_id = ?1 \
          ORDER BY sort_order ASC, id ASC",
     ))?;
     let mut tasks: Vec<Task> = db(tstmt
@@ -114,12 +114,13 @@ pub fn get_project(conn: &Connection, project: &str) -> R<ProjectDetail> {
                 due_date: r.get(4)?,
                 brief: r.get(5)?,
                 stage: r.get(6)?,
+                result: r.get(7)?,
                 subtasks: Vec::new(),
             })
         })
         .and_then(|rows| rows.collect::<rusqlite::Result<Vec<_>>>()))?;
     let mut sstmt = db(conn.prepare(
-        "SELECT id, title, status, due_date, brief, stage FROM subtasks WHERE task_id = ?1 \
+        "SELECT id, title, status, due_date, brief, stage, result FROM subtasks WHERE task_id = ?1 \
          ORDER BY sort_order ASC, id ASC",
     ))?;
     for t in &mut tasks {
@@ -132,6 +133,7 @@ pub fn get_project(conn: &Connection, project: &str) -> R<ProjectDetail> {
                     due_date: r.get(3)?,
                     brief: r.get(4)?,
                     stage: r.get(5)?,
+                    result: r.get(6)?,
                 })
             })
             .and_then(|rows| rows.collect::<rusqlite::Result<Vec<_>>>()))?;
@@ -165,6 +167,19 @@ pub fn get_project(conn: &Connection, project: &str) -> R<ProjectDetail> {
 mod tests {
     use crate::read::test_util::*;
     use super::*;
+
+    #[test]
+    fn get_project_shows_a_result_only_when_set() {
+        let c = fixture();
+        c.execute("UPDATE tasks SET result = 'Exported.' WHERE id = 1", []).unwrap();
+        c.execute("UPDATE subtasks SET result = 'Reversed done.' WHERE id = 2", []).unwrap();
+        let p = get_project(&c, "1").unwrap();
+        let json = serde_json::to_value(&p.tasks).unwrap();
+        assert_eq!(json[0]["result"], "Exported.");
+        assert_eq!(json[0]["subtasks"][1]["result"], "Reversed done.");
+        assert!(json[0]["subtasks"][0].get("result").is_none());
+        assert!(json[1].get("result").is_none());
+    }
 
     #[test]
     fn folder_lookup_exact_and_trailing_slash() {

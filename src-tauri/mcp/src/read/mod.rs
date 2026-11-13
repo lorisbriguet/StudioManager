@@ -34,6 +34,8 @@ pub struct Subtask {
     pub brief: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stage: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub result: Option<String>,
 }
 
 #[derive(Serialize, Debug, Clone, PartialEq)]
@@ -47,6 +49,8 @@ pub struct Task {
     pub brief: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stage: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub result: Option<String>,
     pub subtasks: Vec<Subtask>,
 }
 

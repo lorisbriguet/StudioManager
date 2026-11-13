@@ -32,13 +32,14 @@ pub const MIGRATIONS: &[SqlMigration] = &[
     SqlMigration { version: 14, sql: include_str!("../migrations/014_app_schema.sql"), columns_if_missing: true },
     SqlMigration { version: 15, sql: include_str!("../migrations/015_notification_keys.sql"), columns_if_missing: true },
     SqlMigration { version: 16, sql: include_str!("../migrations/016_captures.sql"), columns_if_missing: true },
+    SqlMigration { version: 17, sql: include_str!("../migrations/017_task_agents.sql"), columns_if_missing: true },
 ];
 
 // Only referenced from this module's own tests (as the expected "fully
 // migrated" version); nothing in the production path needs it, since
 // `migrate_db` derives what to apply from `MIGRATIONS` itself.
 #[allow(dead_code)]
-pub const LATEST_VERSION: i64 = 16;
+pub const LATEST_VERSION: i64 = 17;
 
 pub(crate) fn table_exists(conn: &rusqlite::Connection, name: &str) -> Result<bool, String> {
     conn.query_row(
@@ -680,6 +681,10 @@ mod tests {
                     // 016: the captures table and the brief and stage columns.
                     && !c.starts_with("captures.")
                     && !c.starts_with("index idx_captures_")
+                    // 017: the task_agents table and the result columns.
+                    && !c.starts_with("task_agents.")
+                    && !c.starts_with("index idx_task_agents_")
+                    && !["tasks.result ", "subtasks.result "].iter().any(|p| c.starts_with(p))
                     && !["tasks.brief ", "tasks.stage ", "subtasks.brief ", "subtasks.stage "].iter().any(|p| c.starts_with(p))
             })
             .collect()
@@ -831,6 +836,63 @@ mod tests {
         migrate_db(&db).unwrap();
         let conn = Connection::open(&db).unwrap();
         let sql = MIGRATIONS.iter().find(|m| m.version == 16).expect("016 listed").sql;
+        assert!(run_skipping_existing_columns(&conn, sql).is_ok());
+        drop(conn);
+        cleanup(&db);
+    }
+
+    #[test]
+    fn m017_adds_task_agents_and_result() {
+        let db = temp_db("m017");
+        migrate_db(&db).unwrap();
+        let conn = Connection::open(&db).unwrap();
+        conn.execute_batch("PRAGMA foreign_keys = ON").unwrap();
+        assert!(table_exists(&db, "task_agents"));
+        let cols = |t: &str| -> Vec<String> {
+            conn.prepare(&format!("SELECT name FROM pragma_table_info('{t}')"))
+                .unwrap()
+                .query_map([], |r| r.get::<_, String>(0))
+                .unwrap()
+                .map(Result::unwrap)
+                .collect()
+        };
+        for c in [
+            "id", "task_id", "subtask_id", "session_id", "short_id", "name", "model", "branch",
+            "pr_url", "reported_at", "started_at", "ended_at", "outcome",
+        ] {
+            assert!(cols("task_agents").contains(&c.to_string()), "task_agents.{c}");
+        }
+        assert!(cols("tasks").contains(&"result".to_string()));
+        assert!(cols("subtasks").contains(&"result".to_string()));
+        conn.execute("INSERT INTO clients (id, name) VALUES ('c1', 'Studio A')", []).unwrap();
+        conn.execute("INSERT INTO projects (id, client_id, name) VALUES (1, 'c1', 'Identity')", []).unwrap();
+        conn.execute("INSERT INTO tasks (id, project_id, title) VALUES (5, 1, 'Poster tool')", []).unwrap();
+        conn.execute("INSERT INTO subtasks (id, task_id, title) VALUES (7, 5, 'Contact sheet export')", []).unwrap();
+        let link = |t: &str, s: &str| {
+            conn.execute("INSERT INTO task_agents (task_id, subtask_id, short_id, name) VALUES (?1, ?2, 'ab12', 'poster-agent')", [t, s])
+        };
+        assert!(link("5", "7").is_err(), "both ids refused");
+        assert!(
+            conn.execute("INSERT INTO task_agents (short_id, name) VALUES ('ab12', 'x')", []).is_err(),
+            "neither id refused"
+        );
+        let null = rusqlite::types::Null;
+        conn.execute("INSERT INTO task_agents (task_id, subtask_id, short_id, name) VALUES (5, ?1, 'ab12', 'a')", [&null]).unwrap();
+        conn.execute("INSERT INTO task_agents (task_id, subtask_id, short_id, name) VALUES (?1, 7, 'cd34', 'b')", [&null]).unwrap();
+        let count = || -> i64 { conn.query_row("SELECT COUNT(*) FROM task_agents", [], |r| r.get(0)).unwrap() };
+        assert_eq!(count(), 2);
+        conn.execute("DELETE FROM tasks WHERE id = 5", []).unwrap();
+        assert_eq!(count(), 0, "links go with the task and its subtasks");
+        drop(conn);
+        cleanup(&db);
+    }
+
+    #[test]
+    fn m017_runs_twice_without_error() {
+        let db = temp_db("m017-twice");
+        migrate_db(&db).unwrap();
+        let conn = Connection::open(&db).unwrap();
+        let sql = MIGRATIONS.iter().find(|m| m.version == 17).expect("017 listed").sql;
         assert!(run_skipping_existing_columns(&conn, sql).is_ok());
         drop(conn);
         cleanup(&db);

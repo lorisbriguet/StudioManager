@@ -18,11 +18,13 @@ export function groupAgents(agents: Agent[]): Record<Group, Agent[]> {
 /**
  * The live agent list: one `listAgents()` call, then every `agents:changed` event. While the
  * window is visible it keeps the poller at its fast pace; hidden, the poller slows to 30 s.
+ * `watch: false` is a passive read (a row's chip): the poller keeps its own pace.
  */
-export function useAgents(): { agents: Agent[]; byGroup: Record<Group, Agent[]> } {
+export function useAgents({ watch: watching = true }: { watch?: boolean } = {}): { agents: Agent[]; byGroup: Record<Group, Agent[]> } {
   const [agents, setAgents] = useState<Agent[]>([]);
 
   useEffect(() => {
+    if (!watching) return;
     const watch = () => {
       if (document.visibilityState === "visible") watchAgents().catch(() => {});
     };
@@ -33,13 +35,13 @@ export function useAgents(): { agents: Agent[]; byGroup: Record<Group, Agent[]> 
       clearInterval(timer);
       document.removeEventListener("visibilitychange", watch);
     };
-  }, []);
+  }, [watching]);
 
   useEffect(() => {
     let alive = true;
     let unlisten: (() => void) | null = null;
     listAgents()
-      .then((list) => alive && setAgents(list))
+      .then((list) => alive && setAgents(Array.isArray(list) ? list : []))
       // "Agents are switched off" (or any failure) reads as an empty list.
       .catch(() => alive && setAgents([]));
     listen<Agent[]>(AGENTS_CHANGED, (e) => {

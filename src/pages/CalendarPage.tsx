@@ -38,6 +38,7 @@ import { useStartAgentOn } from "../hooks/useStartAgentOn";
 import { agentMenuItems, calendarAgentTarget, type AgentTarget } from "../lib/agentStart";
 import type { EventMountArg } from "@fullcalendar/core";
 import { qk } from "../db/queryKeys";
+import { StageWord } from "../components/project/StageChip";
 import { useKeepCurrent } from "../hooks/useKeepCurrent";
 import { usePeek } from "../hooks/usePeek";
 
@@ -189,7 +190,7 @@ export function CalendarPage() {
           start: `${t.due_date}T${t.start_time}`,
           end: t.end_time ? `${(t.end_date || t.due_date)}T${t.end_time}` : undefined,
           allDay: false,
-          extendedProps: { type: "task", itemId: t.id, projectId: t.project_id, status: t.status, isSubtask: false },
+          extendedProps: { type: "task", itemId: t.id, projectId: t.project_id, status: t.status, stage: t.stage, isSubtask: false },
           classNames: t.status === "done" ? ["fc-done"] : tagColor ? [] : [prioClass],
           ...(tagColor && t.status !== "done" ? { backgroundColor: tagColor.backgroundColor, textColor: tagColor.textColor } : {}),
         });
@@ -200,7 +201,7 @@ export function CalendarPage() {
           start: t.due_date,
           end: t.end_date ? nextDay(t.end_date) : undefined,
           allDay: true,
-          extendedProps: { type: "task", itemId: t.id, projectId: t.project_id, status: t.status, isSubtask: false },
+          extendedProps: { type: "task", itemId: t.id, projectId: t.project_id, status: t.status, stage: t.stage, isSubtask: false },
           classNames: t.status === "done" ? ["fc-done"] : tagColor ? [] : [prioClass],
           ...(tagColor && t.status !== "done" ? { backgroundColor: tagColor.backgroundColor, textColor: tagColor.textColor } : {}),
         });
@@ -220,7 +221,7 @@ export function CalendarPage() {
           start: `${s.due_date}T${s.start_time}`,
           end: s.end_time ? `${(s.end_date || s.due_date)}T${s.end_time}` : undefined,
           allDay: false,
-          extendedProps: { type: "subtask", itemId: s.id, projectId: parentProjectId, status: s.status, isSubtask: true },
+          extendedProps: { type: "subtask", itemId: s.id, projectId: parentProjectId, status: s.status, stage: s.stage, isSubtask: true },
           classNames: s.status === "done" ? ["fc-done"] : [prioClass],
         });
       } else {
@@ -230,7 +231,7 @@ export function CalendarPage() {
           start: s.due_date,
           end: s.end_date ? nextDay(s.end_date) : undefined,
           allDay: true,
-          extendedProps: { type: "subtask", itemId: s.id, projectId: parentProjectId, status: s.status, isSubtask: true },
+          extendedProps: { type: "subtask", itemId: s.id, projectId: parentProjectId, status: s.status, stage: s.stage, isSubtask: true },
           classNames: s.status === "done" ? ["fc-done"] : [prioClass],
         });
       }
@@ -500,7 +501,7 @@ export function CalendarPage() {
   }, [quickCreate, createTask, createSubtask]);
 
   const renderEventContent = useCallback((arg: EventContentArg) => {
-    const { status, isSubtask, isDeadline, isInvoice, isQuote } = arg.event.extendedProps;
+    const { status, stage, isSubtask, isDeadline, isInvoice, isQuote } = arg.event.extendedProps;
     const done = status === "done";
     const wrap = !arg.event.allDay;
     return (
@@ -509,6 +510,7 @@ export function CalendarPage() {
         {isDeadline && <ICONS.warning size={ICON_SIZE.pill} className="inline align-[-1px] mr-0.5" />}
         {(isInvoice || isQuote) && <span className="font-semibold mr-0.5">$</span>}
         {arg.timeText && <span className="font-medium mr-1">{arg.timeText}</span>}
+        <StageWord stage={stage} status={status} />
         <span>{arg.event.title}</span>
       </div>
     );

@@ -412,6 +412,38 @@ pub(super) fn cli(login: &super::pty::LoginCache) -> Result<super::cli::RealCli,
     super::cli::real_cli(login).ok_or_else(|| "claude not found".to_string())
 }
 
+/// The server file of an agent started from a task in the dev build.
+pub const TASK_AGENT_MCP_FILE: &str = "task-agent-mcp.json";
+
+/// (Re)writes `<app data folder>/task-agent-mcp.json`: the StudioManager server of this build,
+/// told to use this build's data folder. No tool filter: a worker keeps every tool.
+pub fn prepare_task_agent_config(app_dir: &Path, mcp_path: &str) -> Result<PathBuf, String> {
+    std::fs::create_dir_all(app_dir)
+        .map_err(|e| format!("Failed to create {}: {e}", app_dir.display()))?;
+    let config = serde_json::json!({ "mcpServers": { "studiomanager": {
+        "command": mcp_path,
+        "env": { "STUDIOMANAGER_DATA_DIR": app_dir.to_string_lossy() }
+    } } });
+    let content = format!("{}\n", serde_json::to_string_pretty(&config).unwrap_or_default());
+    let file = app_dir.join(TASK_AGENT_MCP_FILE);
+    if !std::fs::read_to_string(&file).is_ok_and(|c| c == content) {
+        crate::agent_access::write_atomic(&file, &content)?;
+    }
+    Ok(file)
+}
+
+/// The extra `claude` arguments of an agent started from a task. Only the dev build adds any:
+/// there the server added to Claude Code reads the installed app's data, so the session is
+/// given this build's own server under the same name (a config file's server wins over the
+/// user's one of the same name; tried by hand on 2026-11-13). Elsewhere: none.
+pub fn task_agent_args(dev: bool, own_server: bool, app_dir: &Path, mcp_path: &str) -> Result<Vec<String>, String> {
+    if !(dev && own_server) {
+        return Ok(vec![]);
+    }
+    let file = prepare_task_agent_config(app_dir, mcp_path)?;
+    Ok(vec!["--mcp-config".to_string(), file.to_string_lossy().into_owned()])
+}
+
 #[tauri::command]
 pub async fn agents_start(
     state: tauri::State<'_, super::AgentsState>,
@@ -419,10 +451,20 @@ pub async fn agents_start(
     task: String,
     model: String,
     name: String,
+    own_server: Option<bool>,
 ) -> Result<String, String> {
     let login = ready(&state)?;
-    blocking(move || start(&cli(&login)?, &read_trusted(&home_dir()), &folder, &task, &model, &name))
-        .await
+    let app_dir = state.app_dir.clone();
+    blocking(move || {
+        let extra = task_agent_args(
+            crate::host::running_dev(),
+            own_server.unwrap_or(false),
+            &app_dir,
+            &crate::agent_access::mcp_path(),
+        )?;
+        start_with(&cli(&login)?, &read_trusted(&home_dir()), &folder, &task, &model, &name, &extra)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -472,6 +514,49 @@ pub async fn agents_dismiss(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn task_dir(name: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("sm-task-agent-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        d
+    }
+
+    #[test]
+    fn the_task_agent_file_names_this_builds_server_and_data_folder() {
+        let dir = task_dir("file");
+        let file = prepare_task_agent_config(&dir, "/opt/app/studiomanager-mcp").unwrap();
+        assert_eq!(file, dir.join("task-agent-mcp.json"));
+        let read = || -> serde_json::Value {
+            serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap()
+        };
+        let expected = serde_json::json!({ "mcpServers": { "studiomanager": {
+            "command": "/opt/app/studiomanager-mcp",
+            "env": { "STUDIOMANAGER_DATA_DIR": dir.to_string_lossy() }
+        } } });
+        assert_eq!(read(), expected);
+        // Safe to run twice.
+        prepare_task_agent_config(&dir, "/opt/app/studiomanager-mcp").unwrap();
+        assert_eq!(read(), expected);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn only_the_dev_build_gives_a_task_agent_its_own_server() {
+        let dir = task_dir("args");
+        // The installed app and the demo build add nothing and write no file.
+        assert_eq!(task_agent_args(false, true, &dir, "/x/mcp").unwrap(), Vec::<String>::new());
+        assert_eq!(task_agent_args(false, false, &dir, "/x/mcp").unwrap(), Vec::<String>::new());
+        // The dev build, for a start that is not from a task: nothing either.
+        assert_eq!(task_agent_args(true, false, &dir, "/x/mcp").unwrap(), Vec::<String>::new());
+        assert!(!dir.join(TASK_AGENT_MCP_FILE).exists());
+        let args = task_agent_args(true, true, &dir, "/x/mcp").unwrap();
+        assert_eq!(
+            args,
+            vec!["--mcp-config".to_string(), dir.join(TASK_AGENT_MCP_FILE).to_string_lossy().into_owned()]
+        );
+        assert!(args.iter().all(|a| a != "--"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     struct FakeCli {
         calls: Mutex<Vec<(Vec<String>, PathBuf)>>,

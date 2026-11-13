@@ -31,6 +31,12 @@ vi.mock("../db/hooks/useCaptures", () => ({
   useBriefEntries: () => ({ data: [] }),
 }));
 
+const linkAgent = vi.hoisted(() => vi.fn(async (_: unknown) => 1));
+vi.mock("../db/queries/taskAgents", async (orig) => ({
+  ...(await orig<typeof import("../db/queries/taskAgents")>()),
+  linkAgent,
+}));
+
 import { useStartAgentOn } from "../hooks/useStartAgentOn";
 import { notify } from "../lib/notify";
 import { AgentsPage } from "../pages/AgentsPage";
@@ -87,8 +93,67 @@ describe("useStartAgentOn", () => {
     item.current = task("/work/proj");
     where = "";
     useAppStore.setState({ agentsEnabled: true, language: "EN" });
+    useAppStore.setState({ testMode: false, presentationMode: false });
     useOrgStore.setState({ activeId: "6kun0b" });
     setInvokeHandler((cmd) => handler(cmd));
+  });
+
+  const startOn = async (target: { kind: "task" | "subtask" | "project"; id: number }) => {
+    const { result } = renderHook(() => useStartAgentOn(), { wrapper });
+    let started: boolean | undefined;
+    await act(async () => {
+      started = await result.current.start(target);
+    });
+    return started;
+  };
+
+  it("links the agent to the task it was started from, with its own server asked for", async () => {
+    expect(await startOn({ kind: "task", id: 44 })).toBe(true);
+    expect(starts()[0].args).toMatchObject({ ownServer: true });
+    expect(linkAgent).toHaveBeenCalledTimes(1);
+    expect(linkAgent).toHaveBeenCalledWith({
+      kind: "task",
+      id: 44,
+      shortId: "abcd1234",
+      name: "task-44-new-features",
+      model: "opus",
+    });
+    expect(notify.error).not.toHaveBeenCalled();
+  });
+
+  it("writes no link for a project start", async () => {
+    item.current = { kind: "project", id: 4, title: "Studio Manager App", project: task("/work/proj").project, orgId: "6kun0b" };
+    expect(await startOn({ kind: "project", id: 4 })).toBe(true);
+    expect(linkAgent).not.toHaveBeenCalled();
+  });
+
+  it("starts but writes no link in test mode or presentation mode", async () => {
+    useAppStore.setState({ testMode: true });
+    expect(await startOn({ kind: "task", id: 44 })).toBe(true);
+    useAppStore.setState({ testMode: false, presentationMode: true });
+    expect(await startOn({ kind: "task", id: 44 })).toBe(true);
+    expect(starts()).toHaveLength(2);
+    expect(linkAgent).not.toHaveBeenCalled();
+    expect(notify.error).not.toHaveBeenCalled();
+  });
+
+  it("says so, and writes no link, when the organisation changed while starting", async () => {
+    setInvokeHandler((cmd) => {
+      if (cmd === "agents_start") useOrgStore.setState({ activeId: "other1" });
+      return handler(cmd);
+    });
+    expect(await startOn({ kind: "task", id: 44 })).toBe(true);
+    expect(linkAgent).not.toHaveBeenCalled();
+    expect(notify.error).toHaveBeenCalledWith("The agent started, but the task does not show it");
+    expect(where).toBe("/agents?started=abcd1234");
+  });
+
+  it("still opens the agent when the link can't be written", async () => {
+    const boom = new Error("locked");
+    linkAgent.mockRejectedValueOnce(boom);
+    expect(await startOn({ kind: "task", id: 44 })).toBe(true);
+    expect(notify.error).toHaveBeenCalledWith("The agent started, but the task does not show it", boom);
+    expect(where).toBe("/agents?started=abcd1234");
   });
 
   it("is disabled while agents are off", () => {

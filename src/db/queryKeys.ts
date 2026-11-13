@@ -34,6 +34,12 @@ export const qk = {
     byStatus: (status: string) => ["captures", status] as const,
     briefs: ["captures", "briefs"] as const,
   },
+  taskAgents: {
+    all: ["taskAgents"] as const,
+    byItem: (kind: string, id: number) => ["taskAgents", "item", kind, id] as const,
+    open: ["taskAgents", "open"] as const,
+    captured: (kind: string, id: number) => ["taskAgents", "captured", kind, id] as const,
+  },
   invoices: {
     ...documentKeys("invoices"),
     byClient: (clientId: string) => ["invoices", "client", clientId] as const,

@@ -326,6 +326,7 @@ fn escape_html(s: &str) -> String {
 mod captures;
 mod clients;
 mod projects;
+mod results;
 mod tasks;
 mod tools;
 mod wiki;
@@ -333,6 +334,7 @@ mod wiki;
 pub use captures::{capture, file_capture, set_brief, Filing};
 pub use clients::create_client;
 pub use projects::{create_project, link_folder, update_project};
+pub use results::{report_result, ReportedResult};
 pub use tasks::{create_subtask, create_task, update_subtask, update_task};
 pub use tools::link_tool;
 pub use wiki::{add_decision, put_wiki_article};

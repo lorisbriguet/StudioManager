@@ -1,5 +1,5 @@
 export type TaskStatus = "todo" | "done";
-/** Where a briefed item stands. Part 1 writes only briefed and ready; running and to_check come later. */
+/** Where a briefed item stands. Part 1 writes briefed and ready; part 2 writes running and to_check. */
 export type TaskStage = "briefed" | "ready" | "running" | "to_check";
 export type TaskPriority = "low" | "medium" | "high";
 
@@ -47,6 +47,8 @@ export interface Task {
   /** Optional: the create helpers do not set them (part 1 writes them only through the capture tools). */
   brief?: string | null;
   stage?: TaskStage | null;
+  /** Written by the report_result tool. */
+  result?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -66,6 +68,8 @@ export interface Subtask {
   /** Optional: the create helpers do not set them (part 1 writes them only through the capture tools). */
   brief?: string | null;
   stage?: TaskStage | null;
+  /** Written by the report_result tool. */
+  result?: string | null;
   created_at: string;
   updated_at: string;
 }

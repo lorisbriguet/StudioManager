@@ -16,6 +16,9 @@ import { useAppStore } from "../stores/app-store";
 import { useOrgStore } from "../stores/org-store";
 import { getLabels, notify } from "../lib/notify";
 import { logError } from "../lib/log";
+import { linkAgent } from "../db/queries/taskAgents";
+import { queryClient } from "../lib/queryClient";
+import { qk, invalidateTasks } from "../db/queryKeys";
 
 /** Items being started: a second click while one starts does nothing. */
 const inFlight = new Set<string>();
@@ -84,11 +87,31 @@ export function useStartAgentOn(): { enabled: boolean; start: (target: AgentTarg
 
         let shortId: string;
         try {
-          shortId = await startAgent(folder, agentPrompt(item), "opus", agentName(item));
+          // From a task: in the dev build the agent gets the dev build's own server.
+          shortId = await startAgent(folder, agentPrompt(item), "opus", agentName(item), true);
         } catch (e) {
           void logError("Agents: start failed:", e);
           notify.error(t.agents_start_failed, e);
           return false;
+        }
+        // The agent runs from here on: a link that can't be written is said, never a failed start.
+        if (item.kind !== "project") {
+          const { testMode, presentationMode } = useAppStore.getState();
+          if (!testMode && !presentationMode) {
+            if (useOrgStore.getState().activeId !== item.orgId) {
+              // The organisation was switched during the folder or trust question.
+              notify.error(t.agents_started_not_linked);
+            } else {
+              try {
+                await linkAgent({ kind: item.kind, id: item.id, shortId, name: agentName(item), model: "opus" });
+                void queryClient.invalidateQueries({ queryKey: qk.taskAgents.all });
+                invalidateTasks(queryClient);
+              } catch (e) {
+                void logError("Agents: started, but the link wasn't written:", e);
+                notify.error(t.agents_started_not_linked, e);
+              }
+            }
+          }
         }
         navigate(`/agents?started=${encodeURIComponent(shortId)}`);
         return true;

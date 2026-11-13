@@ -8,6 +8,12 @@ const TAIL =
   "Then tell me briefly what you found and ask me what to do. Don't change anything before I answer. " +
   "If the StudioManager tools aren't available, say so and ask me to describe the work.";
 
+const ITEM_TAIL =
+  "Then tell me briefly what you found and ask me what to do. Don't change anything before I answer. " +
+  "When the work is done, or you stop with work left, call report_result once with what was done, " +
+  "what is left open and how to check it, and the branch and pull request link if there are any. " +
+  "If the StudioManager tools aren't available, say so and ask me to describe the work.";
+
 const subtask: AgentItem = {
   kind: "subtask",
   id: 297,
@@ -23,16 +29,16 @@ describe("agentPrompt", () => {
   it("names a subtask with its task, project and organisation", () => {
     expect(agentPrompt(subtask)).toBe(
       'Work on StudioManager subtask 297 "Start an agent from a task" (task 44 "New Features", project 4 "Studio Manager App", organisation 6kun0b). ' +
-        "First read it and its context with the StudioManager tools: the task, its subtasks and notes, the project and its wiki. " +
-        TAIL,
+        "First read it and its context with the StudioManager tools: the task, its brief, its subtasks and notes, the project and its wiki. " +
+        ITEM_TAIL,
     );
   });
 
   it("names a task with its project", () => {
     expect(agentPrompt(task)).toBe(
       'Work on StudioManager task 44 "New Features" (project 4 "Studio Manager App", organisation 6kun0b). ' +
-        "First read it and its context with the StudioManager tools: the task, its subtasks and notes, the project and its wiki. " +
-        TAIL,
+        "First read it and its context with the StudioManager tools: the task, its brief, its subtasks and notes, the project and its wiki. " +
+        ITEM_TAIL,
     );
   });
 
@@ -42,6 +48,13 @@ describe("agentPrompt", () => {
         "First read it and its context with the StudioManager tools: the project, its open tasks and its wiki. " +
         TAIL,
     );
+  });
+
+  it("asks only task and subtask agents for a result, and stays short", () => {
+    expect(agentPrompt(task)).toContain("report_result");
+    expect(agentPrompt(subtask)).toContain("report_result");
+    expect(agentPrompt(proj)).not.toContain("report_result");
+    expect(agentPrompt({ ...subtask, title: "x".repeat(500) }).length).toBeLessThan(8000);
   });
 
   it("keeps the title verbatim", () => {

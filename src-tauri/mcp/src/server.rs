@@ -594,6 +594,22 @@ pub struct SetBriefInput {
     pub brief: String,
 }
 
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ReportResultInput {
+    /// Organisation id or name. Default: the active organisation.
+    pub org: Option<String>,
+    /// Exactly one of task_id and subtask_id.
+    pub task_id: Option<i64>,
+    pub subtask_id: Option<i64>,
+    /// What was done, what is left open, how to check it (at most 4000 characters).
+    pub result: String,
+    /// The branch the work is on (no spaces).
+    pub branch: Option<String>,
+    /// The pull request link (starts with https://).
+    pub pr_url: Option<String>,
+}
+
 // ── Plumbing ─────────────────────────────────────────────────
 
 fn ok(v: Value) -> CallToolResult {
@@ -1080,6 +1096,26 @@ impl Server {
         .await
     }
 
+    #[tool(
+        description = "Write the result of your work on a task or subtask before you stop: what was done, what is left open, how to check it. Add the branch and the pull request link if there are any. They are saved on the task's agent link only when exactly one agent is linked to it."
+    )]
+    async fn report_result(&self, Parameters(p): Parameters<ReportResultInput>) -> CallToolResult {
+        self.run(move |d| {
+            write_in(d, p.org.as_deref(), |d, o| {
+                write::report_result(
+                    d,
+                    o,
+                    p.task_id,
+                    p.subtask_id,
+                    &p.result,
+                    p.branch.as_deref(),
+                    p.pr_url.as_deref(),
+                )
+            })
+        })
+        .await
+    }
+
     #[tool(description = "List clients, optionally by text. Archived clients are left out unless include_archived is true.")]
     async fn list_clients(&self, Parameters(p): Parameters<ListClientsInput>) -> CallToolResult {
         self.run(move |d| {
@@ -1539,13 +1575,13 @@ mod tests {
         let dir = crate::test_support::ready_dir("org-a", "Studio A");
         assert_eq!(
             Server::new(Ok(dir.clone())).tool_router.list_all().len(),
-            39
+            40
         );
         crate::test_support::allow_listed(&dir, true, &[]);
-        assert_eq!(Server::new(Ok(dir)).tool_router.list_all().len(), 44);
+        assert_eq!(Server::new(Ok(dir)).tool_router.list_all().len(), 45);
         assert_eq!(
             Server::new(Err("x".into())).tool_router.list_all().len(),
-            39
+            40
         );
     }
 
@@ -1564,9 +1600,18 @@ mod tests {
     }
 
     #[test]
+    fn report_result_is_not_in_the_brief_session() {
+        let brief = "list_captures,file_capture,list_projects,get_project,list_tasks,list_wiki,get_wiki_article";
+        let list = Some(brief.split(',').map(str::to_string).collect());
+        let s = Server::with_tools(Err("x".into()), list);
+        assert!(!names(&s).contains(&"report_result".to_string()));
+        assert!(s.allows("report_result").is_err());
+    }
+
+    #[test]
     fn without_a_session_tool_list_nothing_changes() {
         let s = Server::with_tools(Err("x".into()), None);
-        assert_eq!(names(&s).len(), 39);
+        assert_eq!(names(&s).len(), 40);
         assert!(s.allows("create_client").is_ok());
     }
 

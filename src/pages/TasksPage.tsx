@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { Fragment, useState, useMemo, useCallback } from "react";
 import { IconButton } from "../components/ui/IconButton";
 import { Link, useNavigate } from "react-router-dom";
 import { ChevronRight } from "lucide-react";
@@ -46,6 +46,8 @@ import { PILL } from "../components/ui/tokens";
 import { useStartAgentOn } from "../hooks/useStartAgentOn";
 import { agentMenuItems } from "../lib/agentStart";
 import { qk } from "../db/queryKeys";
+import { TaskAgentPanel } from "../components/project/TaskAgentPanel";
+import { StageChip, AgentResultButton } from "../components/project/StageChip";
 
 export function TasksPage() {
   const t = useT();
@@ -78,6 +80,15 @@ export function TasksPage() {
   const [expandedTasks, setExpandedTasks] = useState<Set<number>>(new Set());
   const [editingTask, setEditingTask] = useState<number | null>(null);
   const [editingSubtask, setEditingSubtask] = useState<number | null>(null);
+  // Subtasks whose stage chip opened their agent panel.
+  const [openSubPanels, setOpenSubPanels] = useState<Set<number>>(new Set());
+  const toggleSubPanel = (id: number) =>
+    setOpenSubPanels((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   const [ctxMenu, setCtxMenu] = useState<ContextMenuState<Task> | null>(null);
   const [subCtxMenu, setSubCtxMenu] = useState<ContextMenuState<Subtask> | null>(null);
   const [headerCtxMenu, setHeaderCtxMenu] = useState<ContextMenuState<{ projectId: number; projectName: string }> | null>(null);
@@ -415,6 +426,7 @@ export function TasksPage() {
                           {tk.title}
                         </span>
                       )}
+                      <StageChip kind="task" id={tk.id} stage={tk.stage} status={tk.status} />
                       {taskSubs.length > 0 && (
                         <span className="text-xs text-muted">
                           {doneSubtasks}/{taskSubs.length}
@@ -467,8 +479,10 @@ export function TasksPage() {
                     </div>
                     {isExpanded && (
                       <div className="ml-12 mr-4 border-l border-[var(--color-border-divider)] pl-3 pb-2 mb-1">
+                        <TaskAgentPanel kind="task" item={tk} />
                         {filteredSubs.map((s) => (
-                          <div key={s.id} data-task-row className="flex items-center gap-2 py-1 group/sub" onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setSubCtxMenu({ x: e.clientX, y: e.clientY, item: s }); }}>
+                          <Fragment key={s.id}>
+                          <div data-task-row className="flex items-center gap-2 py-1 group/sub" onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setSubCtxMenu({ x: e.clientX, y: e.clientY, item: s }); }}>
                             <Checkbox
                               checked={s.status === "done"}
                               aria-label={`${t.mark_done}: ${s.title}`}
@@ -511,6 +525,8 @@ export function TasksPage() {
                                 {s.title}
                               </span>
                             )}
+                            <StageChip kind="subtask" id={s.id} stage={s.stage} status={s.status} onClick={() => toggleSubPanel(s.id)} />
+                            <AgentResultButton id={s.id} stage={s.stage} status={s.status} result={s.result} onClick={() => toggleSubPanel(s.id)} />
                             <TaskDatePicker
                               dueDate={s.due_date}
                               endDate={s.end_date}
@@ -527,6 +543,8 @@ export function TasksPage() {
                               reveal="sub"
                             />
                           </div>
+                          {openSubPanels.has(s.id) && <TaskAgentPanel kind="subtask" item={s} />}
+                          </Fragment>
                         ))}
                         <AddRow
                           className="mt-1"
