@@ -169,7 +169,7 @@ Design: [specs/2026-10-28-agents-window-design.md](docs/superpowers/specs/2026-1
 
 - [x] Wiki as a vault: explorer grouped by project (folders no longer shown), tabs with history, reading/editing modes, `[[` link picker that can create the target
 - [x] Side panel: local graph, backlinks with context, outgoing links, unlinked mentions with Link it, outline
-- [x] Graph view: force simulation with dragging (ported from the Art Basel hub), per-project clusters, labels at a fixed screen size, filters
+- [x] Graph view: force simulation with dragging (ported from a client hub), per-project clusters, labels at a fixed screen size, filters
 - [x] Project Markdown files shown read-only from the project folder (rendered in Rust, raw HTML escaped, only safe links kept), linkable from articles, in the graph with file-to-file links
 - [x] User guide v3: articles link to each other, resolved at seed time
 - [x] Agent server: lossless article round-trip, single `~` as text, `[[Title]]` and `[[file.md]]` links, linking guidance in its instructions
@@ -179,7 +179,7 @@ Follow-ups:
 - [x] Dev only: a full Vite reload can call getDb() before the active organisation is known, creating an empty `studiomanager.db` at the data-folder root (harmless, `organisations.json` blocks the legacy upgrade) — make getDb wait for the org
 - [ ] Project files are read-only; an "Open in editor" action next to Show in Finder
 - [ ] MCP still creates a wiki folder per project on put_wiki_article; folders are no longer shown, so stop creating them
-- [ ] Art Basel design-system toolkit and client folders: their Markdown files are not cross-linked yet
+- [ ] A client's design-system toolkit and client folders: their Markdown files are not cross-linked yet
 
 ## V2.2.0 — Done (agent access)
 

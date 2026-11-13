@@ -220,6 +220,8 @@ hand regardless.
 
 **Hooks**
 
+<a id="hooks"></a>
+
 A session started by the watcher gets a Stop hook *[call]*, on the model of the one the client hub already uses:
 
 - it stops once when the session ends on a question that was not sent through the `ask` tool;

@@ -10,7 +10,7 @@ Decisions marked *[call]* were made by the designer, not by Loris; he can overtu
 
 ## 1. Why
 
-Loris runs several Claude Code agents at once across client and personal projects. For Art Basel he has a
+Loris runs several Claude Code agents at once across client and personal projects. For one client he has a
 "control room" (repo `claude-dashboard`, branch `feat/ab-control-room`, a local Node server on port 4747) that
 lets him start agents, see what they are all doing, and attach to them in a terminal. Nothing like it exists
 for the rest of his work, and StudioManager already knows what a terminal or the control room does not: which
@@ -47,7 +47,7 @@ without opening iTerm or the control room.
 - A free shell. The terminal only ever runs `claude attach <id>`.
 - Context meter and per-agent task list (the control room has both; later).
 - Phone alerts (ntfy, Pushover).
-- Anything Art Basel: open questions, decisions, deadlines, hub records. The control room stays and keeps
+- Anything of that client's hub: open questions, decisions, deadlines, hub records. The control room stays and keeps
   those.
 - Git worktree options when starting an agent.
 - The agent bar (step two).
@@ -55,13 +55,13 @@ without opening iTerm or the control room.
 ## 4. Anti-goals
 
 - Opening a network port or a local web server. The control room's audit
-  (`ArtBasel/docs/hub-audit-2026-10-14/1-control-room-security.md`) shows how much of its risk comes from a
+  (kept in the client hub) shows how much of its risk comes from a
   key-protected HTTP/WebSocket server; inside Tauri everything goes through IPC instead.
 - Letting the webview run arbitrary commands. Today the app's capability file states that the webview cannot
   execute shell commands; v1 keeps that true. Every process is started by a Rust command with a fixed
   program and validated arguments.
 - Accepting Claude's folder-trust prompt on Loris's behalf.
-- Writing to the Art Basel hub's files, or to `~/.claude` beyond what the `claude` CLI itself does.
+- Writing to the client hub's files, or to `~/.claude` beyond what the `claude` CLI itself does.
 
 ## 5. Constraints
 
