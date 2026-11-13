@@ -40,9 +40,12 @@ export function AgentsPage() {
   const panel = tabIds(idBase, tab);
   const { data: newCaptures = [] } = useCaptures("new");
   const needsYouCount = useNeedsYouCount();
-  // An agent with an open Needs you entry is listed there: not a second time in its group here.
+  // A watcher-started agent with an open Needs you entry is listed there: not a second time in
+  // its group here. An agent started by hand stays listed.
   const { data: openEntries = [] } = useOpenEntries();
-  const listedInNeedsYou = new Set(openEntries.flatMap((e) => (e.short_id ? [e.short_id] : [])));
+  const listedInNeedsYou = new Set(
+    openEntries.flatMap((e) => (e.short_id && e.started_by === "watcher" ? [e.short_id] : [])),
+  );
   const counts: Record<Tab, number> = { "needs-you": needsYouCount, inbox: newCaptures.length, all: 0 };
   const tabLabels: Record<Tab, string> = {
     "needs-you": t.agents_tab_needs_you,

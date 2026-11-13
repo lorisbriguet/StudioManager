@@ -2,12 +2,22 @@
 //! are Ready, and whether a link has an open question. Reads only: the watcher of this task
 //! writes nothing.
 
-use super::super::capture::open;
 use super::super::links::{has_table, parse_utc_ms, ItemKind};
 use chrono::NaiveDate;
-use rusqlite::Connection;
+use rusqlite::{Connection, OpenFlags};
 use std::cmp::Reverse;
 use std::path::Path;
+use std::time::Duration;
+
+/// Opens an organisation's database to read only: no create, so a missing file is an error and
+/// nothing is written to it.
+fn open(db: &Path) -> Result<Connection, String> {
+    let conn = Connection::open_with_flags(db, OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX)
+        .map_err(|e| format!("Failed to open DB: {e}"))?;
+    conn.busy_timeout(Duration::from_millis(5000))
+        .map_err(|e| format!("Failed to set busy_timeout: {e}"))?;
+    Ok(conn)
+}
 
 /// An open link the watcher started (`task_agents.started_by = 'watcher'`). A hand-started link
 /// (`started_by` null) belongs to part 2's tracker and is not here.
@@ -209,6 +219,19 @@ mod tests {
     use super::*;
     use rusqlite::params;
     use std::path::PathBuf;
+
+    #[test]
+    fn the_readers_create_no_file_for_a_missing_database() {
+        let d = std::env::temp_dir().join(format!("sm-watcher-store-missing-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        let db = d.join("studiomanager.db");
+        assert!(open_watcher_links(&db, "Studio A").is_err());
+        assert!(open_ask(&db, 1).is_err());
+        assert!(ready_items(&db).is_err());
+        assert!(!db.exists());
+        assert_eq!(std::fs::read_dir(&d).unwrap().count(), 0);
+    }
 
     fn migrated(name: &str) -> PathBuf {
         let d = std::env::temp_dir().join(format!("sm-watcher-store-{name}-{}", std::process::id()));

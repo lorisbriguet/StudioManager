@@ -9,6 +9,8 @@ export interface NeedsYouEntry extends NeedsYouRow {
   /** The link's short id and session id; null when the entry has no link. */
   short_id: string | null;
   session_id: string | null;
+  /** Who started the link's agent: 'watcher', or null for one started by hand. */
+  started_by: string | null;
   /** The link's pull request, when it has one. */
   pr_url: string | null;
 }
@@ -16,7 +18,7 @@ export interface NeedsYouEntry extends NeedsYouRow {
 const SELECT_ENTRY = `
   SELECT n.*, COALESCE(t.title, s.title) AS item_title,
          p.id AS project_id, p.name AS project_name,
-         a.short_id AS short_id, a.session_id AS session_id, a.pr_url AS pr_url
+         a.short_id AS short_id, a.session_id AS session_id, a.started_by AS started_by, a.pr_url AS pr_url
   FROM needs_you n
   LEFT JOIN tasks t ON t.id = n.task_id
   LEFT JOIN subtasks s ON s.id = n.subtask_id
@@ -48,13 +50,17 @@ export async function countOpen(): Promise<number> {
   return rows[0]?.n ?? 0;
 }
 
-/** Loris answers an open entry. An entry already answered or dismissed is left as it is. */
-export async function answerEntry(id: number, answer: string): Promise<void> {
+/**
+ * Loris answers an open entry. An entry already answered or dismissed is left as it is.
+ * `delivered`: the app typed the answer into the agent, so `delivered_at` is set too.
+ */
+export async function answerEntry(id: number, answer: string, opts: { delivered: boolean }): Promise<void> {
   const db = await getDb();
   await db.execute(
-    `UPDATE needs_you SET status = 'answered', answer = $2, decided_by = 'user', answered_at = datetime('now')
+    `UPDATE needs_you SET status = 'answered', answer = $2, decided_by = 'user', answered_at = datetime('now'),
+       delivered_at = CASE WHEN $3 = 1 THEN datetime('now') ELSE delivered_at END
      WHERE id = $1 AND status = 'open'`,
-    [id, answer],
+    [id, answer, opts.delivered ? 1 : 0],
   );
 }
 

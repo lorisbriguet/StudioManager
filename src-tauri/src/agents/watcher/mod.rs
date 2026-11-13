@@ -273,7 +273,11 @@ fn notice_links(d: &Deps, mem: &mut Memory) -> Vec<Noticed> {
                 mem.seen.remove(&key);
             }
         }
-        let ask = open_ask(&db, link.id).unwrap_or_else(|e| {
+        let ask = {
+            let _shared = crate::org_shared();
+            open_ask(&db, link.id)
+        }
+        .unwrap_or_else(|e| {
             log::warn!("[watcher] organisation {}: {e}", link.org);
             None
         });
@@ -309,15 +313,15 @@ pub fn status_of(o: &Outlook, now: i64) -> WatcherStatus {
     };
     WatcherStatus {
         paused: o.paused.as_ref().map(|p| p.key().to_string()),
-        budget: why.map(|b| {
-            match b {
-                Budget::AheadOfWeek { .. } => "ahead_of_week",
-                Budget::FiveHour(_) => "five_hour",
-                Budget::NoData | Budget::Ok => "no_data",
-                Budget::Stale { .. } => "stale",
-            }
-            .to_string()
-        }),
+        budget: why
+            .and_then(|b| match b {
+                Budget::AheadOfWeek { .. } => Some("ahead_of_week"),
+                Budget::FiveHour(_) => Some("five_hour"),
+                Budget::NoData => Some("no_data"),
+                Budget::Stale { .. } => Some("stale"),
+                Budget::Ok => None,
+            })
+            .map(String::from),
         percent: match why {
             Some(Budget::AheadOfWeek { percent, .. }) | Some(Budget::FiveHour(percent)) => Some(*percent),
             _ => None,

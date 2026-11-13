@@ -64,4 +64,22 @@ describe("ProjectAgentSettings", () => {
     renderIt(project());
     expect(screen.getByText("Run by the app in the agent's worktree when a worker finishes. Only you can set it.")).toBeTruthy();
   });
+
+  it("shows the next project's command and saves nothing when the parent switches project", async () => {
+    // The parent keys the component by project id, as ProjectDetailContent does.
+    const qc = new QueryClient();
+    const ui = (p: Project) => (
+      <QueryClientProvider client={qc}>
+        <ProjectAgentSettings key={p.id} project={p} />
+      </QueryClientProvider>
+    );
+    const { rerender } = render(ui(project({ check_command: "npm test" })));
+    expect(screen.getByRole("textbox", { name: "Check command" })).toHaveValue("npm test");
+    rerender(ui(project({ id: 5, name: "Contact sheet export", check_command: null })));
+    const field = screen.getByRole("textbox", { name: "Check command" });
+    expect(field).toHaveValue("");
+    fireEvent.focus(field);
+    fireEvent.blur(field);
+    expect(setSettings).not.toHaveBeenCalled();
+  });
 });

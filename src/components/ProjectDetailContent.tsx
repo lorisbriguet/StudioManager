@@ -407,7 +407,7 @@ export function ProjectDetailContent({ projectId, compact, onBack, actions }: Pr
           )}
         </div>
 
-        {agentsEnabled && <ProjectAgentSettings project={project} />}
+        {agentsEnabled && <ProjectAgentSettings key={project.id} project={project} />}
 
         {totalCount > 0 && (
           <ProgressBar value={progress} label={t.progress} showValue className="mb-4" />

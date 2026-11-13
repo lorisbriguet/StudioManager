@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { useT } from "../../i18n/useT";
 import { useAddDecision, useAnswerEntry, useDismissEntry } from "../../db/hooks/useNeedsYou";
 import type { NeedsYouEntry } from "../../db/queries/needsYou";
@@ -36,11 +37,28 @@ export function DecideEntry({ entry: e }: { entry: NeedsYouEntry }) {
   const [draft, setDraft] = useState("");
   const [error, setError] = useState(false);
   const [sending, setSending] = useState(false);
+  // The answer reached the agent but could not be saved: only the saving is retried, never the send.
+  const [recordFailed, setRecordFailed] = useState(false);
+  const sent = useRef<string | null>(null);
   const options = parseOptions(e.options);
+
+  const record = async (answer: string) => {
+    try {
+      await answerEntry.mutateAsync({ id: e.id, answer, delivered: e.link_id != null });
+    } catch (err) {
+      setRecordFailed(true);
+      void logError(`Needs you ${e.id}: recording the answer failed:`, err);
+      return;
+    }
+    setRecordFailed(false);
+    if (e.is_decision && e.project_id != null) {
+      addDecision.mutate({ projectId: e.project_id, date: todayLocalISO(), text: `${e.body}: ${answer}` });
+    }
+  };
 
   const answer = async (text: string) => {
     const answer = text.trim();
-    if (!answer || sending) return;
+    if (!answer || sending || recordFailed) return;
     setSending(true);
     setError(false);
     try {
@@ -49,16 +67,21 @@ export function DecideEntry({ entry: e }: { entry: NeedsYouEntry }) {
         if (!e.session_id) throw new Error("the agent has no session");
         await sendMessage(e.session_id, ANSWER_PREFIX + answer);
       }
+      sent.current = answer;
     } catch (err) {
       setError(true);
       void logError(`Needs you ${e.id}: send failed:`, err);
       setSending(false);
       return;
     }
-    answerEntry.mutate({ id: e.id, answer });
-    if (e.is_decision && e.project_id != null) {
-      addDecision.mutate({ projectId: e.project_id, date: todayLocalISO(), text: `${e.body}: ${answer}` });
-    }
+    await record(answer);
+    setSending(false);
+  };
+
+  const retryRecord = async () => {
+    if (sending || sent.current == null) return;
+    setSending(true);
+    await record(sent.current);
     setSending(false);
   };
 
@@ -89,12 +112,17 @@ export function DecideEntry({ entry: e }: { entry: NeedsYouEntry }) {
           <Button
             key={o}
             variant={o === e.recommendation ? "primary" : "secondary"}
-            disabled={sending}
+            disabled={sending || recordFailed}
             onClick={() => void answer(o)}
           >
             {o}
           </Button>
         ))}
+        {e.session_id && (
+          <Link to={`/agents?agent=${e.session_id}`} className="text-sm text-accent-text hover:underline">
+            {t.decide_open_agent}
+          </Link>
+        )}
         <Button variant="secondary" aria-expanded={words} onClick={() => setWords(!words)}>
           {t.decide_answer_words}
         </Button>
@@ -112,8 +140,16 @@ export function DecideEntry({ entry: e }: { entry: NeedsYouEntry }) {
               }
             }}
           />
-          <Button disabled={sending || !draft.trim()} onClick={() => void answer(draft)}>
+          <Button disabled={sending || recordFailed || !draft.trim()} onClick={() => void answer(draft)}>
             {t.decide_send_answer}
+          </Button>
+        </div>
+      )}
+      {recordFailed && (
+        <div className="mt-2">
+          <Callout tone="danger">{t.decide_record_failed}</Callout>
+          <Button variant="secondary" className="mt-2" disabled={sending} onClick={() => void retryRecord()}>
+            {t.decide_retry_record}
           </Button>
         </div>
       )}

@@ -25,11 +25,11 @@ const hooks = vi.hoisted(() => ({
 vi.mock("../db/hooks/useNeedsYou", () => ({
   useOpenEntries: () => ({ data: hooks.open }),
   useAloneEntries: () => ({ data: hooks.alone }),
-  useAnswerEntry: () => ({ mutate: hooks.answer }),
+  useAnswerEntry: () => ({ mutate: hooks.answer, mutateAsync: hooks.answer }),
   useReopenEntry: () => ({ mutate: hooks.reopen }),
   useDismissEntry: () => ({ mutate: hooks.dismiss }),
   useAddDecision: () => ({ mutate: hooks.addDecision }),
-  useSendBack: () => ({ mutate: hooks.sendBack }),
+  useSendBack: () => ({ mutate: hooks.sendBack, mutateAsync: hooks.sendBack }),
 }));
 vi.mock("../db/hooks/useTaskAgents", () => ({ useAcceptResult: () => ({ mutate: hooks.accept }) }));
 vi.mock("../lib/agents", async (orig) => ({
@@ -158,6 +158,8 @@ function resetNeeds() {
   hooks.open = [];
   hooks.alone = [];
   hooks.send.mockImplementation(async () => {});
+  hooks.answer.mockImplementation(async () => {});
+  hooks.sendBack.mockImplementation(async () => {});
   useAppStore.setState({ language: "EN" });
 }
 
@@ -189,6 +191,7 @@ const row = (over: Record<string, unknown> = {}) => ({
   project_name: "Poster tool",
   short_id: "abcd1234",
   session_id: "sess-1",
+  started_by: null,
   pr_url: null,
   ...over,
 });
@@ -236,7 +239,7 @@ describe("Needs you: Decide", () => {
     hooks.open = [row()];
     setup([]);
     fireEvent.click(screen.getByRole("button", { name: "Outline" }));
-    await waitFor(() => expect(hooks.answer).toHaveBeenCalledWith({ id: 5, answer: "Outline" }));
+    await waitFor(() => expect(hooks.answer).toHaveBeenCalledWith({ id: 5, answer: "Outline", delivered: true }));
     expect(hooks.send).toHaveBeenCalledWith("sess-1", "Answer to your question: Outline");
     expect(hooks.addDecision).not.toHaveBeenCalled();
   });
@@ -247,7 +250,7 @@ describe("Needs you: Decide", () => {
     fireEvent.click(screen.getByRole("button", { name: "Answer in words" }));
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "Outline, but keep the logo live." } });
     fireEvent.click(screen.getByRole("button", { name: "Send the answer" }));
-    await waitFor(() => expect(hooks.answer).toHaveBeenCalledWith({ id: 5, answer: "Outline, but keep the logo live." }));
+    await waitFor(() => expect(hooks.answer).toHaveBeenCalledWith({ id: 5, answer: "Outline, but keep the logo live.", delivered: true }));
     expect(hooks.send).toHaveBeenCalledWith("sess-1", "Answer to your question: Outline, but keep the logo live.");
   });
 
@@ -278,8 +281,47 @@ describe("Needs you: Decide", () => {
     hooks.open = [row({ session_id: null, short_id: null, link_id: null })];
     setup([]);
     fireEvent.click(screen.getByRole("button", { name: "Outline" }));
-    await waitFor(() => expect(hooks.answer).toHaveBeenCalledWith({ id: 5, answer: "Outline" }));
+    await waitFor(() => expect(hooks.answer).toHaveBeenCalledWith({ id: 5, answer: "Outline", delivered: false }));
     expect(hooks.send).not.toHaveBeenCalled();
+  });
+
+  it("a double click sends once", async () => {
+    let release: () => void = () => {};
+    hooks.answer.mockImplementation(() => new Promise<void>((res) => (release = res)));
+    hooks.open = [row()];
+    setup([]);
+    const button = screen.getByRole("button", { name: "Outline" });
+    fireEvent.click(button);
+    await waitFor(() => expect(hooks.answer).toHaveBeenCalledTimes(1));
+    expect(button).toBeDisabled();
+    fireEvent.click(button);
+    release();
+    await waitFor(() => expect(button).not.toBeDisabled());
+    expect(hooks.send).toHaveBeenCalledTimes(1);
+    expect(hooks.answer).toHaveBeenCalledTimes(1);
+  });
+
+  it("a failed record after a sent answer says so, and a retry records without sending again", async () => {
+    hooks.answer.mockImplementationOnce(async () => {
+      throw new Error("db locked");
+    });
+    hooks.open = [row()];
+    setup([]);
+    fireEvent.click(screen.getByRole("button", { name: "Outline" }));
+    expect(await screen.findByText(/Your answer was sent to the agent/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Outline" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Try saving again" }));
+    await waitFor(() => expect(hooks.answer).toHaveBeenCalledTimes(2));
+    expect(hooks.send).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(screen.queryByText(/Your answer was sent to the agent/)).not.toBeInTheDocument());
+  });
+
+  it("links to the agent when the entry has a session", () => {
+    hooks.open = [row(), row({ id: 6, session_id: null })];
+    setup([]);
+    const links = screen.getAllByRole("link", { name: "Open the agent" });
+    expect(links).toHaveLength(1);
+    expect(links[0]).toHaveAttribute("href", "/agents?agent=sess-1");
   });
 
   it("ignores options that are not a list of words", () => {
@@ -331,7 +373,7 @@ describe("Needs you: Check", () => {
     setup([]);
     fireEvent.click(screen.getByRole("button", { name: "Accept" }));
     expect(hooks.accept).toHaveBeenCalledWith({ kind: "task", id: 44 });
-    expect(hooks.answer).toHaveBeenCalledWith({ id: 8, answer: "Accepted" });
+    expect(hooks.answer).toHaveBeenCalledWith({ id: 8, answer: "Accepted", delivered: false });
   });
 
   it("Accept on a subtask accepts the subtask", () => {
@@ -348,9 +390,24 @@ describe("Needs you: Check", () => {
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "Add a second page above 48." } });
     fireEvent.click(screen.getByRole("button", { name: "Send the note" }));
     await waitFor(() =>
-      expect(hooks.sendBack).toHaveBeenCalledWith({ kind: "task", id: 44, entryId: 8, note: "Add a second page above 48." }),
+      expect(hooks.sendBack).toHaveBeenCalledWith({ kind: "task", id: 44, entryId: 8, note: "Add a second page above 48.", delivered: true }),
     );
     expect(hooks.send).toHaveBeenCalledWith("sess-1", "Add a second page above 48.");
+  });
+
+  it("a failed record after a sent note shows the error and a retry does not send again", async () => {
+    hooks.sendBack.mockImplementationOnce(async () => {
+      throw new Error("db locked");
+    });
+    hooks.open = [check()];
+    setup([]);
+    fireEvent.click(screen.getByRole("button", { name: "Send back" }));
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Again." } });
+    fireEvent.click(screen.getByRole("button", { name: "Send the note" }));
+    expect(await screen.findByText(/Your answer was sent to the agent/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Try saving again" }));
+    await waitFor(() => expect(hooks.sendBack).toHaveBeenCalledTimes(2));
+    expect(hooks.send).toHaveBeenCalledTimes(1);
   });
 
   it("a refused Send back keeps the entry open and shows the error", async () => {

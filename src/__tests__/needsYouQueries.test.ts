@@ -88,14 +88,31 @@ describe("getAloneEntries", () => {
 describe("answer, dismiss and reopen", () => {
   it("answers an open entry as Loris", async () => {
     const id = entry("decide");
-    await answerEntry(id, "SVG");
+    await answerEntry(id, "SVG", { delivered: false });
     expect(one("SELECT * FROM needs_you WHERE id = $1", id)).toMatchObject({ status: "answered", answer: "SVG", decided_by: "user" });
     expect(one("SELECT answered_at FROM needs_you WHERE id = $1", id)?.answered_at).not.toBeNull();
   });
 
+  it("sets delivered_at when the app typed the answer into the agent, and leaves it null otherwise", async () => {
+    const sent = entry("decide");
+    await answerEntry(sent, "SVG", { delivered: true });
+    expect(one("SELECT delivered_at FROM needs_you WHERE id = $1", sent)?.delivered_at).not.toBeNull();
+    const noLink = entry("decide", { link: null });
+    await answerEntry(noLink, "SVG", { delivered: false });
+    expect(one("SELECT delivered_at FROM needs_you WHERE id = $1", noLink)?.delivered_at).toBeNull();
+  });
+
+  it("lists who started the link's agent", async () => {
+    run("UPDATE task_agents SET started_by = 'watcher' WHERE id = $1", linkId);
+    entry("decide");
+    entry("decide", { link: null });
+    const rows = await getOpenEntries();
+    expect(rows.map((r) => r.started_by)).toEqual(["watcher", null]);
+  });
+
   it("does not overwrite an entry that is no longer open", async () => {
     const id = entry("decide", { status: "answered", decided_by: "lead" });
-    await answerEntry(id, "late");
+    await answerEntry(id, "late", { delivered: true });
     expect(one("SELECT answer, decided_by FROM needs_you WHERE id = $1", id)).toMatchObject({ answer: null, decided_by: "lead" });
   });
 

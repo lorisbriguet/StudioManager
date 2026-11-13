@@ -56,7 +56,10 @@ function useEntryMutation<A>(fn: (arg: A) => Promise<void>, touchesTasks = false
   });
 }
 
-export const useAnswerEntry = () => useEntryMutation((a: { id: number; answer: string }) => q.answerEntry(a.id, a.answer));
+export const useAnswerEntry = () =>
+  useEntryMutation((a: { id: number; answer: string; delivered: boolean }) =>
+    q.answerEntry(a.id, a.answer, { delivered: a.delivered }),
+  );
 export const useDismissEntry = () => useEntryMutation((id: number) => q.dismissEntry(id));
 export const useReopenEntry = () => useEntryMutation((id: number) => q.reopenEntry(id), true);
 
@@ -70,11 +73,11 @@ export function useSendBack() {
   const answer = useAnswerEntry();
   return useMutation({
     meta: { errorLabel: "error_save_task" },
-    mutationFn: async (a: { kind: ItemKind; id: number; entryId: number; note: string }) => {
+    mutationFn: async (a: { kind: ItemKind; id: number; entryId: number; note: string; delivered: boolean }) => {
       const data = { stage: "running" } as const;
       if (a.kind === "task") await updateTask.mutateAsync({ id: a.id, data });
       else await updateSubtask.mutateAsync({ id: a.id, data });
-      await answer.mutateAsync({ id: a.entryId, answer: a.note });
+      await answer.mutateAsync({ id: a.entryId, answer: a.note, delivered: a.delivered });
     },
   });
 }

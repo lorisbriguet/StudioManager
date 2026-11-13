@@ -32,10 +32,10 @@ vi.mock("../db/hooks/useNeedsYou", () => ({
   useOpenEntries: () => ({ data: needsMock.open }),
   useNeedsYouCount: () => needsMock.open.length + capturesMock.briefs.length,
   useAloneEntries: () => ({ data: [] }),
-  useAnswerEntry: () => ({ mutate: vi.fn() }),
+  useAnswerEntry: () => ({ mutate: vi.fn(), mutateAsync: vi.fn() }),
   useReopenEntry: () => ({ mutate: vi.fn() }),
   useAddDecision: () => ({ mutate: vi.fn() }),
-  useSendBack: () => ({ mutate: vi.fn() }),
+  useSendBack: () => ({ mutate: vi.fn(), mutateAsync: vi.fn() }),
 }));
 vi.mock("../db/hooks/useTaskAgents", () => ({
   useOpenLinks: () => ({ data: linksMock.links }),
@@ -188,14 +188,20 @@ describe("AgentsPage", () => {
     expect(screen.getByText("Select an agent to see its conversation.")).toBeInTheDocument();
   });
 
-  it("leaves an agent with an open Needs you entry out of the All agents Needs you group", async () => {
-    needsMock.open = [{ id: 1, short_id: "feed0001" }];
+  it("leaves a watcher agent with an open Needs you entry out of the All agents Needs you group", async () => {
+    needsMock.open = [{ id: 1, short_id: "feed0001", started_by: "watcher" }];
     tabsSetup("/agents?tab=all", [
       agent("needs-you", { shortId: "feed0001" }),
       agent("needs-you", { sessionId: "sess-hand", shortId: "feed0002", name: "agent-hand" }),
     ]);
     await screen.findByText("agent-hand");
     expect(screen.queryByText("agent-needs-you")).not.toBeInTheDocument();
+  });
+
+  it("keeps a hand-started agent with an open entry in the All agents Needs you group", async () => {
+    needsMock.open = [{ id: 1, short_id: "feed0001", started_by: null }];
+    tabsSetup("/agents?tab=all", [agent("needs-you", { shortId: "feed0001" })]);
+    expect(await screen.findByText("agent-needs-you")).toBeInTheDocument();
   });
 
   it("keeps a watcher-linked agent with no open entry in the All agents Needs you group", async () => {

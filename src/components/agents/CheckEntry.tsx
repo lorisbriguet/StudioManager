@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useT } from "../../i18n/useT";
 import { useAnswerEntry, useSendBack } from "../../db/hooks/useNeedsYou";
 import { useAcceptResult } from "../../db/hooks/useTaskAgents";
@@ -34,6 +34,9 @@ export function CheckEntry({ entry: e }: { entry: NeedsYouEntry }) {
   const [note, setNote] = useState("");
   const [error, setError] = useState(false);
   const [sending, setSending] = useState(false);
+  // The note reached the worker but could not be saved: only the saving is retried, never the send.
+  const [recordFailed, setRecordFailed] = useState(false);
+  const sent = useRef<string | null>(null);
   const kind = e.subtask_id != null ? "subtask" : "task";
   const itemId = e.subtask_id ?? e.task_id;
   const touches = parseTouches(e.touches);
@@ -46,12 +49,23 @@ export function CheckEntry({ entry: e }: { entry: NeedsYouEntry }) {
   const onAccept = () => {
     if (itemId == null) return;
     accept.mutate({ kind, id: itemId });
-    answerEntry.mutate({ id: e.id, answer: t.check_accepted });
+    answerEntry.mutate({ id: e.id, answer: t.check_accepted, delivered: false });
+  };
+
+  const record = async (text: string) => {
+    if (itemId == null) return;
+    try {
+      await sendBack.mutateAsync({ kind, id: itemId, entryId: e.id, note: text, delivered: e.link_id != null });
+      setRecordFailed(false);
+    } catch (err) {
+      setRecordFailed(true);
+      void logError(`Needs you ${e.id}: recording the send back failed:`, err);
+    }
   };
 
   const onSendBack = async () => {
     const text = note.trim();
-    if (!text || sending || itemId == null) return;
+    if (!text || sending || recordFailed || itemId == null) return;
     setSending(true);
     setError(false);
     try {
@@ -59,13 +73,21 @@ export function CheckEntry({ entry: e }: { entry: NeedsYouEntry }) {
         if (!e.session_id) throw new Error("the agent has no session");
         await sendMessage(e.session_id, text);
       }
+      sent.current = text;
     } catch (err) {
       setError(true);
       void logError(`Needs you ${e.id}: send back failed:`, err);
       setSending(false);
       return;
     }
-    sendBack.mutate({ kind, id: itemId, entryId: e.id, note: text });
+    await record(text);
+    setSending(false);
+  };
+
+  const retryRecord = async () => {
+    if (sending || sent.current == null) return;
+    setSending(true);
+    await record(sent.current);
     setSending(false);
   };
 
@@ -99,8 +121,16 @@ export function CheckEntry({ entry: e }: { entry: NeedsYouEntry }) {
       {noting && (
         <div className="mt-2 flex flex-col items-start gap-2">
           <Textarea aria-label={t.check_note_label} value={note} onChange={(ev) => setNote(ev.target.value)} />
-          <Button disabled={sending || !note.trim()} onClick={() => void onSendBack()}>
+          <Button disabled={sending || recordFailed || !note.trim()} onClick={() => void onSendBack()}>
             {t.check_send_note}
+          </Button>
+        </div>
+      )}
+      {recordFailed && (
+        <div className="mt-2">
+          <Callout tone="danger">{t.decide_record_failed}</Callout>
+          <Button variant="secondary" className="mt-2" disabled={sending} onClick={() => void retryRecord()}>
+            {t.decide_retry_record}
           </Button>
         </div>
       )}

@@ -120,6 +120,8 @@ pub fn in_build(mut s: AgentsSettings, demo: bool) -> AgentsSettings {
         s.watcher = false;
         s.reminders = false;
     }
+    // The watcher is part of Agents: it reads off whenever the Agents switch is off.
+    s.watcher = s.watcher && s.enabled;
     s.worker_cap = s.worker_cap.clamp(1, MAX_WORKER_CAP);
     s
 }
@@ -688,6 +690,14 @@ mod tests {
         let on = AgentsSettings { enabled: true, watcher: true, ..Default::default() };
         assert!(!in_build(on.clone(), true).watcher);
         assert!(in_build(on, false).watcher);
+    }
+
+    #[test]
+    fn the_watcher_reads_off_when_agents_is_off() {
+        let s: AgentsSettings = serde_json::from_str(r#"{"enabled":false,"watcher":true}"#).unwrap();
+        assert!(!in_build(s, false).watcher);
+        let s: AgentsSettings = serde_json::from_str(r#"{"enabled":true,"watcher":true}"#).unwrap();
+        assert!(in_build(s, false).watcher);
     }
 
     #[test]
