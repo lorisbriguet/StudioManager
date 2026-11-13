@@ -45,6 +45,9 @@ const TOOL_KEYS: Record<string, readonly string[]> = {
   list_captures: [],
   file_capture: ["captures", ...TASKS],
   set_brief: ["captures", ...TASKS],
+  report_result: [...TASKS, "taskAgents"],
+  // The link tracker's own event (not a server tool).
+  task_links: [...TASKS, "taskAgents"],
 };
 
 /** Tools whose writes can add or move an Apple Calendar event. */

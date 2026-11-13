@@ -203,12 +203,12 @@ describe("keepAsTask, markStarted, setBrief, briefAgain", () => {
     expect(one("SELECT stage, brief FROM tasks WHERE id = $1", taskId)).toMatchObject({ stage: null, brief: "Build it" });
   });
 
-  it("markStarted sets the outcome to ready and clears the stage of a subtask", async () => {
+  it("markStarted sets only the outcome to ready and keeps the stage", async () => {
     const subId = Number(prep("INSERT INTO subtasks (task_id, title, stage) VALUES ($1, 'Grid', 'briefed')").run(taskId).lastInsertRowid);
     const id = capture("w", { status: "filed", project_id: projectId, task_id: taskId, subtask_id: subId, outcome: "needs_word" });
     await markStarted(id);
     expect(one("SELECT outcome FROM captures WHERE id = $1", id)?.outcome).toBe("ready");
-    expect(one("SELECT stage FROM subtasks WHERE id = $1", subId)?.stage).toBeNull();
+    expect(one("SELECT stage FROM subtasks WHERE id = $1", subId)?.stage).toBe("briefed");
     expect(one("SELECT stage FROM tasks WHERE id = $1", taskId)?.stage).toBe("briefed");
   });
 

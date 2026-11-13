@@ -144,28 +144,30 @@ export async function fileCaptureByHand(data: {
 }
 
 /** Where a filed capture's item lives: its subtask if it has one, else its task. */
-async function settle(captureId: number, outcome: "note" | "ready"): Promise<void> {
+async function settle(captureId: number, outcome: "note" | "ready", clearStage: boolean): Promise<void> {
   const batch = new TransactionBatch();
-  batch.add(
-    "UPDATE tasks SET stage = NULL, updated_at = datetime('now') WHERE id = (SELECT task_id FROM captures WHERE id = $1 AND subtask_id IS NULL)",
-    [captureId],
-  );
-  batch.add(
-    "UPDATE subtasks SET stage = NULL, updated_at = datetime('now') WHERE id = (SELECT subtask_id FROM captures WHERE id = $1)",
-    [captureId],
-  );
+  if (clearStage) {
+    batch.add(
+      "UPDATE tasks SET stage = NULL, updated_at = datetime('now') WHERE id = (SELECT task_id FROM captures WHERE id = $1 AND subtask_id IS NULL)",
+      [captureId],
+    );
+    batch.add(
+      "UPDATE subtasks SET stage = NULL, updated_at = datetime('now') WHERE id = (SELECT subtask_id FROM captures WHERE id = $1)",
+      [captureId],
+    );
+  }
   batch.add("UPDATE captures SET outcome = $2, updated_at = datetime('now') WHERE id = $1", [captureId, outcome]);
   await batch.commit();
 }
 
 /** Keep the filed item as a plain task: no stage left. */
 export function keepAsTask(captureId: number): Promise<void> {
-  return settle(captureId, "note");
+  return settle(captureId, "note", true);
 }
 
-/** The agent was started on it (part 2 sets running and a task_agents row instead). */
+/** The agent was started on it: only the outcome changes, the start sets the stage to Running. */
 export function markStarted(captureId: number): Promise<void> {
-  return settle(captureId, "ready");
+  return settle(captureId, "ready", false);
 }
 
 export async function setBrief(kind: "task" | "subtask", id: number, brief: string): Promise<void> {
