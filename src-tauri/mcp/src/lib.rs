@@ -28,6 +28,7 @@ pub mod server;
 #[path = "../../src/agents/usage/samples.rs"]
 pub mod samples;
 pub mod statusline;
+pub mod stophook;
 pub mod text;
 pub mod upkeep;
 pub mod write;

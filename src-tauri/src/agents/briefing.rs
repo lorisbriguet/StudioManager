@@ -27,7 +27,7 @@ pub const FOLDER: &str = "briefing";
 pub const MCP_FILE: &str = "mcp.json";
 
 /// The prefix Claude Code gives the server's tools.
-const TOOL_PREFIX: &str = "mcp__studiomanager__";
+pub(crate) const TOOL_PREFIX: &str = "mcp__studiomanager__";
 
 /// The tools a brief session may call: exactly these seven. `file_capture` writes the brief, so
 /// `set_brief` is not among them. The server itself lists and allows only these
@@ -64,12 +64,12 @@ fn server_tool_list() -> String {
     ALLOWED_TOOLS.iter().map(|t| t.trim_start_matches(TOOL_PREFIX)).collect::<Vec<_>>().join(",")
 }
 
-fn to_json(v: &serde_json::Value) -> String {
+pub(crate) fn to_json(v: &serde_json::Value) -> String {
     format!("{}\n", serde_json::to_string_pretty(v).unwrap_or_default())
 }
 
 /// Writes `file` unless it already holds `content`.
-fn write_if_changed(file: &Path, content: &str) -> Result<(), String> {
+pub(crate) fn write_if_changed(file: &Path, content: &str) -> Result<(), String> {
     if std::fs::read_to_string(file).is_ok_and(|c| c == content) {
         return Ok(());
     }

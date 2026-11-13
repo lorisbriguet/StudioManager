@@ -1,14 +1,20 @@
-//! The watcher: a thread that, with Agents and its own switch on, will start work on Ready items
-//! by itself. In this task it only NOTICES: each pass it works out why it would wait, which item
-//! it would start and what its own links are doing, and keeps that in memory for
-//! `watcher_status`. It starts, stops and types nothing, runs no command and writes to no
-//! organisation database. Plan:
-//! docs/superpowers/plans/2026-11-13-agent-orchestrator-3-watcher-lead.md (Task 7).
+//! The watcher: a thread that, with Agents and its own switch on, starts work on Ready items by
+//! itself. Each pass it works out why it would wait, which item it would start and what its own
+//! links are doing; when it holds the lock, the budget and the cap allow and an item can start,
+//! `start::step` starts one Opus worker in a git worktree. The last pass's view is kept for
+//! `watcher_status`, which spawns no process. Plan:
+//! docs/superpowers/plans/2026-11-13-agent-orchestrator-3-watcher-lead.md (Tasks 7 and 8).
 //!
-//! Nothing needs to survive a restart yet, so `watcher.json` is not written.
+//! `watcher.json` holds only a start that timed out (`start::Pending`).
 
+pub mod act;
 pub mod budget;
+pub mod check;
+pub mod close;
 pub mod events;
+pub mod git;
+pub mod lead;
+pub mod start;
 pub mod store;
 
 use super::actions;
@@ -21,12 +27,12 @@ use crate::orgs::{org_dir, Registry, DB_FILE};
 use budget::Budget;
 use events::{notice, Event};
 use serde::Serialize;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;
-use store::{open_ask, open_watcher_links, ready_items, ReadyItem, WatcherLink};
+use store::{open_ask, open_could_not_start, open_watcher_links, ready_items, ReadyItem, WatcherLink};
 use tauri::{AppHandle, Manager};
 
 pub const LOCK_FILE: &str = "watcher.lock";
@@ -39,9 +45,19 @@ pub enum Paused {
     AgentsOff,
     Mode,
     Locked,
+    /// The lock is not (yet) held by this thread, or a start waits to show up in the agent list.
+    Starting,
+    /// Agent access is off for every organisation.
+    AccessOff,
     Budget(Budget),
     /// The number of workers running (the cap is in the settings).
     Cap(usize),
+    /// An organisation's links could not be read: with them unknown the cap cannot be trusted, so
+    /// nothing starts and nothing is acted on this pass.
+    LinksUnreadable,
+    /// Items are Ready but none can start: the first one's title and why (`no_folder`,
+    /// `not_git` or `failed_start`).
+    NotStartable { title: String, reason: &'static str },
     Nothing,
 }
 
@@ -53,9 +69,40 @@ impl Paused {
             Paused::AgentsOff => "agents_off",
             Paused::Mode => "mode",
             Paused::Locked => "locked",
+            Paused::Starting => "starting",
+            Paused::AccessOff => "access_off",
             Paused::Budget(_) => "budget",
             Paused::Cap(_) => "cap",
+            Paused::LinksUnreadable => "links_unreadable",
+            Paused::NotStartable { .. } => "not_startable",
             Paused::Nothing => "nothing",
+        }
+    }
+}
+
+/// Whether this thread holds the watcher lock.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LockState {
+    /// Not tried (yet): nothing starts and no "Would start" shows.
+    Unknown,
+    Held,
+    /// Another copy of the app holds it.
+    Other,
+}
+
+impl LockState {
+    fn from_u8(n: u8) -> Self {
+        match n {
+            1 => LockState::Held,
+            2 => LockState::Other,
+            _ => LockState::Unknown,
+        }
+    }
+    fn to_u8(self) -> u8 {
+        match self {
+            LockState::Unknown => 0,
+            LockState::Held => 1,
+            LockState::Other => 2,
         }
     }
 }
@@ -89,6 +136,15 @@ pub fn acquire_lock(app_dir: &Path) -> Option<std::fs::File> {
     got.then_some(file)
 }
 
+/// What the world looks like after a slow step (a check can run for ten minutes): the time and the
+/// poller's list, read again.
+pub struct Fresh {
+    pub now: i64,
+    pub agents: Vec<Agent>,
+    pub listed_at: Option<i64>,
+}
+
+#[derive(Clone, Copy)]
 pub struct Deps<'a> {
     pub app_dir: &'a Path,
     /// Where `limits.json` is read from (read only): `budget::limits_dir`.
@@ -98,13 +154,17 @@ pub struct Deps<'a> {
     /// The poller's last list, and when it last succeeded.
     pub agents: &'a [Agent],
     pub listed_at: Option<i64>,
+    /// Reads the time and the list again; `tick` calls it once after the check step so that what
+    /// follows acts on the world as it is then. None: the first reading stands (tests, status).
+    pub refresh: Option<&'a dyn Fn() -> Fresh>,
 }
 
 /// What the watcher would do now.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Outlook {
     pub paused: Option<Paused>,
-    /// Open watcher links (the fuller count of running workers comes with a later task).
+    /// `start::running_workers` of the open watcher links and the list, plus a start waiting to
+    /// show up.
     pub running: usize,
     pub cap: u32,
     /// (organisation id, item) it would start; only when not paused.
@@ -128,73 +188,168 @@ fn settings_and_gate(d: &Deps, locked: bool) -> (AgentsSettings, Option<Paused>)
     (s, g)
 }
 
-/// The watcher's own open links in every organisation (not in a mode), with the organisation's
-/// database. An organisation that cannot be read is logged and counts as none.
-fn links_of(d: &Deps) -> Vec<(PathBuf, WatcherLink)> {
-    let mut out = Vec::new();
-    for (org, db) in org_dbs(d.app_dir) {
+/// A Ready item of an organisation agent access allows.
+#[derive(Clone, Debug, PartialEq)]
+struct Candidate {
+    org: String,
+    item: ReadyItem,
+    /// An open "Could not start" entry: it is skipped while that entry is open.
+    failed: bool,
+}
+
+/// What one pass read, once: the settings and the gate, the budget, the watcher's own links in
+/// every organisation not in a mode, and the Ready items of the allowed ones.
+pub struct Pass {
+    cap: u32,
+    gate: Option<Paused>,
+    budget: Budget,
+    running: usize,
+    /// Agent access allows at least one organisation.
+    access: bool,
+    /// Across the allowed organisations, in `store::order`, then organisation order.
+    candidates: Vec<Candidate>,
+    links: Vec<(PathBuf, WatcherLink)>,
+}
+
+/// What the pass learned about the world outside the databases.
+pub struct Known<'a> {
+    pub lock: LockState,
+    /// A start that timed out is waiting to show up in the list (it counts as a running worker).
+    pub pending: usize,
+    /// `git` verdicts so far on "is a work tree", by folder; a folder not here is assumed one.
+    pub repos: &'a HashMap<String, bool>,
+}
+
+/// Reads the settings, the gate and, when no gate holds, the databases. `lock` is what the thread
+/// last found: only `Held` lets anything go on.
+fn read_pass(d: &Deps, lock: LockState, pending: usize) -> Pass {
+    let (s, g) = settings_and_gate(d, lock != LockState::Held);
+    let gate = match (g, lock) {
+        (Some(Paused::Locked), LockState::Unknown) => Some(Paused::Starting),
+        (g, _) => g,
+    };
+    let mut pass = Pass {
+        cap: s.worker_cap,
+        gate,
+        budget: Budget::Ok,
+        running: 0,
+        access: true,
+        candidates: vec![],
+        links: vec![],
+    };
+    if pass.gate.is_some() {
+        return pass;
+    }
+    let access = read_access(d.app_dir);
+    let mut ranked: Vec<(usize, Candidate)> = Vec::new();
+    let mut any_allowed = false;
+    for (index, (org, db)) in org_dbs(d.app_dir).into_iter().enumerate() {
         if !db.exists() || in_mode(&db) {
             continue;
         }
+        let allowed = access.enabled && access.orgs.get(&org) == Some(&true);
+        any_allowed |= allowed;
         let _shared = crate::org_shared();
         match open_watcher_links(&db, &org) {
-            Ok(links) => out.extend(links.into_iter().map(|l| (db.clone(), l))),
-            Err(e) => log::warn!("[watcher] organisation {org}: {e}"),
+            Ok(links) => pass.links.extend(links.into_iter().map(|l| (db.clone(), l))),
+            Err(e) => {
+                // Without its links the pass cannot tell what runs (the cap) or what to act on:
+                // it starts nothing and acts on nothing until the next read works.
+                log::warn!("[watcher] organisation {org}: {e}");
+                pass.gate = Some(Paused::LinksUnreadable);
+                return pass;
+            }
         }
-    }
-    out
-}
-
-/// The first Ready item across the organisations agent access allows.
-fn first_ready(d: &Deps) -> Option<(String, ReadyItem)> {
-    let access = read_access(d.app_dir);
-    if !access.enabled {
-        return None;
-    }
-    let mut best: Option<(String, ReadyItem)> = None;
-    for (org, db) in org_dbs(d.app_dir) {
-        if !db.exists() || in_mode(&db) || access.orgs.get(&org) != Some(&true) {
+        if !allowed {
             continue;
         }
-        let _shared = crate::org_shared();
+        let failed = open_could_not_start(&db).unwrap_or_else(|e| {
+            log::warn!("[watcher] organisation {org}: {e}");
+            vec![]
+        });
         match ready_items(&db) {
-            Ok(items) => {
-                if let Some(first) = items.into_iter().next() {
-                    if best.as_ref().map_or(true, |(_, b)| store::order(&first, b).is_lt()) {
-                        best = Some((org, first));
-                    }
-                }
-            }
+            Ok(items) => ranked.extend(items.into_iter().map(|item| {
+                let failed = failed.contains(&(item.kind, item.id));
+                (index, Candidate { org: org.clone(), item, failed })
+            })),
             Err(e) => log::warn!("[watcher] organisation {org}: {e}"),
         }
     }
-    best
+    ranked.sort_by(|a, b| store::order(&a.1.item, &b.1.item).then(a.0.cmp(&b.0)));
+    pass.candidates = ranked.into_iter().map(|(_, c)| c).collect();
+    pass.access = any_allowed;
+    pass.running = start::running_workers(pass.links.len(), d.agents) + pending;
+    // Read only: in the dev build `limits_dir` is the installed app's folder.
+    pass.budget = budget::budget(limits::load_dated(d.limits_dir, d.now), d.now);
+    pass
 }
 
-/// Reads and decides; touches no lock and writes nothing. `locked` is what the thread last found.
-pub fn outlook(d: &Deps, locked: bool) -> Outlook {
+/// Why a Ready item cannot start, or None when it can. A folder `git` has not been asked about is
+/// assumed to be a work tree (the thread asks; the status reader does not).
+fn startable(c: &Candidate, repos: &HashMap<String, bool>) -> Option<&'static str> {
+    if c.failed {
+        return Some("failed_start");
+    }
+    match c.item.folder.as_deref().filter(|f| !f.trim().is_empty()) {
+        None => Some("no_folder"),
+        Some(f) if repos.get(f) == Some(&false) => Some("not_git"),
+        Some(_) => None,
+    }
+}
+
+/// The first startable candidate: what `start::step` starts and what the status names.
+fn pick<'a>(pass: &'a Pass, repos: &HashMap<String, bool>) -> Option<&'a Candidate> {
+    pass.candidates.iter().find(|c| startable(c, repos).is_none())
+}
+
+/// Asks `git` about the folders of the candidates, in order, until one is a work tree. Only the
+/// thread calls it.
+fn fill_repos(pass: &Pass, g: &dyn git::Git, repos: &mut HashMap<String, bool>) {
+    for c in pass.candidates.iter().filter(|c| !c.failed) {
+        let Some(f) = c.item.folder.as_deref().filter(|f| !f.trim().is_empty()) else { continue };
+        let is = *repos.entry(f.to_string()).or_insert_with(|| git::is_repo(g, f));
+        if is {
+            break;
+        }
+    }
+}
+
+/// Decides from what the pass read; reads nothing and writes nothing.
+fn outlook_of(pass: &Pass, k: &Known) -> Outlook {
+    let (cap, running) = (pass.cap, pass.running);
+    let wait = |p: Paused| Outlook { paused: Some(p), running, cap, would_start: None };
+    if let Some(g) = &pass.gate {
+        return Outlook { paused: Some(g.clone()), running: 0, cap, would_start: None };
+    }
+    if !pass.access {
+        return wait(Paused::AccessOff);
+    }
+    if pass.budget != Budget::Ok {
+        return wait(Paused::Budget(pass.budget.clone()));
+    }
+    if running >= cap as usize {
+        return wait(Paused::Cap(running));
+    }
+    if k.pending > 0 {
+        return wait(Paused::Starting);
+    }
+    match (pick(pass, k.repos), pass.candidates.first()) {
+        (Some(c), _) => Outlook { paused: None, running, cap, would_start: Some((c.org.clone(), c.item.clone())) },
+        (None, Some(first)) => {
+            let reason = startable(first, k.repos).unwrap_or("failed_start");
+            wait(Paused::NotStartable { title: first.item.title.clone(), reason })
+        }
+        (None, None) => wait(Paused::Nothing),
+    }
+}
+
+/// Reads and decides; touches no lock, spawns no process and writes nothing.
+pub fn outlook(d: &Deps, k: &Known) -> Outlook {
     // First, before any file is read.
     if d.demo {
         return Outlook { paused: Some(Paused::Demo), running: 0, cap: 0, would_start: None };
     }
-    let (s, g) = settings_and_gate(d, locked);
-    let cap = s.worker_cap;
-    if g.is_some() {
-        return Outlook { paused: g, running: 0, cap, would_start: None };
-    }
-    let running = links_of(d).len();
-    // Read only: in the dev build `limits_dir` is the installed app's folder.
-    let rule = budget::budget(limits::load_dated(d.limits_dir, d.now), d.now);
-    if rule != Budget::Ok {
-        return Outlook { paused: Some(Paused::Budget(rule)), running, cap, would_start: None };
-    }
-    if running >= cap as usize {
-        return Outlook { paused: Some(Paused::Cap(running)), running, cap, would_start: None };
-    }
-    match first_ready(d) {
-        Some(item) => Outlook { paused: None, running, cap, would_start: Some(item) },
-        None => Outlook { paused: Some(Paused::Nothing), running, cap, would_start: None },
-    }
+    outlook_of(&read_pass(d, k.lock, k.pending), k)
 }
 
 /// What one pass noticed about one watcher link.
@@ -211,54 +366,214 @@ pub struct Memory {
     pub lock: Option<std::fs::File>,
     /// Per (organisation, link id): the group the agent was last seen in and since when.
     seen: HashMap<(String, i64), (Group, i64)>,
+    /// `watcher.json` is read on the first pass.
+    loaded: bool,
+    /// When this watcher began (the first pass).
+    started: i64,
+    /// A start that timed out (also in `watcher.json`).
+    pending: Option<start::Pending>,
+    /// `git` verdicts of this pass.
+    repos: HashMap<String, bool>,
+    /// Items whose entry could not be written: skipped for this process.
+    skip: start::Skip,
+    /// Per (organisation, link id): the time of the list that first lacked a finished-looking
+    /// worker's agent (two lists made at different times must lack it before the watcher acts).
+    misses: HashMap<(String, i64), i64>,
+    /// Per link whose failed check was sent back: when the watcher first saw it waiting for the
+    /// worker's next report, and whether the agent was seen working since.
+    awaiting: HashMap<(String, i64), (i64, bool)>,
+    /// Finished checks whose entry could not be written (`check::Unwritten`).
+    unwritten: check::Unwritten,
+    /// Per (organisation, link id, `prompt` or `idle`, start of the wait): an entry written for
+    /// that wait, so one the owner dismissed is not written again while the wait goes on.
+    noted: HashSet<(String, i64, &'static str, i64)>,
+    /// Per link: when a stuck worker was last asked to continue.
+    resumed_at: HashMap<(String, i64), i64>,
+    /// The running lead session and a lead start that timed out (also in `watcher.json`).
+    lead: Option<lead::LeadRun>,
+    lead_pending: Option<lead::LeadPending>,
+    /// `watcher.json` could not be saved: no lead starts until it can.
+    lead_dirty: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Report {
     pub outlook: Outlook,
     pub noticed: Vec<Noticed>,
+    /// The pass wrote to a database (an entry, a link, a stage): the screens read again.
+    pub changed: bool,
 }
 
-static LOCKED: AtomicBool = AtomicBool::new(false);
+/// What the last pass found, for `watcher_status`, which spawns no process.
+static LOCK: AtomicU8 = AtomicU8::new(0);
+static PENDING: AtomicBool = AtomicBool::new(false);
+static REPOS: Mutex<Vec<(String, bool)>> = Mutex::new(Vec::new());
 static LAST_NOTICED: Mutex<Vec<Noticed>> = Mutex::new(Vec::new());
+/// The entry the lead session is on (its title), for `watcher_status`.
+static LEAD: Mutex<Option<String>> = Mutex::new(None);
 
-/// One pass. In the demo build it returns before any file is read.
-pub fn tick(d: &Deps, mem: &mut Memory) -> Report {
+fn remember(lock: LockState, mem: &Memory) {
+    LOCK.store(lock.to_u8(), Ordering::Relaxed);
+    PENDING.store(mem.pending.is_some(), Ordering::Relaxed);
+    if let Ok(mut l) = LEAD.lock() {
+        *l = mem.lead.as_ref().map(|r| r.title.clone()).or_else(|| mem.lead_pending.as_ref().map(|p| p.title.clone()));
+    }
+    if let Ok(mut r) = REPOS.lock() {
+        *r = mem.repos.iter().map(|(k, v)| (k.clone(), *v)).collect();
+    }
+}
+
+fn save_pending(d: &Deps, mem: &Memory) {
+    if let Err(e) = start::save_pending(d.app_dir, &mem.pending) {
+        log::warn!("[watcher] could not save the pending start: {e}");
+    }
+}
+
+/// `read_pass` with this process's skipped items marked as failed.
+fn fresh(d: &Deps, lock: LockState, mem: &Memory) -> Pass {
+    let mut pass = read_pass(d, lock, usize::from(mem.pending.is_some()));
+    for c in &mut pass.candidates {
+        let key = (c.org.clone(), git::kind_word(c.item.kind), c.item.id);
+        c.failed |= mem.skip.contains(&key);
+    }
+    pass
+}
+
+/// `d` with the time and the list of `fresh`, when it was read again.
+fn deps_with<'b>(d: &Deps<'b>, fresh: &'b Option<Fresh>) -> Deps<'b> {
+    match fresh {
+        Some(f) => Deps { now: f.now, agents: &f.agents, listed_at: f.listed_at, ..*d },
+        None => *d,
+    }
+}
+
+/// Writes the listed agent's session id (when the link has none) and short id on each open watcher
+/// link. True when one changed.
+fn sync_link_ids(d: &Deps, links: &[(PathBuf, WatcherLink)]) -> bool {
+    let mut changed = false;
+    for (db, link) in links {
+        let Some(agent) = check::find_agent(d.agents, link) else { continue };
+        let session = (!agent.session_id.is_empty()).then_some(agent.session_id.as_str());
+        let short = agent.short_id.as_deref();
+        if link.session_id.is_some() && short == Some(link.short_id.as_str()) {
+            continue;
+        }
+        let _shared = crate::org_shared();
+        match store::sync_ids(db, link.id, session, short) {
+            Ok(c) => changed |= c,
+            Err(e) => log::warn!("[watcher] link {} of organisation {}: {e}", link.id, link.org),
+        }
+    }
+    changed
+}
+
+/// One pass. In the demo build it returns before any file is read. Without `env` nothing is
+/// started (the pass only looks). Something starts only when this thread holds the lock.
+pub fn tick(d: &Deps, mem: &mut Memory, env: Option<&start::Env>) -> Report {
     if d.demo {
-        return Report { outlook: outlook(d, false), noticed: vec![] };
+        return Report { outlook: outlook(d, &Known { lock: LockState::Unknown, pending: 0, repos: &mem.repos }), noticed: vec![], changed: false };
+    }
+    if !mem.loaded {
+        mem.loaded = true;
+        mem.started = d.now;
+        let saved = start::read_state(d.app_dir);
+        mem.pending = saved.pending;
+        mem.lead = saved.lead;
+        mem.lead_pending = saved.lead_pending;
     }
     // The lock is taken only once the switches and modes allow the watcher, and let go when they
     // do not, so a paused copy never keeps another copy out.
-    let locked = if settings_and_gate(d, false).1.is_some() {
+    let lock = if settings_and_gate(d, false).1.is_some() {
         mem.lock = None;
-        false
+        LockState::Unknown
     } else {
         if mem.lock.is_none() {
             mem.lock = acquire_lock(d.app_dir);
         }
-        mem.lock.is_none()
+        if mem.lock.is_some() {
+            LockState::Held
+        } else {
+            LockState::Other
+        }
     };
-    LOCKED.store(locked, Ordering::Relaxed);
-    let outlook = outlook(d, locked);
-    let watching = matches!(outlook.paused, None | Some(Paused::Budget(_) | Paused::Cap(_) | Paused::Nothing));
-    let noticed = if watching { notice_links(d, mem) } else { vec![] };
+    let mut pass = fresh(d, lock, mem);
+    let mut refreshed: Option<Fresh> = None;
+    let mut changed = false;
+    mem.repos.clear();
+    if lock == LockState::Held && pass.gate.is_none() {
+        if let Some(env) = env {
+            let before = mem.pending.clone();
+            if start::resolve_pending(d, &mut mem.pending, mem.started, &mut mem.skip) {
+                // The adopted link or the entry of a lost start changes what may start.
+                changed = true;
+                pass = fresh(d, lock, mem);
+            }
+            // No process at all unless a start is allowed: a pass paused by the budget or the cap
+            // asks `git` nothing.
+            let room = pass.access && start::may_start(None, &pass.budget, pass.running, pass.cap);
+            if mem.pending.is_none() && room {
+                fill_repos(&pass, env.git, &mut mem.repos);
+                if start::step(env, d, &pass, &mem.repos, &mut mem.pending, &mut mem.skip) != start::Step::Idle {
+                    changed = true;
+                    pass = fresh(d, lock, mem);
+                }
+            }
+            if mem.pending != before {
+                save_pending(d, mem);
+            }
+            // The listed agent's ids on the links: a worker's question needs its session id, and a
+            // copy made by a resume has its own short id.
+            if sync_link_ids(d, &pass.links) {
+                changed = true;
+                pass = fresh(d, lock, mem);
+            }
+            // A finished worker's check: not gated by the budget (no model is used).
+            changed |= check::step(env, d, mem, &pass.links);
+            // A check can run for ten minutes: what follows uses the time and the list read again,
+            // and stops at once when the settings or the mode closed the gate meanwhile.
+            refreshed = d.refresh.map(|r| r());
+            let d = deps_with(d, &refreshed);
+            pass = fresh(&d, lock, mem);
+            if pass.gate.is_none() {
+                // A checked and decided link is ended, so its place is free.
+                if close::step(env, &d, mem, &pass.links) {
+                    changed = true;
+                    pass = fresh(&d, lock, mem);
+                }
+                // Stuck, at a prompt, idle or old: resume, an entry for the owner, or wrap up.
+                if act::step(env, &d, mem, &pass.budget, &pass.links) {
+                    changed = true;
+                    pass = fresh(&d, lock, mem);
+                }
+                // A short lead session for one waiting entry, and what the lead wrote carried out.
+                if lead::step(env, &d, mem, &pass) {
+                    changed = true;
+                    pass = fresh(&d, lock, mem);
+                }
+            }
+        }
+    }
+    remember(lock, mem);
+    let outlook = outlook_of(&pass, &Known { lock, pending: usize::from(mem.pending.is_some()), repos: &mem.repos });
+    let watching = !matches!(
+        outlook.paused,
+        Some(Paused::Demo | Paused::Off | Paused::AgentsOff | Paused::Mode | Paused::Locked)
+    );
+    let d = deps_with(d, &refreshed);
+    let noticed = if watching { notice_links(&d, mem, pass.links) } else { vec![] };
     if !watching {
         mem.seen.clear();
     }
-    Report { outlook, noticed }
+    Report { outlook, noticed, changed }
 }
 
-/// What each open watcher link needs attention for. Stuck is not read yet (it needs the
-/// transcript, a later task), so it is always false here.
-fn notice_links(d: &Deps, mem: &mut Memory) -> Vec<Noticed> {
-    let links = links_of(d);
+/// What each open watcher link needs attention for. Stuck is false here: it needs the transcript,
+/// which only `act::step` reads (the "would act on" lines are a view, not the decision).
+fn notice_links(d: &Deps, mem: &mut Memory, links: Vec<(PathBuf, WatcherLink)>) -> Vec<Noticed> {
     mem.seen.retain(|(org, id), _| links.iter().any(|(_, l)| l.org == *org && l.id == *id));
     let mut out = Vec::new();
     for (db, mut link) in links {
-        let agent = d.agents.iter().find(|a| match &link.session_id {
-            Some(s) => &a.session_id == s,
-            None => a.short_id.as_deref() == Some(link.short_id.as_str()),
-        });
+        let agent = check::find_agent(d.agents, &link);
         let key = (link.org.clone(), link.id);
         match agent.map(|a| a.group) {
             Some(g @ (Group::NeedsYou | Group::Idle)) => {
@@ -291,9 +606,12 @@ fn notice_links(d: &Deps, mem: &mut Memory) -> Vec<Noticed> {
 #[derive(Serialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct WatcherStatus {
-    /// `demo`, `off`, `agents_off`, `mode`, `locked`, `budget`, `cap` or `nothing`; None when it
-    /// would start something.
+    /// `demo`, `off`, `agents_off`, `mode`, `locked`, `starting`, `access_off`, `budget`, `cap`,
+    /// `not_startable` or `nothing`; None when it would start something.
     pub paused: Option<String>,
+    /// With `not_startable`: `no_folder`, `not_git` or `failed_start`, and the first item's title.
+    pub reason: Option<String>,
+    pub blocked_item: Option<String>,
     /// With `budget`: `ahead_of_week`, `five_hour`, `no_data` or `stale`.
     pub budget: Option<String>,
     pub percent: Option<f64>,
@@ -302,7 +620,7 @@ pub struct WatcherStatus {
     pub running: usize,
     pub cap: u32,
     pub would_start: Option<String>,
-    /// The lead session (a later task).
+    /// The lead session: the title of the entry it is on.
     pub lead: Option<String>,
 }
 
@@ -313,6 +631,14 @@ pub fn status_of(o: &Outlook, now: i64) -> WatcherStatus {
     };
     WatcherStatus {
         paused: o.paused.as_ref().map(|p| p.key().to_string()),
+        reason: match &o.paused {
+            Some(Paused::NotStartable { reason, .. }) => Some(reason.to_string()),
+            _ => None,
+        },
+        blocked_item: match &o.paused {
+            Some(Paused::NotStartable { title, .. }) => Some(title.clone()),
+            _ => None,
+        },
         budget: why
             .and_then(|b| match b {
                 Budget::AheadOfWeek { .. } => Some("ahead_of_week"),
@@ -349,6 +675,29 @@ fn check(app: &AppHandle, mem: &mut Memory) {
     let state = app.state::<super::AgentsState>();
     let app_dir = state.app_dir.clone();
     let limits_dir = budget::limits_dir(&app_dir, crate::host::running_dev(), &actions::home_dir());
+    let login = state.login_cache();
+    let real_git = git::RealGit { login: login.clone() };
+    let get_cli = || actions::cli(&login).map(|c| Box::new(c) as Box<dyn super::cli::Cli>);
+    // The same list `agents_start` checks a folder against.
+    let trusted = || super::projects::read_trusted(&actions::home_dir());
+    let mcp_path = crate::agent_access::mcp_path();
+    // The same path `agents_send` types a message through.
+    let send = |agent: &Agent, text: &str| super::pty::send_message(&state.hub, agent, text);
+    // The login shell's `PATH`, resolved only when a check is about to run.
+    let path_env = || super::pty::cached_login_env(&login).path.clone();
+    let claude_dir = actions::home_dir().join(".claude");
+    let transcript_tail = |session_id: &str| super::transcript::tail_text(&claude_dir, session_id, events::TAIL_BYTES);
+    let env = start::Env {
+        git: &real_git,
+        cli: &get_cli,
+        trusted: &trusted,
+        dev: crate::host::running_dev(),
+        mcp_path: &mcp_path,
+        send: &send,
+        path_env: &path_env,
+        transcript_tail: &transcript_tail,
+    };
+    let refresh = || Fresh { now: limits::now_ms(), agents: state.cached(), listed_at: state.listed_at() };
     let report = tick(
         &Deps {
             app_dir: &app_dir,
@@ -357,9 +706,18 @@ fn check(app: &AppHandle, mem: &mut Memory) {
             now: limits::now_ms(),
             agents: &state.cached(),
             listed_at: state.listed_at(),
+            refresh: Some(&refresh),
         },
         mem,
+        Some(&env),
     );
+    // The screens read again: the Needs you list, the tasks' stages and the agent links.
+    if report.changed {
+        use tauri::Emitter;
+        if let Err(e) = app.emit(crate::agent_access::CHANGED_EVENT, ["watcher"]) {
+            log::warn!("[watcher] emit {}: {e}", crate::agent_access::CHANGED_EVENT);
+        }
+    }
     if let Ok(mut last) = LAST_NOTICED.lock() {
         if *last != report.noticed {
             for n in &report.noticed {
@@ -408,8 +766,17 @@ pub async fn watcher_status(
     super::pty::blocking(move || {
         let demo = crate::host::is_demo(&app);
         let now = limits::now_ms();
-        let d = Deps { app_dir: &app_dir, limits_dir: &limits_dir, demo, now, agents: &agents, listed_at };
-        Ok(status_of(&outlook(&d, LOCKED.load(Ordering::Relaxed)), now))
+        let d = Deps { app_dir: &app_dir, limits_dir: &limits_dir, demo, now, agents: &agents, listed_at, refresh: None };
+        // What the thread last found: no process is spawned here.
+        let repos: HashMap<String, bool> = REPOS.lock().map(|r| r.iter().cloned().collect()).unwrap_or_default();
+        let known = Known {
+            lock: LockState::from_u8(LOCK.load(Ordering::Relaxed)),
+            pending: usize::from(PENDING.load(Ordering::Relaxed)),
+            repos: &repos,
+        };
+        let mut status = status_of(&outlook(&d, &known), now);
+        status.lead = LEAD.lock().ok().and_then(|l| l.clone());
+        Ok(status)
     })
     .await
 }
@@ -422,16 +789,16 @@ mod tests {
     use crate::orgs::Organisation;
     use rusqlite::{params, Connection};
 
-    const T0: i64 = 1_800_000_000_000;
+    pub(super) const T0: i64 = 1_800_000_000_000;
 
-    fn tmp(name: &str) -> PathBuf {
+    pub(super) fn tmp(name: &str) -> PathBuf {
         let d = std::env::temp_dir().join(format!("sm-watcher-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).unwrap();
         d
     }
 
-    fn on() -> AgentsSettings {
+    pub(super) fn on() -> AgentsSettings {
         AgentsSettings { enabled: true, watcher: true, ..Default::default() }
     }
 
@@ -458,7 +825,7 @@ mod tests {
     }
 
     /// An app folder: one organisation per id, migrated, with a project; Agents and the watcher on.
-    fn app(name: &str, orgs: &[&str]) -> PathBuf {
+    pub(super) fn app(name: &str, orgs: &[&str]) -> PathBuf {
         let dir = tmp(name);
         Registry {
             version: 1,
@@ -498,7 +865,7 @@ mod tests {
         dir
     }
 
-    fn write_limits(dir: &Path) {
+    pub(super) fn write_limits(dir: &Path) {
         let (five_reset, week_reset) = ((T0 + 3_600_000) / 1000, (T0 + 302_400_000) / 1000);
         std::fs::write(
             dir.join("limits.json"),
@@ -512,11 +879,11 @@ mod tests {
         .unwrap();
     }
 
-    fn db_of(dir: &Path, org: &str) -> PathBuf {
+    pub(super) fn db_of(dir: &Path, org: &str) -> PathBuf {
         org_dir(dir, org).join(DB_FILE)
     }
 
-    fn add_ready(db: &Path, title: &str, priority: &str) {
+    pub(super) fn add_ready(db: &Path, title: &str, priority: &str) {
         Connection::open(db)
             .unwrap()
             .execute(
@@ -526,8 +893,8 @@ mod tests {
             .unwrap();
     }
 
-    fn deps<'a>(dir: &'a Path, agents: &'a [Agent]) -> Deps<'a> {
-        Deps { app_dir: dir, limits_dir: dir, demo: false, now: T0, agents, listed_at: Some(T0), }
+    pub(super) fn deps<'a>(dir: &'a Path, agents: &'a [Agent]) -> Deps<'a> {
+        Deps { app_dir: dir, limits_dir: dir, demo: false, now: T0, agents, listed_at: Some(T0), refresh: None }
     }
 
     #[test]
@@ -535,7 +902,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("sm-watcher-demo-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         let mut mem = Memory::default();
-        let r = tick(&Deps { demo: true, ..deps(&dir, &[]) }, &mut mem);
+        let r = tick(&Deps { demo: true, ..deps(&dir, &[]) }, &mut mem, None);
         assert_eq!(r.outlook.paused, Some(Paused::Demo));
         assert!(mem.lock.is_none());
         assert!(!dir.exists(), "nothing was created or read");
@@ -550,7 +917,7 @@ mod tests {
         add_ready(&db, "Poster tool", "high");
         let before = std::fs::read(&db).unwrap();
         let mut mem = Memory::default();
-        let r = tick(&deps(&dir, &[]), &mut mem);
+        let r = tick(&deps(&dir, &[]), &mut mem, None);
         assert_eq!(r.outlook.paused, None);
         assert_eq!(r.outlook.would_start.as_ref().map(|(o, i)| (o.as_str(), i.title.as_str())), Some(("a", "Poster tool")));
         let st = status_of(&r.outlook, T0);
@@ -572,7 +939,7 @@ mod tests {
         let db = db_of(&dir, "a");
         // Nothing ready.
         let mut mem = Memory::default();
-        assert_eq!(tick(&deps(&dir, &[]), &mut mem).outlook.paused, Some(Paused::Nothing));
+        assert_eq!(tick(&deps(&dir, &[]), &mut mem, None).outlook.paused, Some(Paused::Nothing));
         add_ready(&db, "Poster tool", "medium");
         // Cap: one watcher link open and a cap of 1.
         write_settings(&dir, &AgentsSettings { worker_cap: 1, ..on() }).unwrap();
@@ -584,7 +951,7 @@ mod tests {
             [],
         )
         .unwrap();
-        let r = tick(&deps(&dir, &[]), &mut mem);
+        let r = tick(&deps(&dir, &[]), &mut mem, None);
         assert_eq!(r.outlook.paused, Some(Paused::Cap(1)));
         assert_eq!(r.outlook.running, 1);
         assert_eq!(status_of(&r.outlook, T0).paused.as_deref(), Some("cap"));
@@ -601,7 +968,7 @@ mod tests {
             ),
         )
         .unwrap();
-        let r = tick(&deps(&dir, &[]), &mut mem);
+        let r = tick(&deps(&dir, &[]), &mut mem, None);
         assert!(matches!(r.outlook.paused, Some(Paused::Budget(Budget::AheadOfWeek { .. }))));
         let st = status_of(&r.outlook, T0);
         assert_eq!((st.paused.as_deref(), st.budget.as_deref()), (Some("budget"), Some("ahead_of_week")));
@@ -609,9 +976,22 @@ mod tests {
         // A mode file in any organisation pauses it, and the lock is let go.
         write_limits(&dir);
         std::fs::write(org_dir(&dir, "a").join("studiomanager_test.db"), "").unwrap();
-        let r = tick(&deps(&dir, &[]), &mut mem);
+        let r = tick(&deps(&dir, &[]), &mut mem, None);
         assert_eq!(r.outlook.paused, Some(Paused::Mode));
         assert!(mem.lock.is_none());
+    }
+
+    #[test]
+    fn an_unreadable_organisation_pauses_the_pass_with_a_reason() {
+        let dir = app("unreadable", &["a", "b"]);
+        add_ready(&db_of(&dir, "a"), "Poster tool", "low");
+        let mut mem = Memory::default();
+        assert!(tick(&deps(&dir, &[]), &mut mem, None).outlook.would_start.is_some());
+        std::fs::write(db_of(&dir, "b"), "this is not a database, only text that is long enough to be read").unwrap();
+        let r = tick(&deps(&dir, &[]), &mut mem, None);
+        assert_eq!(r.outlook.paused, Some(Paused::LinksUnreadable));
+        assert_eq!(r.outlook.would_start, None);
+        assert_eq!(status_of(&r.outlook, T0).paused.as_deref(), Some("links_unreadable"));
     }
 
     #[test]
@@ -619,9 +999,9 @@ mod tests {
         let dir = app("second", &["a"]);
         let other = acquire_lock(&dir).unwrap();
         let mut mem = Memory::default();
-        assert_eq!(tick(&deps(&dir, &[]), &mut mem).outlook.paused, Some(Paused::Locked));
+        assert_eq!(tick(&deps(&dir, &[]), &mut mem, None).outlook.paused, Some(Paused::Locked));
         drop(other);
-        assert_eq!(tick(&deps(&dir, &[]), &mut mem).outlook.paused, Some(Paused::Nothing));
+        assert_eq!(tick(&deps(&dir, &[]), &mut mem, None).outlook.paused, Some(Paused::Nothing));
     }
 
     #[test]
@@ -635,7 +1015,7 @@ mod tests {
         )
         .unwrap();
         let mut mem = Memory::default();
-        let r = tick(&deps(&dir, &[]), &mut mem);
+        let r = tick(&deps(&dir, &[]), &mut mem, None);
         assert_eq!(r.outlook.would_start.map(|(o, i)| (o, i.title)), Some(("a".into(), "Poster tool".into())));
     }
 
@@ -654,14 +1034,14 @@ mod tests {
             )
             .unwrap();
         }
-        c.execute("INSERT INTO needs_you (kind, task_id, link_id, title) VALUES ('decide', 1, 1, 'Which size?')", []).unwrap();
+        c.execute("INSERT INTO needs_you (kind, task_id, link_id, title, lead_state) VALUES ('decide', 1, 1, 'Which size?', 'waiting')", []).unwrap();
         let agents = crate::agents::model::parse_agents(
             r#"[{"sessionId":"s1","id":"abc12345","name":"work","cwd":"/x","kind":"bg","status":"busy"},
                 {"sessionId":"s2","id":"def67890","name":"work","cwd":"/x","kind":"bg","status":"idle","state":"done"}]"#,
         )
         .unwrap();
         let mut mem = Memory::default();
-        let r = tick(&deps(&dir, &agents), &mut mem);
+        let r = tick(&deps(&dir, &agents), &mut mem, None);
         assert_eq!(r.noticed, vec![Noticed { org: "a".into(), link_id: 1, event: Event::Asked { entry: 1 } }]);
         assert_eq!(r.outlook.running, 1);
     }

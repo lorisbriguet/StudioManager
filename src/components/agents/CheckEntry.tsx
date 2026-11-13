@@ -106,7 +106,9 @@ export function CheckEntry({ entry: e }: { entry: NeedsYouEntry }) {
       </div>
       <p className="mt-1 text-sm font-medium whitespace-pre-wrap">{e.body || e.title}</p>
       <p className="mt-1 text-xs text-muted">{facts.join(" · ")}</p>
+      {e.recommendation && <p className="mt-1 text-sm whitespace-pre-wrap">{e.recommendation}</p>}
       {e.reason && <p className="text-xs text-muted whitespace-pre-wrap">{e.reason}</p>}
+      {e.lead_state === "running" && <p className="text-xs text-muted">{t.lead_reading}</p>}
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <Button onClick={onAccept}>{t.check_accept}</Button>
         {e.pr_url && (

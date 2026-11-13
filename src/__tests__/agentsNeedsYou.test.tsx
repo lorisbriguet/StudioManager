@@ -224,6 +224,16 @@ describe("Needs you: Decide", () => {
     }
   });
 
+  it("says the lead is reading it only while the lead is running", () => {
+    hooks.open = [row({ lead_state: "running" })];
+    const { unmount } = setup([]);
+    expect(screen.getByText("The lead is reading this")).toBeInTheDocument();
+    unmount();
+    hooks.open = [row({ lead_state: "waiting" })];
+    setup([]);
+    expect(screen.queryByText("The lead is reading this")).not.toBeInTheDocument();
+  });
+
   it("a link with no session keeps the entry open and shows the error; Dismiss lets it go", async () => {
     hooks.open = [row({ session_id: null })];
     setup([]);
@@ -328,6 +338,62 @@ describe("Needs you: Decide", () => {
     hooks.open = [row({ options: "not json", recommendation: null })];
     setup([]);
     expect(screen.getByRole("button", { name: "Answer in words" })).toBeInTheDocument();
+  });
+
+  it("an agent at a prompt offers only Open the agent and Dismiss", () => {
+    hooks.open = [row({ lead_state: "prompt", title: "Allow the tool to run?", body: "Waiting at a prompt: Allow the tool to run?", options: null, recommendation: null, reason: null })];
+    setup([]);
+    expect(screen.getByText(/Waiting at a prompt/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open the agent" })).toHaveAttribute("href", "/agents?agent=sess-1");
+    expect(screen.queryByRole("button", { name: "Answer in words" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Outline" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+    expect(hooks.dismiss).toHaveBeenCalledWith(5);
+    // Even with options on the row, a prompt shows no option button.
+    expect(screen.queryByRole("button", { name: "Embed" })).not.toBeInTheDocument();
+  });
+
+  it("an entry with no link shows its text and Dismiss only", () => {
+    hooks.open = [
+      row({ link_id: null, session_id: null, short_id: null, options: null, recommendation: null, reason: null, body: "The watcher could not start a worker." }),
+    ];
+    setup([]);
+    expect(screen.getByText("The watcher could not start a worker.")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Open the agent" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Answer in words" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+    expect(hooks.dismiss).toHaveBeenCalledWith(5);
+  });
+
+  it("an entry the app wrote shows its own title as the headline (why a worker could not start)", () => {
+    hooks.open = [
+      row({
+        link_id: null,
+        session_id: null,
+        short_id: null,
+        options: null,
+        recommendation: null,
+        reason: null,
+        title: "Could not start: Folder not trusted",
+        body: "The watcher could not start a worker.",
+      }),
+    ];
+    setup([]);
+    expect(screen.getByText("Could not start: Folder not trusted")).toBeInTheDocument();
+    expect(screen.getByText("The watcher could not start a worker.")).toBeInTheDocument();
+  });
+
+  it("a worker's question, titled like its item, shows no second headline", () => {
+    hooks.open = [row({ title: "Export presets", item_title: "Export presets" })];
+    setup([]);
+    expect(screen.getAllByText("Export presets")).toHaveLength(1);
+  });
+
+  it("an entry with a link and no lead state still offers Answer in words (an idle worker is told what to do)", () => {
+    hooks.open = [row({ options: null, recommendation: null, reason: null })];
+    setup([]);
+    expect(screen.getByRole("button", { name: "Answer in words" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Dismiss" })).not.toBeInTheDocument();
   });
 });
 

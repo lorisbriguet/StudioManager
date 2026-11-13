@@ -64,6 +64,27 @@ export async function answerEntry(id: number, answer: string, opts: { delivered:
   );
 }
 
+/**
+ * Loris sends a finished result back: the entry is answered with the note and its link's check
+ * is cleared (`check_state`, `reported_at`) in the same batch, so the watcher checks the next
+ * report afresh. An entry no longer open is left as it is.
+ */
+export async function sendBackEntry(id: number, note: string, opts: { delivered: boolean }): Promise<void> {
+  const batch = new TransactionBatch();
+  batch.add(
+    `UPDATE task_agents SET check_state = NULL, reported_at = NULL
+     WHERE ended_at IS NULL AND id = (SELECT link_id FROM needs_you WHERE id = $1 AND status = 'open')`,
+    [id],
+  );
+  batch.add(
+    `UPDATE needs_you SET status = 'answered', answer = $2, decided_by = 'user', answered_at = datetime('now'),
+       delivered_at = CASE WHEN $3 = 1 THEN datetime('now') ELSE delivered_at END
+     WHERE id = $1 AND status = 'open'`,
+    [id, note, opts.delivered ? 1 : 0],
+  );
+  await batch.commit();
+}
+
 export async function dismissEntry(id: number): Promise<void> {
   const db = await getDb();
   await db.execute(

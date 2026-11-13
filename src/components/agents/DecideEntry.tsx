@@ -41,6 +41,11 @@ export function DecideEntry({ entry: e }: { entry: NeedsYouEntry }) {
   const [recordFailed, setRecordFailed] = useState(false);
   const sent = useRef<string | null>(null);
   const options = parseOptions(e.options);
+  // An agent waiting at a prompt is answered in the agent itself; an entry with no agent and no
+  // options (the app could not start a worker) only says what happened.
+  const simple = e.lead_state === "prompt" || (e.link_id == null && options.length === 0);
+  // An entry the app wrote says what happened in its title (a worker's question has the item's).
+  const headline = e.item_title != null && e.title !== e.item_title ? e.title : null;
 
   const record = async (answer: string) => {
     try {
@@ -98,7 +103,8 @@ export function DecideEntry({ entry: e }: { entry: NeedsYouEntry }) {
         <span aria-hidden>·</span>
         <span>{formatDisplayDateTime(e.created_at)}</span>
       </div>
-      <p className="mt-1 text-sm font-medium whitespace-pre-wrap">{e.body}</p>
+      {headline && <p className="mt-1 text-sm font-medium whitespace-pre-wrap">{headline}</p>}
+      <p className={`whitespace-pre-wrap text-sm ${headline ? "text-muted" : "mt-1 font-medium"}`}>{e.body}</p>
       {e.recommendation && (
         <p className="mt-1 text-sm">
           <span className="font-medium">{t.decide_recommended.replace("{text}", e.recommendation)}</span>
@@ -106,28 +112,36 @@ export function DecideEntry({ entry: e }: { entry: NeedsYouEntry }) {
         </p>
       )}
       {!e.recommendation && e.reason && <p className="mt-1 text-sm text-muted">{e.reason}</p>}
+      {e.lead_state === "running" && <p className="text-xs text-muted">{t.lead_reading}</p>}
       {e.lead_state === "done" && <p className="text-xs text-muted">{t.decide_from_lead}</p>}
       <div className="mt-2 flex flex-wrap items-center gap-2">
-        {options.map((o) => (
-          <Button
-            key={o}
-            variant={o === e.recommendation ? "primary" : "secondary"}
-            disabled={sending || recordFailed}
-            onClick={() => void answer(o)}
-          >
-            {o}
-          </Button>
-        ))}
+        {!simple &&
+          options.map((o) => (
+            <Button
+              key={o}
+              variant={o === e.recommendation ? "primary" : "secondary"}
+              disabled={sending || recordFailed}
+              onClick={() => void answer(o)}
+            >
+              {o}
+            </Button>
+          ))}
         {e.session_id && (
           <Link to={`/agents?agent=${e.session_id}`} className="text-sm text-accent-text hover:underline">
             {t.decide_open_agent}
           </Link>
         )}
-        <Button variant="secondary" aria-expanded={words} onClick={() => setWords(!words)}>
-          {t.decide_answer_words}
-        </Button>
+        {simple ? (
+          <Button variant="secondary" onClick={() => dismiss.mutate(e.id)}>
+            {t.decide_dismiss}
+          </Button>
+        ) : (
+          <Button variant="secondary" aria-expanded={words} onClick={() => setWords(!words)}>
+            {t.decide_answer_words}
+          </Button>
+        )}
       </div>
-      {words && (
+      {words && !simple && (
         <div className="mt-2 flex flex-col items-start gap-2">
           <Textarea
             aria-label={t.decide_answer_words}
