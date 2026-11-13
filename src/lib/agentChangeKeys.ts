@@ -19,6 +19,8 @@ const UPKEEP = ["upkeep-items", "machines", "service-log"];
 const CONSUMABLES = ["consumables", "project-material-cost"];
 const SUBSCRIPTIONS = ["subscriptions", "subscription-renewals"];
 
+const NEEDS_YOU = ["needsYou", ...TASKS, "taskAgents"];
+
 const TOOL_KEYS: Record<string, readonly string[]> = {
   link_folder: PROJECTS,
   create_project: [...PROJECTS, "clients"],
@@ -46,6 +48,12 @@ const TOOL_KEYS: Record<string, readonly string[]> = {
   file_capture: ["captures", ...TASKS],
   set_brief: ["captures", ...TASKS],
   report_result: [...TASKS, "taskAgents"],
+  // Needs you: the agent's question, the lead's decision, a hand-over to Loris.
+  ask: NEEDS_YOU,
+  resolve: NEEDS_YOU,
+  hand_over: NEEDS_YOU,
+  // The app's own watcher logs under this name.
+  watcher: NEEDS_YOU,
   // The link tracker's own event (not a server tool).
   task_links: [...TASKS, "taskAgents"],
 };

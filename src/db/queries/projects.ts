@@ -60,6 +60,45 @@ export async function updateProject(
   );
 }
 
+/**
+ * A project's agent settings. `merge_alone` is refused while the project belongs to a hub, and
+ * making it a hub's project turns `merge_alone` off, in the same statement. The check command
+ * is trimmed, at most 500 characters; empty clears it.
+ */
+export async function setProjectAgentSettings(
+  id: number,
+  settings: { check_command?: string | null; merge_alone?: number; hub_project?: number },
+): Promise<void> {
+  const sets: string[] = [];
+  const params: unknown[] = [id];
+  if (settings.check_command !== undefined) {
+    const command = (settings.check_command ?? "").trim();
+    if (command.length > 500) throw new Error("The check command is at most 500 characters.");
+    params.push(command === "" ? null : command);
+    sets.push(`check_command = $${params.length}`);
+  }
+  const hub = settings.hub_project === undefined ? null : settings.hub_project ? 1 : 0;
+  const merge = settings.merge_alone === undefined ? null : settings.merge_alone ? 1 : 0;
+  const db = await getDb();
+  if (merge === 1) {
+    const rows = await db.select<{ hub_project: number }[]>("SELECT hub_project FROM projects WHERE id = $1", [id]);
+    if ((hub ?? rows[0]?.hub_project ?? 0) === 1) throw new Error("A hub's project is never merged by the lead alone.");
+  }
+  if (hub !== null) {
+    params.push(hub);
+    sets.push(`hub_project = $${params.length}`);
+  }
+  if (hub === 1) {
+    sets.push("merge_alone = 0");
+  } else if (merge !== null) {
+    params.push(merge);
+    // The guard in SQL: a hub flag set after the read above still wins.
+    sets.push(`merge_alone = CASE WHEN ${hub === 0 ? "0" : "hub_project"} = 1 THEN 0 ELSE $${params.length} END`);
+  }
+  if (sets.length === 0) return;
+  await db.execute(`UPDATE projects SET ${sets.join(", ")}, updated_at = datetime('now') WHERE id = $1`, params);
+}
+
 export async function deleteProject(id: number): Promise<void> {
   const db = await getDb();
   // Unlink invoices and quotes (financial records survive project deletion)
