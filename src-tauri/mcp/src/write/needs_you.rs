@@ -48,7 +48,8 @@ fn options_json(options: Option<&[String]>) -> R<Option<String>> {
         .map_err(|e| format!("Could not encode the options: {e}"))
 }
 
-/// Ask a question on a task or subtask: a `decide` row for Loris (or the lead).
+/// Ask a question on a task or subtask: a `decide` row for the user (or the lead).
+/// Needs an open agent link on the item: the answer is typed into that agent.
 pub fn ask(
     dir: &Path,
     org: &Org,
@@ -70,7 +71,7 @@ pub fn ask(
             (None, Some(id)) => ("subtask", "subtask_id", id, subtask_result(tx, org, id)?.title),
             _ => return Err(ONE_ID.to_string()),
         };
-        // The newest open link of the item; none when no agent is linked.
+        // The newest open link of the item: the answer is typed into that agent.
         let link: Option<(i64, Option<String>)> = db(tx
             .query_row(
                 &format!(
@@ -81,9 +82,22 @@ pub fn ask(
                 |r| Ok((r.get(0)?, r.get(1)?)),
             )
             .optional())?;
-        let link_id = link.as_ref().map(|l| l.0);
-        let lead_state = match &link {
-            Some((_, Some(by))) if by == "watcher" => Some("waiting"),
+        let Some((link_id, started_by)) = link else {
+            return Err(
+                "No agent is working on this item from StudioManager: ask the user in the conversation instead."
+                    .to_string(),
+            );
+        };
+        let open: i64 = db(tx.query_row(
+            "SELECT COUNT(*) FROM needs_you WHERE link_id = ?1 AND kind = 'decide' AND status = 'open'",
+            [link_id],
+            |r| r.get(0),
+        ))?;
+        if open > 0 {
+            return Err("A question is already waiting on this item.".to_string());
+        }
+        let lead_state = match started_by.as_deref() {
+            Some("watcher") => Some("waiting"),
             _ => None,
         };
         db(tx.execute(
@@ -151,7 +165,7 @@ pub fn resolve(
     })
 }
 
-/// Hand an entry to Loris with the lead's recommendation: it stays open.
+/// Hand an entry to the user with the lead's recommendation: it stays open.
 pub fn hand_over(
     dir: &Path,
     org: &Org,
@@ -241,11 +255,39 @@ mod tests {
     }
 
     #[test]
-    fn ask_on_a_hand_link_or_no_link_has_no_lead_state() {
+    fn ask_with_no_open_link_is_refused_and_writes_nothing() {
         let (dir, org, conn) = fixture();
+        let e = ask(&dir, &org, None, Some(2), "Q?", "R", None).unwrap_err();
+        assert!(e.contains("ask the user in the conversation"), "{e}");
+        link(&conn, "task_id", 1, None, Some("2026-11-13 08:00:00"));
+        assert!(ask(&dir, &org, Some(1), None, "Q?", "R", None).is_err());
+        assert_eq!(one::<i64>(&conn, "SELECT COUNT(*) FROM needs_you"), 0);
+        assert!(log_lines(&dir).is_empty());
+    }
+
+    #[test]
+    fn ask_on_a_watcher_link_of_a_subtask_waits_for_the_lead() {
+        let (dir, org, conn) = fixture();
+        link(&conn, "subtask_id", 2, Some("watcher"), None);
         let a = ask(&dir, &org, None, Some(2), "Q?", "R", None).unwrap();
-        assert_eq!(row(&conn, a.id).0, None);
-        assert_eq!(row(&conn, a.id).1, None);
+        assert_eq!(row(&conn, a.id).1.as_deref(), Some("waiting"));
+    }
+
+    #[test]
+    fn a_second_open_question_on_the_same_link_is_refused() {
+        let (dir, org, conn) = fixture();
+        link(&conn, "task_id", 1, None, None);
+        let a = ask(&dir, &org, Some(1), None, "Q?", "R", None).unwrap();
+        let e = ask(&dir, &org, Some(1), None, "Q2?", "R", None).unwrap_err();
+        assert_eq!(e, "A question is already waiting on this item.");
+        assert_eq!(one::<i64>(&conn, "SELECT COUNT(*) FROM needs_you"), 1);
+        conn.execute("UPDATE needs_you SET status = 'answered' WHERE id = ?1", [a.id]).unwrap();
+        ask(&dir, &org, Some(1), None, "Q3?", "R", None).unwrap();
+    }
+
+    #[test]
+    fn ask_on_a_hand_link_has_no_lead_state() {
+        let (dir, org, conn) = fixture();
         let l = link(&conn, "task_id", 1, None, None);
         let b = ask(&dir, &org, Some(1), None, "Q?", "R", None).unwrap();
         let (link_id, state, ..) = row(&conn, b.id);
@@ -277,6 +319,7 @@ mod tests {
         let n: i64 = one(&conn, "SELECT COUNT(*) FROM needs_you");
         assert_eq!(n, 0);
         assert!(log_lines(&dir).is_empty());
+        link(&conn, "task_id", 1, None, None);
         ask(&dir, &org, Some(1), None, &"x".repeat(2000), "R", Some(&opts(6))).unwrap();
     }
 

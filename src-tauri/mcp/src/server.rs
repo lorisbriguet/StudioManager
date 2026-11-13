@@ -668,9 +668,9 @@ pub struct HandOverInput {
     /// Organisation id or name. Default: the active organisation.
     pub org: Option<String>,
     pub needs_you_id: i64,
-    /// What you would do, for Loris (at most 2000 characters).
+    /// What you would do, for the user (at most 2000 characters).
     pub recommendation: String,
-    /// Why this is for Loris and not for you.
+    /// Why this is for the user and not for you.
     pub reason: String,
     /// Up to 6 short answers to pick from, each at most 80 characters.
     pub options: Option<Vec<String>>,
@@ -1195,7 +1195,7 @@ impl Server {
     }
 
     #[tool(
-        description = "Ask a question you cannot answer from the brief, the wiki or the decisions, with your recommendation. Then stop and wait: the answer is typed into this conversation."
+        description = "For an agent started on this task or subtask from StudioManager: ask a question you cannot answer from the brief, the wiki or the decisions, with your recommendation. Then stop and wait: the answer is typed into this conversation. Refused when no such agent is linked to the item: any other session asks the user directly in the conversation."
     )]
     async fn ask(&self, Parameters(p): Parameters<AskInput>) -> CallToolResult {
         self.run(move |d| {
