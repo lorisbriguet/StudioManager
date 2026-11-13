@@ -6,7 +6,7 @@ import { useAppStore } from "../stores/app-store";
 import { setInvokeHandler, invokedCommands, clearInvokedCommands } from "../__mocks__/tauri-api";
 
 let hotkeyError: string | null = null;
-let info: { enabled: boolean; claudePath: string | null; menuBar: boolean; limitAlerts: boolean; briefing?: boolean };
+let info: { enabled: boolean; claudePath: string | null; menuBar: boolean; limitAlerts: boolean; briefing?: boolean; watcher?: boolean; workerCap?: number; dev?: boolean };
 let folderTrusted = false;
 const BRIEFING = "/data/briefing";
 let status: unknown = null;
@@ -30,6 +30,10 @@ beforeEach(() => {
     if (cmd === "agents_trust_folder") return args.folder;
     if (cmd === "agents_set_briefing") {
       info = { ...info, briefing: args.on as boolean };
+      return info;
+    }
+    if (cmd === "agents_set_watcher") {
+      info = { ...info, watcher: args.on as boolean, workerCap: args.cap as number };
       return info;
     }
     if (cmd === "agents_set_menu_bar") {
@@ -226,6 +230,43 @@ describe("AgentsCard", () => {
       fireEvent.click(sw);
       await waitFor(() => expect(invokedCommands.find((c) => c.cmd === "agents_set_briefing")?.args).toEqual({ on: false }));
       expect(cmds()).not.toContain("agents_briefing_folder");
+    });
+  });
+
+  describe("watcher", () => {
+    it("is disabled while Agents is off", async () => {
+      info = { enabled: false, claudePath: "/bin/claude", menuBar: false, limitAlerts: true, watcher: false, workerCap: 3 };
+      render(<AgentsCard />);
+      expect(await screen.findByRole("switch", { name: "Start work on Ready tasks by itself" })).toBeDisabled();
+    });
+
+    it("switches on with the cap", async () => {
+      info = { enabled: true, claudePath: "/bin/claude", menuBar: false, limitAlerts: true, watcher: false, workerCap: 3 };
+      render(<AgentsCard />);
+      fireEvent.click(await screen.findByRole("switch", { name: "Start work on Ready tasks by itself" }));
+      await waitFor(() => expect(invokedCommands.find((c) => c.cmd === "agents_set_watcher")?.args).toEqual({ on: true, cap: 3 }));
+    });
+
+    it("saves another cap on blur, 1 to 5", async () => {
+      info = { enabled: true, claudePath: "/bin/claude", menuBar: false, limitAlerts: true, watcher: true, workerCap: 3 };
+      render(<AgentsCard />);
+      const cap = await screen.findByRole("spinbutton", { name: "Workers at once" });
+      fireEvent.change(cap, { target: { value: "9" } });
+      fireEvent.blur(cap);
+      await waitFor(() => expect(invokedCommands.find((c) => c.cmd === "agents_set_watcher")?.args).toEqual({ on: true, cap: 5 }));
+    });
+
+    it("the dev build warns that workers use the real plan", async () => {
+      info = { enabled: true, claudePath: "/bin/claude", menuBar: false, limitAlerts: true, watcher: false, workerCap: 3, dev: true };
+      render(<AgentsCard />);
+      await screen.findByText("Dev build: workers use your real Claude plan and the repositories of the projects here");
+    });
+
+    it("no warning outside the dev build", async () => {
+      info = { enabled: true, claudePath: "/bin/claude", menuBar: false, limitAlerts: true, watcher: false, workerCap: 3, dev: false };
+      render(<AgentsCard />);
+      await screen.findByRole("switch", { name: "Start work on Ready tasks by itself" });
+      expect(screen.queryByText(/Dev build/)).toBeNull();
     });
   });
 });

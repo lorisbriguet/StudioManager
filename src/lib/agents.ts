@@ -6,6 +6,12 @@ export interface AgentsInfo {
   limitAlerts: boolean;
   /** The brief session switch (Settings › Agents). */
   briefing: boolean;
+  /** Start work on Ready tasks by itself (Settings › Agents). */
+  watcher: boolean;
+  /** Workers at once, 1 to 5. */
+  workerCap: number;
+  /** The dev build: its workers use the real Claude plan. */
+  dev: boolean;
   /** Capture from an Apple Reminders list (Settings › Agents). */
   reminders: boolean;
   /** The list of the default Reminders account that is read. */
@@ -35,6 +41,11 @@ export function setAgentsMenuBar(on: boolean): Promise<AgentsInfo> {
 /** Turns the brief session on or off; the folder must be trusted before it is turned on. */
 export function setAgentsBriefing(on: boolean): Promise<AgentsInfo> {
   return invoke<AgentsInfo>("agents_set_briefing", { on });
+}
+
+/** The watcher switch and the worker cap (Rust keeps the cap between 1 and 5). */
+export function setAgentsWatcher(on: boolean, cap: number): Promise<AgentsInfo> {
+  return invoke<AgentsInfo>("agents_set_watcher", { on, cap });
 }
 
 /** What went wrong on the import that switching Reminders on ran at once. */

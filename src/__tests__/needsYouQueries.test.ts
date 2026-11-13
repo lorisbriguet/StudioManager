@@ -16,7 +16,7 @@ import {
   dismissEntry,
   reopenEntry,
 } from "../db/queries/needsYou";
-import { setProjectAgentSettings, getProject } from "../db/queries/projects";
+import { setProjectAgentSettings, getProject, updateProject } from "../db/queries/projects";
 
 const prep = (sql: string) => rawDb().prepare(sql.replace(/\$(\d+)/g, "?$1"));
 const one = (sql: string, ...p: (string | number | null)[]) => prep(sql).get(...p) as Record<string, unknown> | undefined;
@@ -176,5 +176,14 @@ describe("setProjectAgentSettings", () => {
     await setProjectAgentSettings(projectId, { hub_project: 1 });
     await setProjectAgentSettings(projectId, { hub_project: 0, merge_alone: 1 });
     expect(one("SELECT merge_alone, hub_project FROM projects WHERE id = $1", projectId)).toEqual({ merge_alone: 1, hub_project: 0 });
+  });
+
+  it("updateProject refuses the three agent fields: setProjectAgentSettings is their only writer", async () => {
+    for (const data of [{ check_command: "npm test" }, { merge_alone: 1 }, { hub_project: 1 }]) {
+      await expect(updateProject(projectId, { name: "Poster tool", ...data })).rejects.toThrow(/setProjectAgentSettings/);
+    }
+    expect(one("SELECT name, check_command, merge_alone, hub_project FROM projects WHERE id = $1", projectId)).toMatchObject({ check_command: null, merge_alone: 0, hub_project: 0 });
+    await updateProject(projectId, { name: "Poster tool" });
+    expect(one("SELECT name FROM projects WHERE id = $1", projectId)?.name).toBe("Poster tool");
   });
 });

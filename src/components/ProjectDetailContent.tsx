@@ -35,6 +35,8 @@ import { ProjectTasksSection } from "./project/ProjectTasksSection";
 import { ProjectNamedTables } from "./project/ProjectNamedTables";
 import { EquipmentBlock } from "./upkeep/EquipmentBlock";
 import { useChanged } from "../hooks/useChanged";
+import { useAppStore } from "../stores/app-store";
+import { ProjectAgentSettings } from "./project/ProjectAgentSettings";
 
 interface Props {
   projectId: number;
@@ -64,6 +66,7 @@ export function ProjectDetailContent({ projectId, compact, onBack, actions }: Pr
   const { data: wlConfig } = useProjectWorkloadConfig(projectId);
   const setWlConfig = useSetProjectWorkloadConfig(projectId);
   const t = useT();
+  const agentsEnabled = useAppStore((s) => s.agentsEnabled);
 
   const { data: projectInvoices } = useInvoicesByProject(projectId);
   const { data: projectQuotes } = useQuotesByProject(projectId);
@@ -403,6 +406,8 @@ export function ProjectDetailContent({ projectId, compact, onBack, actions }: Pr
             </Button>
           )}
         </div>
+
+        {agentsEnabled && <ProjectAgentSettings project={project} />}
 
         {totalCount > 0 && (
           <ProgressBar value={progress} label={t.progress} showValue className="mb-4" />

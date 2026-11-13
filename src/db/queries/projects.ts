@@ -45,12 +45,17 @@ export async function createProject(
   return result.lastInsertId ?? 0;
 }
 
+/** Written only by `setProjectAgentSettings`, which holds their rules. */
+const AGENT_FIELDS = ["check_command", "merge_alone", "hub_project"];
+
 export async function updateProject(
   id: number,
   data: Partial<Omit<Project, "id" | "created_at" | "updated_at">>
 ): Promise<void> {
-  const db = await getDb();
   const fields = Object.keys(data);
+  const agentField = fields.find((f) => AGENT_FIELDS.includes(f));
+  if (agentField) throw new Error(`${agentField} is changed only through setProjectAgentSettings`);
+  const db = await getDb();
   validateFields(fields);
   const sets = fields.map((f, i) => `${f} = $${i + 2}`).join(", ");
   const values = [id, ...fields.map((f) => data[f as keyof typeof data])];

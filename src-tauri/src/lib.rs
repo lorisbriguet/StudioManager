@@ -1066,6 +1066,7 @@ pub fn run() {
             agents::cli::agents_set_menu_bar,
             agents::cli::agents_set_limit_alerts,
             agents::cli::agents_set_briefing,
+            agents::cli::agents_set_watcher,
             agents::cli::agents_set_reminders,
             agents::briefing::agents_briefing_folder,
             agents::briefing::briefing_status,
