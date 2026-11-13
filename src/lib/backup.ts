@@ -82,9 +82,10 @@ export const TABLES = [
   "tasks",
   "project_tables",
   "resource_projects",
-  // Children of tasks (captures also point at projects and subtasks)
+  // Children of tasks (captures also point at projects and subtasks, task_agents at subtasks)
   "subtasks",
   "captures",
+  "task_agents",
   "time_entries",
   "workload_rows",
   // Invoicing (invoices <-> quotes reference each other circularly; restore

@@ -73,6 +73,7 @@ describe("TABLES", () => {
     // Children of tasks
     "subtasks",
     "captures",
+    "task_agents",
     "time_entries",
     "workload_rows",
     // Invoicing (invoices <-> quotes reference each other; restored under
@@ -176,6 +177,8 @@ describe("TABLES", () => {
       ["projects", "captures"],
       ["tasks", "captures"],
       ["subtasks", "captures"],
+      ["tasks", "task_agents"],
+      ["subtasks", "task_agents"],
       ["tasks", "time_entries"],
       ["tasks", "workload_rows"],
       ["workload_templates", "workload_rows"],
