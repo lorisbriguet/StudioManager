@@ -682,6 +682,102 @@ pub fn record_alone(
     Ok(conn.last_insert_rowid())
 }
 
+/// What merging alone reads again, fresh, just before it acts: the project's switches and check
+/// command, the link's pull request and the Check entry's stored verdict.
+#[derive(Clone, Debug, PartialEq)]
+pub struct MergeFacts {
+    pub merge_alone: bool,
+    pub hub_project: bool,
+    /// None when the project has no check command (an empty one counts as none).
+    pub check_command: Option<String>,
+    /// The entry's link is an open watcher link.
+    pub link_open: bool,
+    /// What the worker reported with `report_result`.
+    pub pr_url: Option<String>,
+    /// The entry's `check_passed`: None when no check ran.
+    pub check_passed: Option<bool>,
+}
+
+/// Reads `MergeFacts` of an entry (its item's project, its link, its stored verdict). None when
+/// the entry or its item is gone.
+pub fn merge_facts(db: &Path, entry_id: i64, kind: ItemKind) -> Result<Option<MergeFacts>, String> {
+    let conn = open(db)?;
+    let from = match kind {
+        ItemKind::Task => "needs_you n JOIN tasks t ON t.id = n.task_id JOIN projects p ON p.id = t.project_id",
+        ItemKind::Subtask => {
+            "needs_you n JOIN subtasks s ON s.id = n.subtask_id JOIN tasks t ON t.id = s.task_id JOIN projects p ON p.id = t.project_id"
+        }
+    };
+    conn.query_row(
+        &format!(
+            "SELECT p.merge_alone, p.hub_project, p.check_command, a.id IS NOT NULL, a.pr_url, n.check_passed
+             FROM {from} LEFT JOIN task_agents a ON a.id = n.link_id AND a.ended_at IS NULL AND a.started_by = 'watcher'
+             WHERE n.id = ?1"
+        ),
+        [entry_id],
+        |r| {
+            let command: Option<String> = r.get(2)?;
+            let url: Option<String> = r.get(4)?;
+            let passed: Option<i64> = r.get(5)?;
+            Ok(MergeFacts {
+                merge_alone: r.get::<_, i64>(0)? != 0,
+                hub_project: r.get::<_, i64>(1)? != 0,
+                check_command: command.filter(|c| !c.trim().is_empty()),
+                link_open: r.get(3)?,
+                pr_url: url.map(|u| u.trim().to_string()).filter(|u| !u.is_empty()),
+                check_passed: passed.map(|p| p != 0),
+            })
+        },
+    )
+    .optional()
+    .map_err(|e| format!("Failed to read the merge facts: {e}"))
+}
+
+/// Records a merge that happened, in one transaction: the item done and its stage cleared (what
+/// Accept in the UI writes: `status = 'done'`, `stage = NULL`, a due date moved to today), the
+/// link ended with `outcome = 'merged'`, and an answered `alone` row decided by the app with
+/// `text` and `reason`. The Check entry is left as it is (answered by the lead, delivered).
+pub fn finish_merged(
+    db: &Path,
+    kind: ItemKind,
+    item_id: i64,
+    link_id: i64,
+    text: &str,
+    reason: &str,
+) -> Result<(), String> {
+    let mut conn = super::super::capture::open(db)?;
+    let tx = conn
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|e| format!("Failed to lock the database: {e}"))?;
+    let e = |e: rusqlite::Error| format!("Failed to record the merge: {e}");
+    let (table, _) = table_of(kind);
+    tx.execute(
+        &format!(
+            "UPDATE {table} SET status = 'done', stage = NULL,
+                    due_date = CASE WHEN due_date IS NOT NULL AND due_date <> date('now', 'localtime') THEN date('now', 'localtime') ELSE due_date END,
+                    updated_at = datetime('now')
+             WHERE id = ?1"
+        ),
+        [item_id],
+    )
+    .map_err(e)?;
+    tx.execute("UPDATE task_agents SET ended_at = datetime('now'), outcome = 'merged' WHERE id = ?1 AND ended_at IS NULL", [link_id])
+        .map_err(e)?;
+    let (task, sub) = match kind {
+        ItemKind::Task => (Some(item_id), None),
+        ItemKind::Subtask => (None, Some(item_id)),
+    };
+    let text: String = text.chars().take(200).collect();
+    let reason: String = reason.chars().take(1000).collect();
+    tx.execute(
+        "INSERT INTO needs_you (kind, task_id, subtask_id, link_id, title, status, decided_by, reason, answered_at)
+         VALUES ('alone', ?1, ?2, ?3, ?4, 'answered', 'app', ?5, datetime('now'))",
+        params![task, sub, link_id, text, reason],
+    )
+    .map_err(e)?;
+    tx.commit().map_err(e)
+}
+
 /// What a finished item tells the check: its title, the result its worker reported and the
 /// project's check command.
 #[derive(Clone, Debug, PartialEq)]

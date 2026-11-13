@@ -10,12 +10,17 @@
 //! - The session counter (`question_sessions` at most 3, `check_sessions` at most 2 per link) is
 //!   bumped and the entry set to `running` in one transaction BEFORE `claude` is started. A start
 //!   that fails at once leaves the entry `skipped` and the counter spent.
-//! - Nothing here merges anything. A check the lead would accept goes back to the owner open,
-//!   with "The lead would accept: ...".
-//! - The only agent this module stops is the lead session the watcher started; it removes none.
+//! - A check the lead would accept is merged only by `accept`: the project must allow merging
+//!   alone, the change be small and checked, the check pass again on this very commit, the gate
+//!   still be open, and `gh pr merge` runs once, never retried (see `accept`). Without that the
+//!   entry goes back to the owner open, with "The lead would accept: ..." (merging alone off) or
+//!   "The lead would accept; not merged: ...".
+//! - The agents this module stops are the lead session the watcher started and, after a merge, the
+//!   worker of the merged item; it removes none, and deletes no branch, worktree or file.
 
 use super::budget::Budget;
-use super::check::{find_agent, LIST_MAX_AGE_MS};
+use super::check::{diff_facts, find_agent, run_check, LIST_MAX_AGE_MS};
+use super::merge::{self, MergeRules, Refusal};
 use super::start::{same_dir, Env, WatcherState};
 use super::store::{self, Counter, LeadEntry, WatcherLink};
 use super::{Deps, LockState, Memory, Paused, Pass};
@@ -25,7 +30,7 @@ use crate::agents::briefing::{
     in_mode, list_is_fresh, to_json, verdict as brief_verdict, write_if_changed, BriefRun, Verdict, DENIED_TOOLS, LISTED_GRACE_MS,
     MCP_FILE, RUN_LIMIT_MS, TOOL_PREFIX,
 };
-use crate::agents::model::{Agent, Kind};
+use crate::agents::model::{Agent, Group, Kind};
 use crate::agents::projects::is_trusted;
 use crate::agents::validate::normalise_message;
 use serde::{Deserialize, Serialize};
@@ -427,7 +432,8 @@ enum Action {
     Answer(String),
     /// A check to send back, with the notes.
     SendBack(String),
-    /// A check the lead would accept: nothing merges; the owner decides.
+    /// A check the lead would accept: the app merges it alone only when the project allows it and
+    /// every rule holds (`accept`); otherwise the owner decides.
     Accept,
     /// Something the app does not understand: the owner reads it.
     Unclear,
@@ -464,17 +470,147 @@ fn reopen_with(db: &Path, entry: i64, text: &str, clear_reason: bool) -> bool {
     }
 }
 
+/// What the owner reads when the app does not merge a check the lead would accept; `why` is the
+/// first reason that applied.
+fn not_merged(db: &Path, entry: i64, why: &str, reason: &str) -> bool {
+    reopen_with(db, entry, &format!("The lead would accept; not merged: {why}. The lead's reason: {reason}"), true)
+}
+
+/// The first line of a failure, as the owner reads it.
+fn one_line(e: &str) -> String {
+    e.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or("it failed").chars().take(160).collect()
+}
+
+/// The lead accepted a Check entry: the app decides alone whether to merge, and merges only when
+/// every step holds. Every step that fails puts the entry back to open for the owner with the
+/// reason, and nothing is merged. True when something was written (or merged); false when nothing
+/// was (a gate closed meanwhile or a failed save: the entry is looked at again on a later pass).
+///
+/// In order: the cheap refusals, read fresh from the database and asking no process (a hub's
+/// project, merging alone off, no open link, no worktree or base, no check command, a check that
+/// did not pass, no pull request url, no usage budget); then the facts from `git` and `gh pr
+/// view` through `merge::may_merge`; then the check command run again on this very commit (the
+/// entry does not say which commit the first check saw), with HEAD and the worktree unchanged
+/// after it; then the gate read again, because the check can take ten minutes; then the entry's
+/// delivery is claimed (so a crash never merges twice) and `gh pr merge` runs once. A failed merge
+/// is never retried: the entry is open again and is not carried out again.
+///
+/// After a merge the item is done and its link ended in one transaction, an `alone` row records
+/// it, and a worker still listed and not done is stopped. Nothing here deletes a branch, a
+/// worktree, an agent or a file.
+fn accept(env: &Env, d: &Deps, budget: &Budget, link: Option<&WatcherLink>, db: &Path, e: &LeadEntry, reason: &str) -> bool {
+    let no = |why: &str| not_merged(db, e.id, why, reason);
+    let facts = match store::merge_facts(db, e.id, e.item_kind) {
+        Ok(Some(f)) => f,
+        Ok(None) => return no("the entry or its item is gone"),
+        Err(err) => return no(&one_line(&err)),
+    };
+    if facts.hub_project {
+        return no(&Refusal::HubProject.text());
+    }
+    if !facts.merge_alone {
+        return reopen_with(db, e.id, &format!("The lead would accept: {reason}"), true);
+    }
+    let Some(link) = link.filter(|_| facts.link_open) else { return no("the entry has no open watcher link") };
+    let (Some(worktree), Some(base_ref)) = (link.worktree.as_deref().filter(|w| !w.is_empty()), link.base_ref.as_deref()) else {
+        return no("the worker has no worktree or no base branch");
+    };
+    let Some(base_branch) = base_ref.strip_prefix("origin/").filter(|b| !b.is_empty()) else {
+        return no("the base branch is not on origin");
+    };
+    let Some(command) = facts.check_command.as_deref() else { return no("the project has no check command") };
+    if facts.check_passed != Some(true) {
+        return no(&Refusal::CheckNotPassed.text());
+    }
+    let Some(url) = facts.pr_url.as_deref() else { return no("the worker reported no pull request url") };
+    // A merge alone needs the same usage state as typing a lead's answer.
+    if *budget != Budget::Ok {
+        return no("the usage budget does not allow it now");
+    }
+    // Read-only facts.
+    let head = match merge::head_of(env.git, worktree) {
+        Ok(h) => h,
+        Err(err) => return no(&one_line(&err)),
+    };
+    let diff = match diff_facts(env.git, worktree, base_ref) {
+        Ok(f) => f,
+        Err(err) => return no(&one_line(&err)),
+    };
+    let pr = match merge::pr_facts(env.git, worktree, url) {
+        Ok(p) => p,
+        Err(err) => return no(&one_line(&err)),
+    };
+    let rules = MergeRules { merge_alone: true, hub_project: false, check_passed: facts.check_passed, lead_accepts: true };
+    if let Err(refusal) = merge::may_merge(&rules, &diff, &pr, base_branch, &head) {
+        return no(&refusal.text());
+    }
+    let lines = diff.lines.unwrap_or_default();
+    // The check again, on this head: the entry does not store the commit the first check ran on.
+    if !run_check(command, worktree, &(env.path_env)()).passed {
+        return no("the check did not pass when run again on the commit to merge");
+    }
+    let unchanged = merge::head_of(env.git, worktree).is_ok_and(|h| h == head)
+        && diff_facts(env.git, worktree, base_ref).is_ok_and(|f| f.clean && f.complete);
+    if !unchanged {
+        return no("the worktree changed during the check");
+    }
+    // The check can take ten minutes: with the gate closed meanwhile (demo, a switch, a mode) the
+    // entry stays as it is and a later pass looks at it again.
+    if d.demo || super::settings_and_gate(d, false).1.is_some() {
+        return false;
+    }
+    // The delivery is marked before the merge, so a crash never merges twice.
+    let claimed = {
+        let _shared = crate::org_shared();
+        store::claim_delivery(db, e.id)
+    };
+    match claimed {
+        Ok(true) => {}
+        Ok(false) => return false,
+        Err(err) => {
+            warn("could not save the decision", &err);
+            return false;
+        }
+    }
+    if let Err(err) = merge::merge(env.git, worktree, url, &head) {
+        return no(&format!("the merge failed: {}", one_line(&err)));
+    }
+    let short = &head[..7];
+    let why = format!(
+        "The lead accepted the change ({reason}); the project allows merging alone; merged pull request {url} at {short}."
+    );
+    let recorded = {
+        let _shared = crate::org_shared();
+        store::finish_merged(db, link.kind, link.item_id, link.id, &format!("Merged: check passed, {lines} lines"), &why)
+    };
+    // The merge happened: a failed write is a warning, never a reason to merge again.
+    if let Err(err) = recorded {
+        warn("merged, but could not record it", &err);
+    }
+    // A worker still listed and not done is stopped, never deleted; a failed stop is a warning.
+    let listed = d.listed_at.is_some_and(|t| d.now - t <= LIST_MAX_AGE_MS);
+    if listed && find_agent(d.agents, link).is_some_and(|a| a.group != Group::Done) {
+        if let Err(err) = (env.cli)().and_then(|cli| actions::stop(&*cli, &actions::home_dir(), &link.short_id)) {
+            warn("could not stop the worker after the merge", &err);
+        }
+    }
+    true
+}
+
 /// Carries out what the lead wrote on one resolved entry (`lead_state = 'done'`, answered by the
-/// lead, not delivered). True when something was written or typed. Nothing is merged here.
+/// lead, not delivered). True when something was written or typed.
 ///
 /// - A question: "Answer: <answer> (<reason>)" is typed into the worker. The delivery is marked
 ///   first, in its own write, so a crash in between never types it twice; a refused send puts the
 ///   entry back to open with the answer as a recommendation.
 /// - A check sent back (once per link): the count, the cleared check and the Running stage are
 ///   written in one transaction, then the notes are typed.
-/// - A check the lead would accept, a second send back, or anything the app cannot do (no budget,
-///   no listed agent): the entry goes back to open for the owner with the lead's words as the
-///   recommendation.
+/// - A check the lead would accept: `accept` decides alone whether to merge (a project that
+///   merges alone, a small checked change, a check run again, the gate still open) and merges at
+///   most once; with merging alone off (the default) nothing runs and the entry goes back to open
+///   with "The lead would accept: ...". Any refusal or a failed merge also goes back to open.
+/// - A second send back, or anything the app cannot do (no budget, no listed agent): the entry
+///   goes back to open for the owner with the lead's words as the recommendation.
 pub fn act_on_resolution(
     env: &Env,
     d: &Deps,
@@ -487,8 +623,9 @@ pub fn act_on_resolution(
     let reason = e.reason.clone().unwrap_or_default();
     let answer = e.answer.clone().unwrap_or_default();
     let action = action_of(e);
+    let link = links.iter().find(|(_, l)| l.org == org && Some(l.id) == e.link_id).map(|(_, l)| l);
     let (text, notes) = match &action {
-        Action::Accept => return reopen_with(db, e.id, &format!("The lead would accept: {reason}"), true),
+        Action::Accept => return accept(env, d, budget, link, db, e, &reason),
         Action::Unclear => return reopen(db, e.id, &format!("From the lead: {answer}")),
         Action::Answer(a) => (clean(&format!("Answer: {a} ({reason})")), None),
         Action::SendBack(n) => {
@@ -499,7 +636,6 @@ pub fn act_on_resolution(
         Some(n) => format!("From the lead: send back: {n}"),
         None => format!("From the lead: {answer}"),
     };
-    let link = links.iter().find(|(_, l)| l.org == org && Some(l.id) == e.link_id).map(|(_, l)| l);
     let Some(link) = link else { return reopen(db, e.id, &from_lead) };
     // Typing into a worker makes it spend usage: not over the budget, and the owner sees it.
     if *budget != Budget::Ok || normalise_message(&text).is_none() {

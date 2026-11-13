@@ -3,16 +3,12 @@
 //! caller already holds; `pr_facts` and `merge` talk to `gh` through the same `Git` trait as every
 //! other call here (argv, never a shell). Nothing here deletes a branch, a worktree or a file,
 //! and nothing runs `git push`, `git checkout`, `git reset` or any command that changes the
-//! repository other than the single `gh pr merge`. The wiring into the watcher comes with the
-//! next task. Plan: docs/superpowers/plans/2026-11-13-agent-orchestrator-3-watcher-lead.md
+//! repository other than the single `gh pr merge`. `lead::accept` wires it to the lead's "accept". Plan: docs/superpowers/plans/2026-11-13-agent-orchestrator-3-watcher-lead.md
 //! (Task 13).
 //!
 //! The pull request url comes from a worker, so it is checked before any `gh` call: only
 //! `https://github.com/<owner>/<repo>/pull/<n>`, and only for the repository the worktree's
 //! `origin` points at.
-
-// Nothing calls this module yet: the watcher is wired to it in the next task (13b), which removes this.
-#![allow(dead_code)]
 
 use super::check::DiffFacts;
 use super::git::{first_line, git, succeeded, Git};
