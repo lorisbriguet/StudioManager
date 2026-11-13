@@ -86,6 +86,7 @@ export const TABLES = [
   "subtasks",
   "captures",
   "task_agents",
+  "needs_you",
   "time_entries",
   "workload_rows",
   // Invoicing (invoices <-> quotes reference each other circularly; restore

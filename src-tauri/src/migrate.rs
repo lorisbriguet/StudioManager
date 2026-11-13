@@ -33,13 +33,14 @@ pub const MIGRATIONS: &[SqlMigration] = &[
     SqlMigration { version: 15, sql: include_str!("../migrations/015_notification_keys.sql"), columns_if_missing: true },
     SqlMigration { version: 16, sql: include_str!("../migrations/016_captures.sql"), columns_if_missing: true },
     SqlMigration { version: 17, sql: include_str!("../migrations/017_task_agents.sql"), columns_if_missing: true },
+    SqlMigration { version: 18, sql: include_str!("../migrations/018_watcher.sql"), columns_if_missing: true },
 ];
 
 // Only referenced from this module's own tests (as the expected "fully
 // migrated" version); nothing in the production path needs it, since
 // `migrate_db` derives what to apply from `MIGRATIONS` itself.
 #[allow(dead_code)]
-pub const LATEST_VERSION: i64 = 17;
+pub const LATEST_VERSION: i64 = 18;
 
 pub(crate) fn table_exists(conn: &rusqlite::Connection, name: &str) -> Result<bool, String> {
     conn.query_row(
@@ -684,6 +685,10 @@ mod tests {
                     // 017: the task_agents table and the result columns.
                     && !c.starts_with("task_agents.")
                     && !c.starts_with("index idx_task_agents_")
+                    // 018: the needs_you table and the project agent settings.
+                    && !c.starts_with("needs_you.")
+                    && !c.starts_with("index idx_needs_you_")
+                    && !["projects.check_command ", "projects.merge_alone ", "projects.hub_project "].iter().any(|p| c.starts_with(p))
                     && !["tasks.result ", "subtasks.result "].iter().any(|p| c.starts_with(p))
                     && !["tasks.brief ", "tasks.stage ", "subtasks.brief ", "subtasks.stage "].iter().any(|p| c.starts_with(p))
             })
@@ -893,6 +898,99 @@ mod tests {
         migrate_db(&db).unwrap();
         let conn = Connection::open(&db).unwrap();
         let sql = MIGRATIONS.iter().find(|m| m.version == 17).expect("017 listed").sql;
+        assert!(run_skipping_existing_columns(&conn, sql).is_ok());
+        drop(conn);
+        cleanup(&db);
+    }
+
+    #[test]
+    fn m018_adds_needs_you_watcher_columns_and_project_settings() {
+        let db = temp_db("m018");
+        migrate_db(&db).unwrap();
+        let conn = Connection::open(&db).unwrap();
+        conn.execute_batch("PRAGMA foreign_keys = ON").unwrap();
+        assert!(table_exists(&db, "needs_you"));
+        let cols = |t: &str| -> Vec<String> {
+            conn.prepare(&format!("SELECT name FROM pragma_table_info('{t}')"))
+                .unwrap()
+                .query_map([], |r| r.get::<_, String>(0))
+                .unwrap()
+                .map(Result::unwrap)
+                .collect()
+        };
+        for c in [
+            "id", "kind", "task_id", "subtask_id", "link_id", "title", "body", "recommendation",
+            "options", "is_decision", "status", "answer", "decided_by", "reason", "lead_state",
+            "check_passed", "check_output", "change_lines", "touches", "delivered_at",
+            "created_at", "answered_at",
+        ] {
+            assert!(cols("needs_you").contains(&c.to_string()), "needs_you.{c}");
+        }
+        for c in [
+            "started_by", "worktree", "base_ref", "check_state", "resumes", "check_fails",
+            "sent_back", "question_sessions", "check_sessions", "wrap_asked_at",
+        ] {
+            assert!(cols("task_agents").contains(&c.to_string()), "task_agents.{c}");
+        }
+        for c in ["check_command", "merge_alone", "hub_project"] {
+            assert!(cols("projects").contains(&c.to_string()), "projects.{c}");
+        }
+        conn.execute("INSERT INTO clients (id, name) VALUES ('c1', 'Studio A')", []).unwrap();
+        conn.execute("INSERT INTO projects (id, client_id, name) VALUES (1, 'c1', 'Identity')", []).unwrap();
+        let (merge_alone, hub): (i64, i64) = conn
+            .query_row("SELECT merge_alone, hub_project FROM projects WHERE id = 1", [], |r| Ok((r.get(0)?, r.get(1)?)))
+            .unwrap();
+        assert_eq!((merge_alone, hub), (0, 0));
+        conn.execute("INSERT INTO tasks (id, project_id, title) VALUES (5, 1, 'Poster tool')", []).unwrap();
+        conn.execute("INSERT INTO subtasks (id, task_id, title) VALUES (7, 5, 'Contact sheet export')", []).unwrap();
+        conn.execute("INSERT INTO task_agents (task_id, short_id, name) VALUES (5, 'ab12', 'a')", []).unwrap();
+        let link_id: i64 = conn.query_row("SELECT id FROM task_agents", [], |r| r.get(0)).unwrap();
+        let (resumes, sent_back): (i64, i64) = conn
+            .query_row("SELECT resumes, sent_back FROM task_agents", [], |r| Ok((r.get(0)?, r.get(1)?)))
+            .unwrap();
+        assert_eq!((resumes, sent_back), (0, 0));
+        let null = rusqlite::types::Null;
+        let entry = |kind: &str, t: &dyn rusqlite::ToSql, s: &dyn rusqlite::ToSql| {
+            conn.execute(
+                "INSERT INTO needs_you (kind, task_id, subtask_id, title) VALUES (?1, ?2, ?3, 'Q')",
+                rusqlite::params![kind, t, s],
+            )
+        };
+        assert!(entry("decide", &5, &7).is_err(), "both ids refused");
+        assert!(entry("decide", &null, &null).is_err(), "neither id refused");
+        assert!(entry("brief", &5, &null).is_err(), "kind brief refused");
+        entry("decide", &5, &null).unwrap();
+        entry("check", &null, &7).unwrap();
+        entry("alone", &5, &null).unwrap();
+        assert!(
+            conn.execute("INSERT INTO needs_you (kind, task_id, title, status) VALUES ('decide', 5, 'Q', 'closed')", []).is_err(),
+            "status closed refused"
+        );
+        assert!(
+            conn.execute("INSERT INTO needs_you (kind, task_id, title, decided_by) VALUES ('decide', 5, 'Q', 'robot')", []).is_err(),
+            "unknown decided_by refused"
+        );
+        let status: String = conn.query_row("SELECT status FROM needs_you LIMIT 1", [], |r| r.get(0)).unwrap();
+        assert_eq!(status, "open");
+        conn.execute("UPDATE needs_you SET link_id = ?1 WHERE kind = 'decide'", [link_id]).unwrap();
+        conn.execute("DELETE FROM task_agents WHERE id = ?1", [link_id]).unwrap();
+        let kept: i64 = conn
+            .query_row("SELECT COUNT(*) FROM needs_you WHERE kind = 'decide' AND link_id IS NULL", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(kept, 1, "deleting a link keeps the entry, link_id null");
+        conn.execute("DELETE FROM tasks WHERE id = 5", []).unwrap();
+        let n: i64 = conn.query_row("SELECT COUNT(*) FROM needs_you", [], |r| r.get(0)).unwrap();
+        assert_eq!(n, 0, "entries go with the task and its subtasks");
+        drop(conn);
+        cleanup(&db);
+    }
+
+    #[test]
+    fn m018_runs_twice_without_error() {
+        let db = temp_db("m018-twice");
+        migrate_db(&db).unwrap();
+        let conn = Connection::open(&db).unwrap();
+        let sql = MIGRATIONS.iter().find(|m| m.version == 18).expect("018 listed").sql;
         assert!(run_skipping_existing_columns(&conn, sql).is_ok());
         drop(conn);
         cleanup(&db);
