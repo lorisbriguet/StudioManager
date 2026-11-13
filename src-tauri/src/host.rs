@@ -19,6 +19,18 @@ pub fn identifier() -> &'static str {
     IDENTIFIER.get().map(String::as_str).unwrap_or(APP_IDENTIFIER)
 }
 
+/// The dev build started by `npm run dev:test`: its own data folder, Agents available.
+pub const DEV_IDENTIFIER: &str = "ch.studiomanager.dev";
+
+pub fn is_dev_identifier(identifier: &str) -> bool {
+    identifier == DEV_IDENTIFIER
+}
+
+/// Whether the running build is the dev build (for code without the app handle).
+pub fn running_dev() -> bool {
+    is_dev_identifier(identifier())
+}
+
 pub fn is_demo_identifier(identifier: &str) -> bool {
     identifier == crate::agent_access::DEMO_IDENTIFIER
 }
@@ -36,6 +48,14 @@ pub fn running_demo() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_the_dev_identifier_is_the_dev_build() {
+        assert!(is_dev_identifier("ch.studiomanager.dev"));
+        assert!(!is_dev_identifier(APP_IDENTIFIER));
+        assert!(!is_dev_identifier(crate::agent_access::DEMO_IDENTIFIER));
+        assert!(!is_dev_identifier(""));
+    }
 
     #[test]
     fn only_the_demo_identifier_is_the_demo() {

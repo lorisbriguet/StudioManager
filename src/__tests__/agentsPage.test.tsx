@@ -287,6 +287,7 @@ describe("StartAgentForm", () => {
         task: "Fix the login bug",
         model: "sonnet",
         name: "fix-the-login-bug",
+        ownServer: false,
       }),
     );
   });
