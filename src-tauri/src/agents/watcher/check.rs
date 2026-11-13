@@ -141,12 +141,51 @@ pub struct DiffFacts {
     /// The diff text, at most `DIFF_CAP` bytes; starts with `DIFF_CUT_NOTICE` when its beginning
     /// was lost.
     pub head: String,
-    /// Nothing uncommitted in the worktree.
+    /// Nothing uncommitted in the worktree (untracked files count).
     pub clean: bool,
+    /// Paths (or the raw lines that could not be read) of a symlink, a submodule or a mode change
+    /// in the raw diff: merging alone refuses the change (`unusual file`).
+    pub unusual: Vec<String>,
+}
+
+/// The options every `git diff` call here takes: no rename detection, no external diff or text
+/// conversion a worker's config could name, submodules never hidden.
+const DIFF_SAFE: [&str; 4] = ["--no-renames", "--no-ext-diff", "--no-textconv", "--ignore-submodules=none"];
+
+/// What a plain file in the raw diff may look like: added as a regular file, modified without a
+/// mode change, or deleted. Anything else (a symlink `120000`, a submodule `160000`, an executable
+/// bit changed or added) is unusual.
+fn raw_mode_ok(old: &str, new: &str) -> bool {
+    matches!((old, new), ("000000", "100644") | ("100644", "100644") | (_, "000000"))
+}
+
+/// The unusual entries of `git diff --raw` output: `:<old mode> <new mode> <old sha> <new sha> <status>\t<path>`.
+/// A line that does not read like that is unusual too. Returns them and the number of lines.
+fn raw_unusual(raw: &str) -> (Vec<String>, usize) {
+    let (mut bad, mut n) = (vec![], 0);
+    for l in raw.lines().filter(|l| !l.trim().is_empty()) {
+        n += 1;
+        let parsed = l.strip_prefix(':').and_then(|rest| rest.split_once('\t')).and_then(|(meta, path)| {
+            let f: Vec<&str> = meta.split_whitespace().collect();
+            let mode = |m: &str| m.len() == 6 && m.bytes().all(|b| b.is_ascii_digit());
+            (f.len() == 5 && mode(f[0]) && mode(f[1])).then(|| (f[0].to_string(), f[1].to_string(), path.to_string()))
+        });
+        match parsed {
+            Some((old, new, path)) => {
+                if !raw_mode_ok(&old, &new) {
+                    bad.push(path);
+                }
+            }
+            None => bad.push(l.to_string()),
+        }
+    }
+    (bad, n)
 }
 
 /// What the worktree changed against `base`: `git merge-base <base> HEAD`, then `--numstat`,
-/// `--name-status --no-renames` and the diff itself against it. Argv, never a shell.
+/// `--name-status`, `--raw` (the modes) and the diff itself against it, with the options of
+/// `DIFF_SAFE`. Argv, never a shell. The worktree is clean when `git status` lists nothing, not
+/// even an untracked file or a submodule's change.
 pub fn diff_facts(g: &dyn Git, worktree: &str, base: &str) -> Result<DiffFacts, String> {
     if !git::ref_ok(base) {
         return Err("Invalid base branch".to_string());
@@ -161,6 +200,7 @@ pub fn diff_facts(g: &dyn Git, worktree: &str, base: &str) -> Result<DiffFacts, 
     // at a character): an output that long may have lost its beginning.
     let run = |a: &[&str], what: &str| -> Result<(String, bool), String> {
         let mut args: Vec<&str> = a.to_vec();
+        args.extend(DIFF_SAFE);
         args.push(&mb);
         args.push("--");
         let o = git::git(g, worktree, &args);
@@ -171,11 +211,17 @@ pub fn diff_facts(g: &dyn Git, worktree: &str, base: &str) -> Result<DiffFacts, 
             Err(git::first_line(&o, what))
         }
     };
-    let (numstat, numstat_cut) = run(&["diff", "--numstat", "--no-renames"], "git diff failed")?;
-    let (names, names_cut) = run(&["diff", "--name-status", "--no-renames"], "git diff failed")?;
-    let (text, text_cut) = run(&["diff", "--no-ext-diff", "--no-color", "--no-renames"], "git diff failed")?;
-    let status = git::git(g, worktree, &["status", "--porcelain"]);
-    let complete = !numstat_cut && !names_cut;
+    let (numstat, numstat_cut) = run(&["diff", "--numstat"], "git diff failed")?;
+    let (names, names_cut) = run(&["diff", "--name-status"], "git diff failed")?;
+    let (raw, raw_cut) = run(&["diff", "--raw"], "git diff failed")?;
+    let (text, text_cut) = run(&["diff", "--no-color"], "git diff failed")?;
+    let status = git::git(g, worktree, &["status", "--porcelain", "--untracked-files=all", "--ignore-submodules=none"]);
+    let complete = !numstat_cut && !names_cut && !raw_cut;
+    let (mut unusual, raw_lines) = raw_unusual(&raw);
+    // The raw diff must list the files the name-status lists, or its modes say nothing about them.
+    if raw_lines != names.lines().filter(|l| !l.trim().is_empty()).count() {
+        unusual.push("the raw diff and the name-status list differ".to_string());
+    }
     let mut lines = if complete { Some(0i64) } else { None };
     for l in numstat.lines() {
         let mut f = l.split('\t');
@@ -202,7 +248,7 @@ pub fn diff_facts(g: &dyn Git, worktree: &str, base: &str) -> Result<DiffFacts, 
     } else {
         first_bytes(&text, DIFF_CAP).to_string()
     };
-    Ok(DiffFacts { lines, paths, deleted, complete, head, clean: git::succeeded(&status) && status.tail.trim().is_empty() })
+    Ok(DiffFacts { lines, paths, deleted, complete, head, clean: git::succeeded(&status) && status.tail.trim().is_empty(), unusual })
 }
 
 /// `<app data>/lead/checks/<org id>-<entry id>.diff`: the file `get_needs_you` of the MCP server
@@ -219,39 +265,42 @@ fn write_diff(app_dir: &Path, org: &str, entry: i64, text: &str) -> Result<(), S
     write_atomic(&path, first_bytes(text, DIFF_CAP))
 }
 
-/// Package and lock files: a change to one is a change of dependencies.
-fn is_dependency_file(name: &str) -> bool {
-    const FILES: [&str; 28] = [
-        "package.json",
-        "package-lock.json",
-        "npm-shrinkwrap.json",
-        "yarn.lock",
-        "pnpm-lock.yaml",
-        "bun.lock",
-        "bun.lockb",
-        "Cargo.toml",
-        "Cargo.lock",
-        "pyproject.toml",
-        "poetry.lock",
-        "Pipfile",
-        "Pipfile.lock",
-        "uv.lock",
-        "setup.py",
-        "Gemfile",
-        "Gemfile.lock",
-        "go.mod",
-        "go.sum",
-        "composer.json",
-        "composer.lock",
-        "Podfile",
-        "Podfile.lock",
-        "Package.swift",
-        "Package.resolved",
-        "pubspec.yaml",
-        "pubspec.lock",
-        "mix.exs",
-    ];
-    FILES.contains(&name) || (name.starts_with("requirements") && name.ends_with(".txt"))
+/// Package and lock files: a change to one is a change of dependencies. The one list, shared with
+/// `merge::touches`.
+pub(super) const DEPENDENCY_FILES: [&str; 28] = [
+    "package.json",
+    "package-lock.json",
+    "npm-shrinkwrap.json",
+    "yarn.lock",
+    "pnpm-lock.yaml",
+    "bun.lock",
+    "bun.lockb",
+    "Cargo.toml",
+    "Cargo.lock",
+    "pyproject.toml",
+    "poetry.lock",
+    "Pipfile",
+    "Pipfile.lock",
+    "uv.lock",
+    "setup.py",
+    "Gemfile",
+    "Gemfile.lock",
+    "go.mod",
+    "go.sum",
+    "composer.json",
+    "composer.lock",
+    "Podfile",
+    "Podfile.lock",
+    "Package.swift",
+    "Package.resolved",
+    "pubspec.yaml",
+    "pubspec.lock",
+    "mix.exs",
+];
+
+/// Whether `name` (a file name, no folder) is a package or lock file.
+pub(super) fn is_dependency_file(name: &str) -> bool {
+    DEPENDENCY_FILES.contains(&name) || (name.starts_with("requirements") && name.ends_with(".txt"))
 }
 
 /// The always-asks rules a change touches, from the paths of the diff and the files it deletes:
@@ -565,9 +614,9 @@ mod tests {
     fn numstat_git(numstat: &'static str, diff: String) -> FakeGit {
         FakeGit::new(move |c| match c {
             "merge-base origin/main HEAD" => out(0, "abc123\n"),
-            "diff --numstat --no-renames abc123 --" => out(0, numstat),
-            "diff --name-status --no-renames abc123 --" => out(0, "M\ta.txt\nD\tb.txt\n"),
-            "diff --no-ext-diff --no-color --no-renames abc123 --" => out(0, &diff),
+            "diff --numstat --no-renames --no-ext-diff --no-textconv --ignore-submodules=none abc123 --" => out(0, numstat),
+            "diff --name-status --no-renames --no-ext-diff --no-textconv --ignore-submodules=none abc123 --" => out(0, "M\ta.txt\nD\tb.txt\n"),
+            "diff --no-color --no-renames --no-ext-diff --no-textconv --ignore-submodules=none abc123 --" => out(0, &diff),
             _ => out(0, ""),
         })
     }
@@ -738,7 +787,7 @@ mod tests {
         let cut = long[long.len() - TAIL_BYTES..].to_string();
         let g = FakeGit::new(move |c| match c {
             "merge-base origin/main HEAD" => out(0, "abc123\n"),
-            "diff --numstat --no-renames abc123 --" => out(0, &format!("3\t4\tx\n{cut}")),
+            "diff --numstat --no-renames --no-ext-diff --no-textconv --ignore-submodules=none abc123 --" => out(0, &format!("3\t4\tx\n{cut}")),
             _ => out(0, ""),
         });
         let facts = diff_facts(&g, "/x", "origin/main").unwrap();
@@ -748,7 +797,7 @@ mod tests {
         let tail = tail[tail.len() - TAIL_BYTES..].to_string();
         f.git = FakeGit::new(move |c| match c {
             "merge-base origin/main HEAD" => out(0, "abc123\n"),
-            "diff --numstat --no-renames abc123 --" => out(0, &tail),
+            "diff --numstat --no-renames --no-ext-diff --no-textconv --ignore-submodules=none abc123 --" => out(0, &tail),
             _ => out(0, "M\ta.txt\n"),
         });
         go(&f, DONE, &mut Memory::default(), 10);
@@ -758,14 +807,87 @@ mod tests {
         assert_eq!(one::<i64>(&f.db, "SELECT check_passed FROM needs_you"), 1);
     }
 
+    const SAFE: &str = "--no-renames --no-ext-diff --no-textconv --ignore-submodules=none";
+
+    #[test]
+    fn the_diff_calls_ignore_a_workers_config_and_hide_no_submodule() {
+        let g = numstat_git("1\t0\ta.txt\n", "+x\n".to_string());
+        diff_facts(&g, "/x", "origin/main").unwrap();
+        let calls = g.commands();
+        for want in [
+            format!("diff --numstat {SAFE} abc123 --"),
+            format!("diff --name-status {SAFE} abc123 --"),
+            format!("diff --raw {SAFE} abc123 --"),
+            format!("diff --no-color {SAFE} abc123 --"),
+            "status --porcelain --untracked-files=all --ignore-submodules=none".to_string(),
+        ] {
+            assert!(calls.contains(&want), "{want} in {calls:?}");
+        }
+        for c in calls.iter().filter(|c| c.starts_with("diff")) {
+            assert!(c.contains("--no-ext-diff") && c.contains("--no-textconv") && c.contains("--ignore-submodules=none"), "{c}");
+        }
+    }
+
+    fn raw_git(raw: &'static str) -> FakeGit {
+        FakeGit::new(move |c| match c {
+            "merge-base origin/main HEAD" => out(0, "abc123\n"),
+            c if c == format!("diff --numstat {SAFE} abc123 --") => out(0, "1\t0\ta.txt\n"),
+            c if c == format!("diff --name-status {SAFE} abc123 --") => out(0, "M\ta.txt\n"),
+            c if c == format!("diff --raw {SAFE} abc123 --") => out(0, raw),
+            _ => out(0, ""),
+        })
+    }
+
+    #[test]
+    fn a_symlink_a_submodule_or_a_mode_change_is_an_unusual_file() {
+        let usual = [
+            ":100644 100644 1111111 2222222 M\ta.txt\n",
+            ":000000 100644 0000000 2222222 A\ta.txt\n",
+            ":100644 000000 1111111 0000000 D\ta.txt\n",
+        ];
+        for raw in usual {
+            let f = diff_facts(&raw_git(raw), "/x", "origin/main").unwrap();
+            assert!(f.unusual.is_empty(), "{raw}: {:?}", f.unusual);
+        }
+        let unusual = [
+            ":000000 120000 0000000 2222222 A\ta.txt\n",
+            ":100644 120000 1111111 2222222 T\ta.txt\n",
+            ":120000 120000 1111111 2222222 M\ta.txt\n",
+            ":160000 160000 1111111 2222222 M\ta.txt\n",
+            ":000000 160000 0000000 2222222 A\ta.txt\n",
+            ":100644 100755 1111111 2222222 M\ta.txt\n",
+            ":000000 100755 0000000 2222222 A\ta.txt\n",
+            ":100755 100644 1111111 2222222 M\ta.txt\n",
+            // Not a raw line at all, or one that cannot be read.
+            "diff\n",
+            ":100644 100644 1111111 M\ta.txt\n",
+            ":10064 100644 1111111 2222222 M\ta.txt\n",
+            "",
+        ];
+        for raw in unusual {
+            let f = diff_facts(&raw_git(raw), "/x", "origin/main").unwrap();
+            assert!(!f.unusual.is_empty(), "{raw:?} should be unusual");
+        }
+        let f = diff_facts(&raw_git(":100644 120000 1111111 2222222 T\ta.txt\n"), "/x", "origin/main").unwrap();
+        assert_eq!(f.unusual, vec!["a.txt".to_string()]);
+    }
+
+    #[test]
+    fn a_cut_raw_output_makes_the_facts_incomplete() {
+        let raw = ":100644 100644 1111111 2222222 M\tsome/path/to/a/file.txt\n".repeat(2_000);
+        let raw: &'static str = Box::leak(raw[raw.len() - TAIL_BYTES..].to_string().into_boxed_str());
+        let f = diff_facts(&raw_git(raw), "/x", "origin/main").unwrap();
+        assert_eq!((f.complete, f.lines), (false, None));
+    }
+
     #[test]
     fn a_cut_name_status_makes_the_facts_incomplete() {
         let names = "M\tsome/path/to/a/file.txt\n".repeat(4_000);
         let names = names[names.len() - TAIL_BYTES..].to_string();
         let g = FakeGit::new(move |c| match c {
             "merge-base origin/main HEAD" => out(0, "abc123\n"),
-            "diff --name-status --no-renames abc123 --" => out(0, &names),
-            "diff --numstat --no-renames abc123 --" => out(0, "1\t0\ta.txt\n"),
+            "diff --name-status --no-renames --no-ext-diff --no-textconv --ignore-submodules=none abc123 --" => out(0, &names),
+            "diff --numstat --no-renames --no-ext-diff --no-textconv --ignore-submodules=none abc123 --" => out(0, "1\t0\ta.txt\n"),
             _ => out(0, ""),
         });
         let facts = diff_facts(&g, "/x", "origin/main").unwrap();
@@ -847,8 +969,8 @@ mod tests {
         let mut f = fx("touchesmig", Some("true"));
         f.git = FakeGit::new(move |c| match c {
             "merge-base origin/main HEAD" => out(0, "abc123\n"),
-            "diff --numstat --no-renames abc123 --" => out(0, "5\t0\tdb/migrations/019_x.sql\n1\t1\tCargo.lock\n0\t4\tb.txt\n"),
-            "diff --name-status --no-renames abc123 --" => out(0, "A\tdb/migrations/019_x.sql\nM\tCargo.lock\nD\tb.txt\n"),
+            "diff --numstat --no-renames --no-ext-diff --no-textconv --ignore-submodules=none abc123 --" => out(0, "5\t0\tdb/migrations/019_x.sql\n1\t1\tCargo.lock\n0\t4\tb.txt\n"),
+            "diff --name-status --no-renames --no-ext-diff --no-textconv --ignore-submodules=none abc123 --" => out(0, "A\tdb/migrations/019_x.sql\nM\tCargo.lock\nD\tb.txt\n"),
             _ => out(0, "diff\n"),
         });
         go(&f, DONE, &mut Memory::default(), 10);
@@ -858,8 +980,8 @@ mod tests {
         let mut g = g;
         g.git = FakeGit::new(move |c| match c {
             "merge-base origin/main HEAD" => out(0, "abc123\n"),
-            "diff --numstat --no-renames abc123 --" => out(0, "1\t0\ta.txt\n"),
-            "diff --name-status --no-renames abc123 --" => out(0, "M\ta.txt\n"),
+            "diff --numstat --no-renames --no-ext-diff --no-textconv --ignore-submodules=none abc123 --" => out(0, "1\t0\ta.txt\n"),
+            "diff --name-status --no-renames --no-ext-diff --no-textconv --ignore-submodules=none abc123 --" => out(0, "M\ta.txt\n"),
             _ => out(0, "diff\n"),
         });
         go(&g, DONE, &mut Memory::default(), 10);

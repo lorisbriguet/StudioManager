@@ -1,6 +1,6 @@
 //! Lead sessions: a short Opus session that reads one entry waiting for the lead, a question a
 //! worker asked or finished work, and answers it through three MCP tools (`resolve`, `hand_over`;
-//! `get_needs_you` to read). The app then carries out what the lead wrote (`act_on_resolution`).
+//! `get_needs_you` to read). The app then carries out what the lead wrote (`act`).
 //! Plan: docs/superpowers/plans/2026-11-13-agent-orchestrator-3-watcher-lead.md (Task 12).
 //!
 //! Limits, each fail closed:
@@ -22,7 +22,7 @@ use super::budget::Budget;
 use super::check::{diff_facts, find_agent, run_check, LIST_MAX_AGE_MS};
 use super::merge::{self, MergeRules, Refusal};
 use super::start::{same_dir, Env, WatcherState};
-use super::store::{self, Counter, LeadEntry, WatcherLink};
+use super::store::{self, Counter, LeadEntry, MergeFacts, WatcherLink};
 use super::{Deps, LockState, Memory, Paused, Pass};
 use crate::agent_access::read_access;
 use crate::agents::actions;
@@ -481,26 +481,69 @@ fn one_line(e: &str) -> String {
     e.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or("it failed").chars().take(160).collect()
 }
 
+/// What carrying out one entry did: whether something was written (or merged) and whether the
+/// project's check command was run (a pass runs at most one check, see `carry_out`).
+#[derive(Clone, Copy, Debug, Default)]
+struct Acted {
+    written: bool,
+    ran_check: bool,
+}
+
+/// The entry's merge facts, read fresh and under the shared lock.
+fn read_facts(db: &Path, e: &LeadEntry) -> Result<Option<MergeFacts>, String> {
+    let _shared = crate::org_shared();
+    store::merge_facts(db, e.id, e.item_kind)
+}
+
 /// The lead accepted a Check entry: the app decides alone whether to merge, and merges only when
 /// every step holds. Every step that fails puts the entry back to open for the owner with the
-/// reason, and nothing is merged. True when something was written (or merged); false when nothing
-/// was (a gate closed meanwhile or a failed save: the entry is looked at again on a later pass).
+/// reason, and nothing is merged. `written` is true when something was written (or merged), false
+/// when nothing was (a gate closed meanwhile or a failed save: the entry is looked at again on a
+/// later pass); `ran_check` is true once the check command was run.
 ///
-/// In order: the cheap refusals, read fresh from the database and asking no process (a hub's
-/// project, merging alone off, no open link, no worktree or base, no check command, a check that
-/// did not pass, no pull request url, no usage budget); then the facts from `git` and `gh pr
-/// view` through `merge::may_merge`; then the check command run again on this very commit (the
-/// entry does not say which commit the first check saw), with HEAD and the worktree unchanged
-/// after it and the pull request read again and asked the same rules; then the gate read again, because the check can take ten minutes; then the entry's
-/// delivery is claimed (so a crash never merges twice) and `gh pr merge` runs once. A failed merge
-/// is never retried: the entry is open again and is not carried out again.
+/// In order:
+/// - the cheap refusals, read fresh from the database and asking no process: a hub's project,
+///   merging alone off, no open link, a link for another item, no worktree or base, no check
+///   command, a check that did not pass, no pull request url, no project folder, no usage budget;
+/// - the url against the `origin` of the project folder and of the worktree;
+/// - the facts from `git` and `gh pr view` through `merge::may_merge` (GitHub's own line count,
+///   file count and paths must be the measured ones);
+/// - the check command run again on this very commit (the entry does not say which commit the
+///   first check saw), with HEAD and the worktree unchanged after it and the pull request read
+///   again and asked the same rules;
+/// - the database and the agent access read again, then the gate, because the check can take ten
+///   minutes (a switch turned off, a hub ticked or a link ended meanwhile stops the merge);
+/// - the delivery is claimed together with the `alone` row "Merging pull request ..." (so a crash
+///   never merges twice and always leaves the decision listed), and `gh pr merge` runs once.
 ///
-/// After a merge the item is done and its link ended in one transaction, an `alone` row records
-/// it, and a worker still listed and not done is stopped. Nothing here deletes a branch, a
-/// worktree, an agent or a file.
-fn accept(env: &Env, d: &Deps, budget: &Budget, link: Option<&WatcherLink>, db: &Path, e: &LeadEntry, reason: &str) -> bool {
+/// The pull request is read once more after the merge, whatever `gh` said (a timeout or an error
+/// can follow a merge GitHub did; a merge queue answers before merging): `MERGED` is a merge,
+/// `OPEN` after an error is a failed merge, anything else (still `OPEN` after success, unreadable)
+/// goes to the owner as "may have happened or is queued" and the item is not marked done. The
+/// `alone` row ends as "Merged", "Not merged" or "May be merged". A failed merge is never
+/// retried: the entry is open again and is not carried out again.
+///
+/// After a merge the item is done and its link ended in one transaction, and a worker still
+/// listed and not done is stopped. Nothing here deletes a branch, a worktree, an agent or a file.
+fn accept(env: &Env, d: &Deps, budget: &Budget, link: Option<&WatcherLink>, db: &Path, e: &LeadEntry, reason: &str) -> Acted {
+    let mut ran = false;
+    let written = accept_steps(env, d, budget, link, db, e, reason, &mut ran);
+    Acted { written, ran_check: ran }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn accept_steps(
+    env: &Env,
+    d: &Deps,
+    budget: &Budget,
+    link: Option<&WatcherLink>,
+    db: &Path,
+    e: &LeadEntry,
+    reason: &str,
+    ran: &mut bool,
+) -> bool {
     let no = |why: &str| not_merged(db, e.id, why, reason);
-    let facts = match store::merge_facts(db, e.id, e.item_kind) {
+    let facts = match read_facts(db, e) {
         Ok(Some(f)) => f,
         Ok(None) => return no("the entry or its item is gone"),
         Err(err) => return no(&one_line(&err)),
@@ -512,6 +555,9 @@ fn accept(env: &Env, d: &Deps, budget: &Budget, link: Option<&WatcherLink>, db: 
         return reopen_with(db, e.id, &format!("The lead would accept: {reason}"), true);
     }
     let Some(link) = link.filter(|_| facts.link_open) else { return no("the entry has no open watcher link") };
+    if link.kind != e.item_kind || link.item_id != e.item_id {
+        return no("the entry and its link are not for the same item");
+    }
     let (Some(worktree), Some(base_ref)) = (link.worktree.as_deref().filter(|w| !w.is_empty()), link.base_ref.as_deref()) else {
         return no("the worker has no worktree or no base branch");
     };
@@ -523,9 +569,15 @@ fn accept(env: &Env, d: &Deps, budget: &Budget, link: Option<&WatcherLink>, db: 
         return no(&Refusal::CheckNotPassed.text());
     }
     let Some(url) = facts.pr_url.as_deref() else { return no("the worker reported no pull request url") };
+    let Some(folder) = facts.folder_path.as_deref() else { return no("the project has no folder") };
     // A merge alone needs the same usage state as typing a lead's answer.
     if *budget != Budget::Ok {
         return no("the usage budget does not allow it now");
+    }
+    // The url must name the repository the project folder points at (the worktree is asked too, in
+    // `pr_facts`): the same git config, so a guard against mistakes only.
+    if let Err(err) = merge::check_url(env.git, folder, url) {
+        return no(&one_line(&err));
     }
     // Read-only facts.
     let head = match merge::head_of(env.git, worktree) {
@@ -545,6 +597,7 @@ fn accept(env: &Env, d: &Deps, budget: &Budget, link: Option<&WatcherLink>, db: 
         return no(&refusal.text());
     }
     // The check again, on this head: the entry does not store the commit the first check ran on.
+    *ran = true;
     if !run_check(command, worktree, &(env.path_env)()).passed {
         return no("the check did not pass when run again on the commit to merge");
     }
@@ -562,40 +615,90 @@ fn accept(env: &Env, d: &Deps, budget: &Budget, link: Option<&WatcherLink>, db: 
         return no(&refusal.text());
     }
     let lines = again.lines.unwrap_or_default();
-    // The check can take ten minutes: with the gate closed meanwhile (demo, a switch, a mode) the
-    // entry stays as it is and a later pass looks at it again.
+    // The check can take ten minutes: what the cheap refusals read is read again.
+    let now = match read_facts(db, e) {
+        Ok(Some(f)) => f,
+        Ok(None) => return no("the entry or its item is gone"),
+        Err(err) => return no(&one_line(&err)),
+    };
+    if now.hub_project {
+        return no(&Refusal::HubProject.text());
+    }
+    if !now.merge_alone {
+        return no("merging alone was switched off during the check");
+    }
+    if !now.link_open {
+        return no("the watcher link ended during the check");
+    }
+    if now.check_command.as_deref() != Some(command) || now.pr_url.as_deref() != Some(url) || now.folder_path.as_deref() != Some(folder) {
+        return no("the check command or the pull request changed during the check");
+    }
+    if now.check_passed != Some(true) {
+        return no(&Refusal::CheckNotPassed.text());
+    }
+    // Agent access for the organisation, as `step` reads it: off meanwhile is a closed gate.
+    let access = read_access(d.app_dir);
+    if !(access.enabled && access.orgs.get(link.org.as_str()) == Some(&true)) {
+        return false;
+    }
+    // With the gate closed meanwhile (demo, a switch, a mode) the entry stays as it is and a later
+    // pass looks at it again.
     if d.demo || super::settings_and_gate(d, false).1.is_some() {
         return false;
     }
-    // The delivery is marked before the merge, so a crash never merges twice.
+    // The delivery is marked before the merge, so a crash never merges twice, and the decision is
+    // listed in the same write.
+    let short = &head[..7];
+    let why = format!("The lead accepted the change ({reason}); the project allows merging alone; pull request {url} at {short}.");
     let claimed = {
         let _shared = crate::org_shared();
-        store::claim_delivery(db, e.id)
+        store::claim_merge(db, e.id, link.kind, link.item_id, link.id, &format!("Merging pull request {url} at {short}"), &why)
     };
-    match claimed {
-        Ok(true) => {}
-        Ok(false) => return false,
+    let alone = match claimed {
+        Ok(Some(id)) => id,
+        Ok(None) => return false,
         Err(err) => {
             warn("could not save the decision", &err);
             return false;
         }
+    };
+    let merged = merge::merge(env.git, worktree, url, &head);
+    // `gh` may fail after GitHub merged (a timeout) or answer before it merges (a queue): the
+    // pull request says what happened.
+    let state = merge::pr_facts(env.git, worktree, url).map(|p| p.state);
+    let settle = |title: &str, outcome: &str| {
+        let _shared = crate::org_shared();
+        if let Err(err) = store::settle_alone(db, alone, title, &format!("{why} {outcome}")) {
+            warn("could not update the decision", &err);
+        }
+    };
+    match (&merged, &state) {
+        (_, Ok(s)) if s == "MERGED" => {}
+        (Err(err), Ok(s)) if s == "OPEN" => {
+            let err = one_line(err);
+            settle(&format!("Not merged: the merge failed: {err}"), &format!("The merge failed: {err}."));
+            return no(&format!("the merge failed: {err}"));
+        }
+        _ => {
+            settle("May be merged: look at the pull request", "Whether it merged is not known.");
+            return reopen_with(
+                db,
+                e.id,
+                &format!("The lead would accept; the merge may have happened or is queued: look at {url}. The lead's reason: {reason}"),
+                true,
+            );
+        }
     }
-    if let Err(err) = merge::merge(env.git, worktree, url, &head) {
-        return no(&format!("the merge failed: {}", one_line(&err)));
-    }
-    let short = &head[..7];
-    let why = format!(
-        "The lead accepted the change ({reason}); the project allows merging alone; merged pull request {url} at {short}."
-    );
     let recorded = {
         let _shared = crate::org_shared();
-        store::finish_merged(db, link.kind, link.item_id, link.id, &format!("Merged: check passed, {lines} lines"), &why)
+        store::finish_merged(db, link.kind, link.item_id, link.id, alone, &format!("Merged: check passed, {lines} lines"), &why)
     };
     // The merge happened: a failed write is a warning, never a reason to merge again. The owner is
     // told once (a reopened entry is `open`, so `carry_out` never takes it again); when that write
     // fails too, only the warning stays.
     if let Err(err) = recorded {
         warn("merged, but could not record it", &err);
+        settle("Merged: the app could not record it", "The pull request is merged; mark the task done by hand.");
         reopen(db, e.id, &format!("Merged pull request {url}, but the app could not record it: mark the task done by hand."));
     }
     // A worker still listed and not done is stopped, never deleted; a failed stop is a warning.
@@ -622,21 +725,24 @@ fn accept(env: &Env, d: &Deps, budget: &Budget, link: Option<&WatcherLink>, db: 
 ///   with "The lead would accept: ...". Any refusal or a failed merge also goes back to open.
 /// - A second send back, or anything the app cannot do (no budget, no listed agent): the entry
 ///   goes back to open for the owner with the lead's words as the recommendation.
-pub fn act_on_resolution(
-    env: &Env,
-    d: &Deps,
-    budget: &Budget,
-    links: &[(PathBuf, WatcherLink)],
-    org: &str,
-    db: &Path,
-    e: &LeadEntry,
-) -> bool {
+///
+/// The result also says whether the project's check command was run (`Acted`).
+fn act(env: &Env, d: &Deps, budget: &Budget, links: &[(PathBuf, WatcherLink)], org: &str, db: &Path, e: &LeadEntry) -> Acted {
+    if matches!(action_of(e), Action::Accept) {
+        let link = links.iter().find(|(_, l)| l.org == org && Some(l.id) == e.link_id).map(|(_, l)| l);
+        return accept(env, d, budget, link, db, e, &e.reason.clone().unwrap_or_default());
+    }
+    Acted { written: carry_out_one(env, d, budget, links, org, db, e), ran_check: false }
+}
+
+/// Everything but a check the lead would accept (`accept`).
+fn carry_out_one(env: &Env, d: &Deps, budget: &Budget, links: &[(PathBuf, WatcherLink)], org: &str, db: &Path, e: &LeadEntry) -> bool {
     let reason = e.reason.clone().unwrap_or_default();
     let answer = e.answer.clone().unwrap_or_default();
     let action = action_of(e);
     let link = links.iter().find(|(_, l)| l.org == org && Some(l.id) == e.link_id).map(|(_, l)| l);
     let (text, notes) = match &action {
-        Action::Accept => return accept(env, d, budget, link, db, e, &reason),
+        Action::Accept => return false,
         Action::Unclear => return reopen(db, e.id, &format!("From the lead: {answer}")),
         Action::Answer(a) => (clean(&format!("Answer: {a} ({reason})")), None),
         Action::SendBack(n) => {
@@ -690,7 +796,14 @@ fn carry_out(env: &Env, d: &Deps, pass: &Pass, allowed: &dyn Fn(&str) -> bool, r
     let mut changed = false;
     for r in reads.iter().filter(|r| allowed(&r.org)) {
         for e in r.entries.iter().filter(|e| e.lead_state.as_deref() == Some("done") && e.status == "answered") {
-            changed |= act_on_resolution(env, d, &pass.budget, &pass.links, &r.org, &r.db, e);
+            let acted = act(env, d, &pass.budget, &pass.links, &r.org, &r.db, e);
+            changed |= acted.written;
+            // One check at a time: it can take ten minutes and the agent list read for this pass
+            // goes stale. The other entries are looked at on the next pass, which reads everything
+            // fresh. A refusal that ran no process does not count.
+            if acted.ran_check {
+                return changed;
+            }
         }
     }
     changed

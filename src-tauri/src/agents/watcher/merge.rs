@@ -3,22 +3,29 @@
 //! caller already holds; `pr_facts` and `merge` talk to `gh` through the same `Git` trait as every
 //! other call here (argv, never a shell). Nothing here deletes a branch, a worktree or a file,
 //! and nothing runs `git push`, `git checkout`, `git reset` or any command that changes the
-//! repository other than the single `gh pr merge`. `lead::accept` wires it to the lead's "accept". Plan: docs/superpowers/plans/2026-11-13-agent-orchestrator-3-watcher-lead.md
-//! (Task 13).
+//! repository other than the single `gh pr merge`. `lead::accept` wires it to the lead's "accept".
+//! Plan: docs/superpowers/plans/2026-11-13-agent-orchestrator-3-watcher-lead.md (Task 13).
 //!
 //! The pull request url comes from a worker, so it is checked before any `gh` call: only
-//! `https://github.com/<owner>/<repo>/pull/<n>`, and only for the repository the worktree's
-//! `origin` points at.
+//! `https://github.com/<owner>/<repo>/pull/<n>`, and only for the repository the project folder's
+//! and the worktree's `origin` both name. Both read the same git config (a worktree shares it
+//! with its repository, and a worker can write it), so this guards against mistakes, not against
+//! a hostile worker, who has `gh` and a shell anyway. What GitHub merges is its own diff: the
+//! line count, the file count and the paths GitHub reports must equal what was measured locally.
 
-use super::check::DiffFacts;
+use super::check::{is_dependency_file, DiffFacts, DEPENDENCY_FILES};
 use super::git::{first_line, git, succeeded, Git};
 use crate::agents::routines::run::CommandOutcome;
+use std::collections::BTreeSet;
 
 /// A change of this many added plus removed lines, or more, is left to the owner.
 pub const MERGE_LINES: i64 = 100;
 
-/// Rules that always send a change to the owner: the rule name and its path patterns. `money` is
-/// matched by words (`MONEY_WORDS`) and `deleting` by the deleted paths; both are in `touches`.
+/// Rules that always send a change to the owner: the rule name and its path patterns.
+/// `dependencies` is also matched by `check::DEPENDENCY_FILES`. The others are in `touches`:
+/// `money` is matched by words (`MONEY_WORDS`), `unusual path` by a path git prints quoted or with
+/// control characters, `deleting` by the deleted paths. `unusual file` (a symlink, a submodule or
+/// a mode change in the raw diff) is added by `may_merge`.
 pub const ALWAYS_ASKS: &[(&str, &[&str])] = &[
     ("migrations", &["**/migrations/**", "*.sql"]),
     (
@@ -30,14 +37,21 @@ pub const ALWAYS_ASKS: &[(&str, &[&str])] = &[
     ),
     ("version", &["tauri.conf.json", "CHANGELOG.md", "VERSION", "latest.json", "RELEASING.md"]),
     ("release", &[".github/**", "scripts/release*"]),
-    ("security", &[".claude/**", "**/capabilities/**", "**/permissions/**", "*.entitlements", "Info.plist", ".env*"]),
+    (
+        "security",
+        &[
+            ".claude/**", "**/capabilities/**", "**/permissions/**", "*.entitlements", "Info.plist", ".env*", ".gitmodules",
+            ".gitattributes", ".cargo/**", ".npmrc", "rust-toolchain", "rust-toolchain.toml", ".husky/**", ".pre-commit-config.yaml",
+            "CLAUDE.md", "AGENTS.md", ".mcp.json",
+        ],
+    ),
 ];
 
 /// A path containing one of these (any case, anywhere) is the rule `money`. It over-matches on
 /// purpose: a false match only sends the change to the owner.
 const MONEY_WORDS: &[&str] = &[
     "invoice", "quote", "expense", "payment", "billing", "money", "price", "pricing", "vat", "qr-bill", "qrbill", "tax", "salary",
-    "bank", "iban",
+    "bank", "iban", "currency", "chf", "receipt", "ledger", "pnl", "accounting", "bill",
 ];
 
 /// A `*` in the pattern stands for any run of characters (at most one `*`).
@@ -62,10 +76,11 @@ fn matches(pattern: &str, path: &str) -> bool {
     let path = path.trim_start_matches("./").to_lowercase();
     let segs: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
     let Some(last) = segs.last() else { return false };
-    // `**/x/**` and `x/**`: the folder `x` anywhere in the path (a folder, so not the file name).
+    // `**/x/**` and `x/**`: a folder `x` anywhere in the path, or a file of that name (a file named
+    // like a protected folder is refused too).
     if let Some(folder) = pattern.strip_suffix("/**") {
         let folder = folder.strip_prefix("**/").unwrap_or(folder);
-        return segs[..segs.len() - 1].contains(&folder);
+        return segs.contains(&folder);
     }
     // `scripts/release*`: the path, from any folder on, starts with it.
     if pattern.contains('/') {
@@ -75,13 +90,22 @@ fn matches(pattern: &str, path: &str) -> bool {
     glob_one(&pattern, last)
 }
 
+/// The last segment of the path names a package or lock file (in any case): the one list of
+/// `check::DEPENDENCY_FILES`.
+fn is_dependency_path(path: &str) -> bool {
+    let last = path.trim_start_matches("./").rsplit('/').next().unwrap_or("");
+    is_dependency_file(last) || DEPENDENCY_FILES.iter().any(|f| f.eq_ignore_ascii_case(last)) || is_dependency_file(&last.to_lowercase())
+}
+
 /// The rules the change touches, each once: those of `ALWAYS_ASKS` in order, then `money`, then
-/// `deleting` (any deleted path). Deleted paths count as paths too.
+/// `unusual path`, then `deleting` (any deleted path). Deleted paths count as paths too.
 pub fn touches(paths: &[String], deleted: &[String]) -> Vec<&'static str> {
     let all = || paths.iter().chain(deleted.iter());
     let mut out: Vec<&'static str> = ALWAYS_ASKS
         .iter()
-        .filter(|(_, pats)| all().any(|p| pats.iter().any(|pat| matches(pat, p))))
+        .filter(|(name, pats)| {
+            (*name == "dependencies" && all().any(|p| is_dependency_path(p))) || all().any(|p| pats.iter().any(|pat| matches(pat, p)))
+        })
         .map(|(name, _)| *name)
         .collect();
     if all().any(|p| {
@@ -111,6 +135,14 @@ pub struct PrFacts {
     pub head: String,
     /// The branch it targets.
     pub base: String,
+    /// `MERGEABLE`, `CONFLICTING` or `UNKNOWN` (GitHub has not worked it out yet).
+    pub mergeable: String,
+    /// What GitHub counts for the whole pull request.
+    pub additions: i64,
+    pub deletions: i64,
+    pub changed_files: i64,
+    /// The paths GitHub lists (it cuts a long list: compare with `changed_files`).
+    pub paths: Vec<String>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -137,6 +169,9 @@ pub enum Refusal {
     PrDraft,
     PrOtherBase,
     PrOtherHead,
+    PrNotMergeable,
+    /// GitHub's line count, file count or paths differ from the local measure.
+    PrNotMeasured,
 }
 
 impl Refusal {
@@ -154,6 +189,10 @@ impl Refusal {
             Refusal::PrDraft => "the pull request is a draft".to_string(),
             Refusal::PrOtherBase => "the pull request targets another branch".to_string(),
             Refusal::PrOtherHead => "the pull request has other commits than the ones checked".to_string(),
+            Refusal::PrNotMergeable => {
+                "the pull request cannot be merged cleanly or GitHub has not worked it out yet".to_string()
+            }
+            Refusal::PrNotMeasured => "the pull request on GitHub is not the change that was measured".to_string(),
         }
     }
 }
@@ -182,7 +221,16 @@ pub fn may_merge(r: &MergeRules, d: &DiffFacts, pr: &PrFacts, base_branch: &str,
         }
         _ => return Err(Refusal::SizeUnknown),
     }
-    let rules = touches(&d.paths, &d.deleted);
+    let mut rules = touches(&d.paths, &d.deleted);
+    // GitHub merges its own diff: what it lists is asked the same rules.
+    for r in touches(&pr.paths, &[]) {
+        if !rules.contains(&r) {
+            rules.push(r);
+        }
+    }
+    if !d.unusual.is_empty() {
+        rules.push("unusual file");
+    }
     if !rules.is_empty() {
         return Err(Refusal::Touches(rules));
     }
@@ -200,6 +248,20 @@ pub fn may_merge(r: &MergeRules, d: &DiffFacts, pr: &PrFacts, base_branch: &str,
     }
     if head.is_empty() || !pr.head.eq_ignore_ascii_case(head) {
         return Err(Refusal::PrOtherHead);
+    }
+    if pr.mergeable != "MERGEABLE" {
+        return Err(Refusal::PrNotMergeable);
+    }
+    // The paths measured locally (a deleted path is a path too), against what GitHub lists.
+    let local: BTreeSet<&str> = d.paths.iter().chain(d.deleted.iter()).map(String::as_str).collect();
+    let theirs: BTreeSet<&str> = pr.paths.iter().map(String::as_str).collect();
+    let lines = d.lines.unwrap_or(-1);
+    if pr.additions.checked_add(pr.deletions) != Some(lines)
+        || pr.changed_files != local.len() as i64
+        || pr.paths.len() as i64 != pr.changed_files
+        || theirs != local
+    {
+        return Err(Refusal::PrNotMeasured);
     }
     Ok(())
 }
@@ -274,8 +336,9 @@ fn gh_failure(o: &CommandOutcome, fallback: &str) -> String {
     first_line(o, fallback)
 }
 
-/// The url must be a pull request of the repository `origin` points at.
-fn check_url(g: &dyn Git, worktree: &str, url: &str) -> Result<(), String> {
+/// The url must be a pull request of the repository `origin` points at, read in `folder` (the
+/// project folder or the worktree: the same config, see the module doc).
+pub fn check_url(g: &dyn Git, worktree: &str, url: &str) -> Result<(), String> {
     let (owner, repo, _) = pr_url_ok(url).ok_or_else(|| "Not a GitHub pull request url".to_string())?;
     let (o, r) = origin_repo(g, worktree)?;
     if o.eq_ignore_ascii_case(&owner) && r.eq_ignore_ascii_case(&repo) {
@@ -285,11 +348,14 @@ fn check_url(g: &dyn Git, worktree: &str, url: &str) -> Result<(), String> {
     }
 }
 
-/// `gh pr view <url> --json state,isDraft,headRefOid,baseRefName`, after the url checks. The
-/// output interleaves stdout and stderr, so the JSON is the last line that is an object holding `state` and `headRefOid`.
+/// The fields `gh pr view` is asked for.
+const VIEW_FIELDS: &str = "state,isDraft,headRefOid,baseRefName,mergeable,additions,deletions,changedFiles,files";
+
+/// `gh pr view <url> --json <VIEW_FIELDS>`, after the url checks. The output interleaves stdout and
+/// stderr, so the JSON is the last line that is an object holding `state` and `headRefOid`.
 pub fn pr_facts(g: &dyn Git, worktree: &str, url: &str) -> Result<PrFacts, String> {
     check_url(g, worktree, url)?;
-    let o = gh(g, worktree, &["pr", "view", url, "--json", "state,isDraft,headRefOid,baseRefName"]);
+    let o = gh(g, worktree, &["pr", "view", url, "--json", VIEW_FIELDS]);
     if !succeeded(&o) {
         return Err(gh_failure(&o, "gh pr view failed"));
     }
@@ -301,8 +367,24 @@ pub fn pr_facts(g: &dyn Git, worktree: &str, url: &str) -> Result<PrFacts, Strin
         .find(|v| v.get("state").is_some() && v.get("headRefOid").is_some())
         .ok_or_else(|| "gh pr view gave no JSON".to_string())?;
     let text = |k: &str| v.get(k).and_then(|x| x.as_str()).map(str::to_string).ok_or_else(|| format!("gh pr view gave no {k}"));
+    let number = |k: &str| v.get(k).and_then(|x| x.as_i64()).ok_or_else(|| format!("gh pr view gave no {k}"));
     let draft = v.get("isDraft").and_then(|x| x.as_bool()).ok_or_else(|| "gh pr view gave no isDraft".to_string())?;
-    Ok(PrFacts { state: text("state")?, draft, head: text("headRefOid")?, base: text("baseRefName")? })
+    let paths = v
+        .get("files")
+        .and_then(|x| x.as_array())
+        .and_then(|a| a.iter().map(|f| f.get("path").and_then(|p| p.as_str()).map(str::to_string)).collect::<Option<Vec<String>>>())
+        .ok_or_else(|| "gh pr view gave no files".to_string())?;
+    Ok(PrFacts {
+        state: text("state")?,
+        draft,
+        head: text("headRefOid")?,
+        base: text("baseRefName")?,
+        mergeable: text("mergeable")?,
+        additions: number("additions")?,
+        deletions: number("deletions")?,
+        changed_files: number("changedFiles")?,
+        paths,
+    })
 }
 
 /// `gh pr merge <url> --squash --match-head-commit <head>`: GitHub refuses it when the head moved.
@@ -329,7 +411,7 @@ mod tests {
     const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
     const URL: &str = "https://github.com/studio-a/poster-tool/pull/12";
     const ORIGIN: &str = "https://github.com/studio-a/poster-tool.git\n";
-    const VIEW: &str = "{\"state\":\"OPEN\",\"isDraft\":false,\"headRefOid\":\"0123456789abcdef0123456789abcdef01234567\",\"baseRefName\":\"main\"}\n";
+    const VIEW: &str = "{\"state\":\"OPEN\",\"isDraft\":false,\"headRefOid\":\"0123456789abcdef0123456789abcdef01234567\",\"baseRefName\":\"main\",\"mergeable\":\"MERGEABLE\",\"additions\":10,\"deletions\":2,\"changedFiles\":1,\"files\":[{\"path\":\"src/poster.ts\",\"additions\":10,\"deletions\":2}]}\n";
 
     type Script = Box<dyn Fn(&str, &str) -> CommandOutcome + Send + Sync>;
 
@@ -372,10 +454,28 @@ mod tests {
         MergeRules { merge_alone: true, hub_project: false, check_passed: Some(true), lead_accepts: true }
     }
     fn facts() -> DiffFacts {
-        DiffFacts { lines: Some(12), complete: true, paths: s(&["src/poster.ts"]), deleted: vec![], head: String::new(), clean: true }
+        DiffFacts {
+            lines: Some(12),
+            complete: true,
+            paths: s(&["src/poster.ts"]),
+            deleted: vec![],
+            head: String::new(),
+            clean: true,
+            unusual: vec![],
+        }
     }
     fn pr() -> PrFacts {
-        PrFacts { state: "OPEN".into(), draft: false, head: SHA.into(), base: "main".into() }
+        PrFacts {
+            state: "OPEN".into(),
+            draft: false,
+            head: SHA.into(),
+            base: "main".into(),
+            mergeable: "MERGEABLE".into(),
+            additions: 10,
+            deletions: 2,
+            changed_files: 1,
+            paths: s(&["src/poster.ts"]),
+        }
     }
     fn ask(r: &MergeRules, d: &DiffFacts, p: &PrFacts) -> Result<(), Refusal> {
         may_merge(r, d, p, "main", SHA)
@@ -418,7 +518,7 @@ mod tests {
     #[test]
     fn merge_rule_size_limit() {
         let at = |n| DiffFacts { lines: Some(n), ..facts() };
-        assert_eq!(ask(&rules(), &at(99), &pr()), Ok(()));
+        assert_eq!(ask(&rules(), &at(99), &PrFacts { additions: 99, deletions: 0, ..pr() }), Ok(()));
         assert_eq!(ask(&rules(), &at(100), &pr()), Err(Refusal::TooBig(100)));
         assert_eq!(ask(&rules(), &at(140), &pr()).unwrap_err().text(), "the change is 140 lines (the limit is under 100)");
     }
@@ -534,8 +634,16 @@ mod tests {
     #[test]
     fn merge_rule_order_hub_wins_when_several_apply() {
         let r = MergeRules { hub_project: true, merge_alone: false, check_passed: None, lead_accepts: false };
-        let d = DiffFacts { lines: None, complete: false, paths: s(&["package.json"]), deleted: s(&["x"]), head: String::new(), clean: false };
-        let p = PrFacts { state: "CLOSED".into(), draft: true, head: "x".into(), base: "y".into() };
+        let d = DiffFacts {
+            lines: None,
+            complete: false,
+            paths: s(&["package.json"]),
+            deleted: s(&["x"]),
+            head: String::new(),
+            clean: false,
+            unusual: vec![],
+        };
+        let p = PrFacts { state: "CLOSED".into(), draft: true, head: "x".into(), base: "y".into(), ..pr() };
         assert_eq!(ask(&r, &d, &p), Err(Refusal::HubProject));
         let r = MergeRules { hub_project: false, ..r };
         assert_eq!(ask(&r, &d, &p), Err(Refusal::MergeAloneOff));
@@ -631,13 +739,38 @@ mod tests {
         // The origin may be written another way and in another case than the url.
         let g = fake("git@github.com:Studio-A/Poster-Tool.git\n", out(0, VIEW));
         assert_eq!(pr_facts(&g, "/w", URL).unwrap(), pr());
-        assert_eq!(g.gh_calls(), vec![format!("pr view {URL} --json state,isDraft,headRefOid,baseRefName")]);
+        assert_eq!(
+            g.gh_calls(),
+            vec![format!(
+                "pr view {URL} --json state,isDraft,headRefOid,baseRefName,mergeable,additions,deletions,changedFiles,files"
+            )]
+        );
     }
 
     #[test]
     fn pr_facts_takes_the_object_that_has_the_fields_not_a_later_json_warning() {
         let tail = format!("{VIEW}{{\"warning\":\"a new release of gh is available\"}}\n[1,2]\n");
         assert_eq!(pr_facts(&fake(ORIGIN, out(0, &tail)), "/w", URL).unwrap(), pr());
+    }
+
+    #[test]
+    fn pr_facts_needs_every_field_it_is_asked_for() {
+        let g = fake(ORIGIN, out(0, VIEW));
+        let f = pr_facts(&g, "/w", URL).unwrap();
+        assert_eq!((f.mergeable.as_str(), f.additions, f.deletions, f.changed_files, f.paths.clone()), ("MERGEABLE", 10, 2, 1, s(&["src/poster.ts"])));
+        for (cut, why) in [
+            ("\"mergeable\":\"MERGEABLE\",", "mergeable"),
+            ("\"additions\":10,", "additions"),
+            ("\"deletions\":2,", "deletions"),
+            ("\"changedFiles\":1,", "changedFiles"),
+        ] {
+            let e = pr_facts(&fake(ORIGIN, out(0, &VIEW.replace(cut, ""))), "/w", URL).unwrap_err();
+            assert_eq!(e, format!("gh pr view gave no {why}"));
+        }
+        let no_files = VIEW.replace(",\"files\":[{\"path\":\"src/poster.ts\",\"additions\":10,\"deletions\":2}]", "");
+        assert_eq!(pr_facts(&fake(ORIGIN, out(0, &no_files)), "/w", URL).unwrap_err(), "gh pr view gave no files");
+        let odd = VIEW.replace("\"path\":\"src/poster.ts\",", "");
+        assert_eq!(pr_facts(&fake(ORIGIN, out(0, &odd)), "/w", URL).unwrap_err(), "gh pr view gave no files");
     }
 
     #[test]
@@ -671,7 +804,7 @@ mod tests {
         assert_eq!(ask(&rules(), &zero, &pr()), Err(Refusal::SizeUnknown));
         let no_paths = DiffFacts { lines: Some(5), paths: vec![], ..facts() };
         assert_eq!(ask(&rules(), &no_paths, &pr()), Err(Refusal::SizeUnknown));
-        assert_eq!(ask(&rules(), &DiffFacts { lines: Some(1), ..facts() }, &pr()), Ok(()));
+        assert_eq!(ask(&rules(), &DiffFacts { lines: Some(1), ..facts() }, &PrFacts { additions: 1, deletions: 0, ..pr() }), Ok(()));
     }
 
     #[test]
@@ -687,11 +820,107 @@ mod tests {
             let t = touches(&s(&[path]), &[]);
             assert!(t.contains(rule), "{path} should touch {rule}, got {t:?}");
         }
-        // Intended: a FILE named like a folder rule is not a folder match (the rule is about what is
-        // inside the folder), so these are not refused by the pattern.
-        for path in ["src/migrations", ".claude", "docs/.claude"] {
-            assert!(touches(&s(&[path]), &[]).is_empty(), "{path}");
+        // A FILE named like a folder rule is a match too (F3): a worker cannot dodge the rule by a
+        // file of that name.
+        for (rule, path) in [
+            ("migrations", "src/migrations"),
+            ("security", ".claude"),
+            ("security", "docs/.claude"),
+            ("release", ".github"),
+            ("security", "src-tauri/capabilities"),
+            ("security", "x/permissions"),
+        ] {
+            let t = touches(&s(&[path]), &[]);
+            assert!(t.contains(&rule), "{path} should touch {rule}, got {t:?}");
         }
+    }
+
+    #[test]
+    fn merge_rule_every_dependency_file_the_check_knows_is_a_merge_rule_too() {
+        for name in DEPENDENCY_FILES {
+            for path in [name.to_string(), format!("apps/poster/{name}"), format!("./{name}")] {
+                assert!(touches(&s(&[&path]), &[]).contains(&"dependencies"), "{path}");
+                assert!(touches(&[], &s(&[&path])).contains(&"dependencies"), "{path} deleted");
+            }
+        }
+        // The ones that were merged alone before the lists were one.
+        for name in ["bun.lock", "bun.lockb", "npm-shrinkwrap.json", "poetry.lock", "uv.lock", "Pipfile", "Pipfile.lock", "setup.py"]
+            .into_iter()
+            .chain(["composer.json", "composer.lock", "Package.swift", "Package.resolved", "pubspec.yaml", "pubspec.lock", "mix.exs"])
+        {
+            assert!(touches(&s(&[name]), &[]).contains(&"dependencies"), "{name}");
+        }
+        assert!(touches(&s(&["tools/Requirements-dev.TXT"]), &[]).contains(&"dependencies"));
+        // Case does not matter, as for the rest of the rules.
+        assert!(touches(&s(&["CARGO.TOML"]), &[]).contains(&"dependencies"));
+        assert!(!touches(&s(&["src/package.json.ts"]), &[]).contains(&"dependencies"));
+        // In its place among the rules.
+        assert_eq!(touches(&s(&["mix.exs", "CHANGELOG.md"]), &[]), vec!["dependencies", "version"]);
+    }
+
+    #[test]
+    fn merge_rule_more_security_paths_and_money_words() {
+        for p in [
+            ".gitmodules",
+            "sub/.gitattributes",
+            ".cargo/config.toml",
+            "app/.cargo/x",
+            ".npmrc",
+            "rust-toolchain",
+            "rust-toolchain.toml",
+            ".husky/pre-commit",
+            ".pre-commit-config.yaml",
+            "CLAUDE.md",
+            "docs/AGENTS.md",
+            ".mcp.json",
+        ] {
+            assert!(touches(&s(&[p]), &[]).contains(&"security"), "{p}");
+        }
+        for p in ["src/currency.ts", "src/Chf.ts", "src/receipt.ts", "src/ledger.rs", "src/pnl.ts", "src/accounting.ts", "src/bill.ts", "src/billing.ts"] {
+            assert!(touches(&s(&[p]), &[]).contains(&"money"), "{p}");
+        }
+        assert!(touches(&s(&["src/poster.ts", "src/githubby/x.ts"]), &[]).is_empty());
+    }
+
+    #[test]
+    fn merge_rule_an_unusual_file_is_refused() {
+        let d = DiffFacts { unusual: s(&["src/link"]), ..facts() };
+        assert_eq!(ask(&rules(), &d, &pr()).unwrap_err().text(), "it touches: unusual file");
+        assert_eq!(ask(&rules(), &facts(), &pr()), Ok(()));
+    }
+
+    #[test]
+    fn merge_rule_the_pull_request_must_be_mergeable() {
+        for m in ["CONFLICTING", "UNKNOWN", ""] {
+            let p = PrFacts { mergeable: m.into(), ..pr() };
+            assert_eq!(ask(&rules(), &facts(), &p), Err(Refusal::PrNotMergeable), "{m}");
+        }
+        assert_eq!(
+            Refusal::PrNotMergeable.text(),
+            "the pull request cannot be merged cleanly or GitHub has not worked it out yet"
+        );
+    }
+
+    #[test]
+    fn merge_rule_github_must_report_the_change_that_was_measured() {
+        let text = "the pull request on GitHub is not the change that was measured";
+        let off = |p: PrFacts| ask(&rules(), &facts(), &p);
+        assert_eq!(off(PrFacts { additions: 11, ..pr() }), Err(Refusal::PrNotMeasured));
+        assert_eq!(off(PrFacts { deletions: 0, ..pr() }), Err(Refusal::PrNotMeasured));
+        assert_eq!(off(PrFacts { changed_files: 2, ..pr() }), Err(Refusal::PrNotMeasured));
+        assert_eq!(off(PrFacts { paths: s(&["src/other.ts"]), ..pr() }), Err(Refusal::PrNotMeasured));
+        // GitHub cut its list: more files changed than it names.
+        let cut = DiffFacts { paths: s(&["src/a.ts", "src/b.ts"]), ..facts() };
+        let p = PrFacts { changed_files: 2, paths: s(&["src/a.ts"]), ..pr() };
+        assert_eq!(ask(&rules(), &cut, &p), Err(Refusal::PrNotMeasured));
+        assert_eq!(Refusal::PrNotMeasured.text(), text);
+        // The same files in another order, a deleted path counted once.
+        let two = DiffFacts { paths: s(&["src/b.ts", "src/gone.ts"]), deleted: vec![], ..facts() };
+        let p = PrFacts { changed_files: 2, paths: s(&["src/gone.ts", "src/b.ts"]), ..pr() };
+        assert_eq!(ask(&rules(), &two, &p), Ok(()));
+        // The rules are asked of GitHub's paths too.
+        let p = PrFacts { paths: s(&["package.json"]), ..pr() };
+        assert_eq!(ask(&rules(), &facts(), &p).unwrap_err().text(), "it touches: dependencies");
     }
 
     #[test]

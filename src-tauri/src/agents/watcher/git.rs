@@ -140,6 +140,10 @@ pub(super) mod fake {
         pub calls: Mutex<Vec<(String, String)>>,
         script: Script,
         gh: Option<Script>,
+        /// The folder each call ran in, parallel to `calls`.
+        pub cwds: Mutex<Vec<String>>,
+        /// `git remote get-url origin` says this in the given folder (before the script is asked).
+        origins: Vec<(String, String)>,
     }
 
     pub fn out(code: i32, tail: &str) -> CommandOutcome {
@@ -148,12 +152,23 @@ pub(super) mod fake {
 
     impl FakeGit {
         pub fn new(script: impl Fn(&str) -> CommandOutcome + Send + Sync + 'static) -> Self {
-            Self { calls: Mutex::new(vec![]), script: Box::new(script), gh: None }
+            Self { calls: Mutex::new(vec![]), script: Box::new(script), gh: None, cwds: Mutex::new(vec![]), origins: vec![] }
         }
         /// Scripts the `gh` calls too (matched by the joined argv, as `git` is).
         pub fn with_gh(mut self, script: impl Fn(&str) -> CommandOutcome + Send + Sync + 'static) -> Self {
             self.gh = Some(Box::new(script));
             self
+        }
+        /// `git remote get-url origin` says `tail` when run in `folder`, whatever the script says.
+        pub fn with_origin_in(mut self, folder: &str, tail: &str) -> Self {
+            self.origins.push((folder.to_string(), tail.to_string()));
+            self
+        }
+        /// The folders `git remote get-url origin` was run in.
+        pub fn origin_folders(&self) -> Vec<String> {
+            let calls = self.calls.lock().unwrap();
+            let cwds = self.cwds.lock().unwrap();
+            calls.iter().zip(cwds.iter()).filter(|((_, a), _)| a == "remote get-url origin").map(|(_, c)| c.clone()).collect()
         }
         /// The recorded `gh` calls, joined argv.
         pub fn gh_commands(&self) -> Vec<String> {
@@ -176,10 +191,14 @@ pub(super) mod fake {
     }
 
     impl Git for FakeGit {
-        fn run(&self, program: &str, args: &[String], _cwd: &str) -> CommandOutcome {
+        fn run(&self, program: &str, args: &[String], cwd: &str) -> CommandOutcome {
             let joined = args.join(" ");
             self.calls.lock().unwrap().push((program.to_string(), joined.clone()));
+            self.cwds.lock().unwrap().push(cwd.to_string());
             match program {
+                "git" if joined == "remote get-url origin" && self.origins.iter().any(|(f, _)| f == cwd) => {
+                    out(0, &self.origins.iter().find(|(f, _)| f == cwd).map(|(_, t)| t.clone()).unwrap_or_default())
+                }
                 "git" => (self.script)(&joined),
                 "gh" => (self.gh.as_ref().expect("gh is not scripted in this test"))(&joined),
                 other => panic!("the watcher runs only git and gh here, not {other}"),
