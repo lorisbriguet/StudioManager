@@ -7,6 +7,7 @@
 //!
 //! `watcher.json` holds only a start that timed out (`start::Pending`).
 
+pub mod act;
 pub mod budget;
 pub mod check;
 pub mod events;
@@ -24,7 +25,7 @@ use crate::orgs::{org_dir, Registry, DB_FILE};
 use budget::Budget;
 use events::{notice, Event};
 use serde::Serialize;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::Mutex;
@@ -359,6 +360,11 @@ pub struct Memory {
     awaiting: HashMap<(String, i64), (i64, bool)>,
     /// Finished checks whose entry could not be written (`check::Unwritten`).
     unwritten: check::Unwritten,
+    /// Per (organisation, link id, `prompt` or `idle`, start of the wait): an entry written for
+    /// that wait, so one the owner dismissed is not written again while the wait goes on.
+    noted: HashSet<(String, i64, &'static str, i64)>,
+    /// Per link: when a stuck worker was last asked to continue.
+    resumed_at: HashMap<(String, i64), i64>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -448,6 +454,10 @@ pub fn tick(d: &Deps, mem: &mut Memory, env: Option<&start::Env>) -> Report {
             if check::step(env, d, mem, &pass.links) {
                 pass = fresh(d, lock, mem);
             }
+            // Stuck, at a prompt, idle or old: resume, an entry for the owner, or wrap up.
+            if act::step(env, d, mem, &pass.budget, &pass.links) {
+                pass = fresh(d, lock, mem);
+            }
         }
     }
     remember(lock, mem);
@@ -463,8 +473,8 @@ pub fn tick(d: &Deps, mem: &mut Memory, env: Option<&start::Env>) -> Report {
     Report { outlook, noticed }
 }
 
-/// What each open watcher link needs attention for. Stuck is not read yet (it needs the
-/// transcript, a later task), so it is always false here.
+/// What each open watcher link needs attention for. Stuck is false here: it needs the transcript,
+/// which only `act::step` reads (the "would act on" lines are a view, not the decision).
 fn notice_links(d: &Deps, mem: &mut Memory, links: Vec<(PathBuf, WatcherLink)>) -> Vec<Noticed> {
     mem.seen.retain(|(org, id), _| links.iter().any(|(_, l)| l.org == *org && l.id == *id));
     let mut out = Vec::new();
@@ -584,6 +594,8 @@ fn check(app: &AppHandle, mem: &mut Memory) {
     let send = |agent: &Agent, text: &str| super::pty::send_message(&state.hub, agent, text);
     // The login shell's `PATH`, resolved only when a check is about to run.
     let path_env = || super::pty::cached_login_env(&login).path.clone();
+    let claude_dir = actions::home_dir().join(".claude");
+    let transcript_tail = |session_id: &str| super::transcript::tail_text(&claude_dir, session_id, events::TAIL_BYTES);
     let env = start::Env {
         git: &real_git,
         cli: &get_cli,
@@ -592,6 +604,7 @@ fn check(app: &AppHandle, mem: &mut Memory) {
         mcp_path: &mcp_path,
         send: &send,
         path_env: &path_env,
+        transcript_tail: &transcript_tail,
     };
     let report = tick(
         &Deps {

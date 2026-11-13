@@ -329,6 +329,38 @@ describe("Needs you: Decide", () => {
     setup([]);
     expect(screen.getByRole("button", { name: "Answer in words" })).toBeInTheDocument();
   });
+
+  it("an agent at a prompt offers only Open the agent and Dismiss", () => {
+    hooks.open = [row({ lead_state: "prompt", title: "Allow the tool to run?", body: "Waiting at a prompt: Allow the tool to run?", options: null, recommendation: null, reason: null })];
+    setup([]);
+    expect(screen.getByText(/Waiting at a prompt/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open the agent" })).toHaveAttribute("href", "/agents?agent=sess-1");
+    expect(screen.queryByRole("button", { name: "Answer in words" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Outline" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+    expect(hooks.dismiss).toHaveBeenCalledWith(5);
+    // Even with options on the row, a prompt shows no option button.
+    expect(screen.queryByRole("button", { name: "Embed" })).not.toBeInTheDocument();
+  });
+
+  it("an entry with no link shows its text and Dismiss only", () => {
+    hooks.open = [
+      row({ link_id: null, session_id: null, short_id: null, options: null, recommendation: null, reason: null, body: "The watcher could not start a worker." }),
+    ];
+    setup([]);
+    expect(screen.getByText("The watcher could not start a worker.")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Open the agent" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Answer in words" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+    expect(hooks.dismiss).toHaveBeenCalledWith(5);
+  });
+
+  it("an entry with a link and no lead state still offers Answer in words (an idle worker is told what to do)", () => {
+    hooks.open = [row({ options: null, recommendation: null, reason: null })];
+    setup([]);
+    expect(screen.getByRole("button", { name: "Answer in words" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Dismiss" })).not.toBeInTheDocument();
+  });
 });
 
 describe("Needs you: Check", () => {

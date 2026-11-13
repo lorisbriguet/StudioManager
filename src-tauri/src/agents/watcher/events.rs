@@ -12,6 +12,31 @@ pub const IDLE_NO_RESULT_MS: i64 = 30 * 60_000;
 /// Waiting on a permission prompt this long: a person has to look.
 pub const AT_PROMPT_MS: i64 = 2 * 60_000;
 
+/// Idle this long on a connection error: the watcher asks the worker to continue.
+pub const STUCK_IDLE_MS: i64 = 2 * 60_000;
+/// How much of the end of a transcript `stuck_in` is given.
+pub const TAIL_BYTES: u64 = 64 * 1024;
+
+/// Whether a session stopped on a lost connection: the last parseable line of the transcript's
+/// tail is an assistant entry flagged `isApiErrorMessage` with `error` `server_error`. Other
+/// errors (`rate_limit`, `authentication_failed`) are not: a resume would spend usage or fail
+/// again. The tail may start in the middle of a line, and lines that are not JSON objects are
+/// skipped.
+pub fn stuck_in(transcript_tail: &str) -> bool {
+    for line in transcript_tail.lines().rev() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let Ok(v) = serde_json::from_str::<serde_json::Value>(line) else { continue };
+        if !v.is_object() {
+            continue;
+        }
+        return v["type"] == "assistant" && v["isApiErrorMessage"] == true && v["error"] == "server_error";
+    }
+    false
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Event {
     /// The worker asked a question: the open `decide` entry.
@@ -141,6 +166,39 @@ mod tests {
         assert_eq!(notice(&l, None, false, None, at + 5 * MIN, None), None, "never listed");
         assert_eq!(notice(&l, None, false, None, at + 5 * MIN, Some(at)), None, "the list is not past the grace");
         assert_eq!(notice(&l, None, false, None, at + 5 * MIN, Some(at + 1)), Some(Event::Gone));
+    }
+
+    fn entry(error: &str) -> String {
+        format!(
+            r#"{{"type":"assistant","isApiErrorMessage":true,"error":"{error}","message":{{"content":[{{"type":"text","text":"API Error: Connection lost mid-response"}}]}}}}"#
+        )
+    }
+    const WENT_ON: &str = r#"{"type":"user","message":{"content":"Continue where you stopped."}}"#;
+
+    #[test]
+    fn stuck_in_is_a_lost_connection_as_the_last_entry_and_nothing_else() {
+        let ok = r#"{"type":"assistant","message":{"content":[{"type":"text","text":"Done."}]}}"#;
+        assert!(stuck_in(&format!("{ok}\n{}\n", entry("server_error"))));
+        // Other errors are not stuck: a resume would spend usage or fail again.
+        assert!(!stuck_in(&format!("{ok}\n{}\n", entry("rate_limit"))));
+        assert!(!stuck_in(&format!("{ok}\n{}\n", entry("authentication_failed"))));
+        // The session went on after the error.
+        assert!(!stuck_in(&format!("{}\n{WENT_ON}\n", entry("server_error"))));
+        // A user entry or a plain assistant entry with the same fields is not it.
+        assert!(!stuck_in(&format!("{ok}\n")));
+        assert!(!stuck_in(&entry("server_error").replace("assistant", "user")));
+        assert!(!stuck_in(&entry("server_error").replace("true", "false")));
+        assert!(!stuck_in(""));
+    }
+
+    #[test]
+    fn stuck_in_copes_with_a_cut_first_line_and_garbage() {
+        let cut = r#"ssage":{"content":"x"}}"#;
+        assert!(stuck_in(&format!("{cut}\n{}", entry("server_error"))), "no trailing new line");
+        assert!(!stuck_in(cut), "only a cut line");
+        // Lines that are not JSON, or not objects, are skipped; the last parseable one decides.
+        assert!(stuck_in(&format!("{WENT_ON}\n{}\nnot json at all\n42\n\n", entry("server_error"))));
+        assert!(!stuck_in(&format!("{}\n{WENT_ON}\n{{broken", entry("server_error"))));
     }
 
     #[test]

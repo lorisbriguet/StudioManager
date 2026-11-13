@@ -186,9 +186,122 @@ pub fn add_entry(db: &Path, kind: ItemKind, item_id: i64, title: &str, body: &st
     Ok(conn.last_insert_rowid())
 }
 
+/// What an entry the app writes for a link says. `lead_state` is `prompt` for an agent waiting at a
+/// prompt (the card offers only "Open the agent"), else None.
+pub struct LinkEntry<'a> {
+    pub kind: ItemKind,
+    pub item_id: i64,
+    pub link_id: i64,
+    pub lead_state: Option<&'static str>,
+    pub title: &'a str,
+    pub body: &'a str,
+    /// The link's `outcome` in the same transaction; the link stays open.
+    pub outcome: Option<&'static str>,
+}
+
+/// A Decide entry on a link, in one transaction. A link has at most one open `decide` entry with
+/// the same `lead_state`: with one open nothing is inserted and None comes back (the outcome is
+/// still written).
+pub fn add_link_entry(db: &Path, n: &LinkEntry) -> Result<Option<i64>, String> {
+    let mut conn = super::super::capture::open(db)?;
+    let tx = conn
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|e| format!("Failed to lock the database: {e}"))?;
+    let e = |e: rusqlite::Error| format!("Failed to write the entry: {e}");
+    let open: i64 = tx
+        .query_row(
+            "SELECT COUNT(*) FROM needs_you WHERE link_id = ?1 AND kind = 'decide' AND status = 'open' AND lead_state IS ?2",
+            params![n.link_id, n.lead_state],
+            |r| r.get(0),
+        )
+        .map_err(e)?;
+    let mut id = None;
+    if open == 0 {
+        let (task, sub) = match n.kind {
+            ItemKind::Task => (Some(n.item_id), None),
+            ItemKind::Subtask => (None, Some(n.item_id)),
+        };
+        let title: String = n.title.chars().take(200).collect();
+        let body: String = n.body.chars().take(2000).collect();
+        tx.execute(
+            "INSERT INTO needs_you (kind, task_id, subtask_id, link_id, title, body, status, lead_state)
+             VALUES ('decide', ?1, ?2, ?3, ?4, ?5, 'open', ?6)",
+            params![task, sub, n.link_id, title, body, n.lead_state],
+        )
+        .map_err(e)?;
+        id = Some(tx.last_insert_rowid());
+    }
+    if let Some(outcome) = n.outcome {
+        tx.execute("UPDATE task_agents SET outcome = ?1 WHERE id = ?2 AND ended_at IS NULL", params![outcome, n.link_id])
+            .map_err(e)?;
+    }
+    tx.commit().map_err(|e| format!("Failed to save the entry: {e}"))?;
+    Ok(id)
+}
+
+/// The open prompt entry of a link (`decide`, lead state `prompt`), if any.
+pub fn open_prompt(db: &Path, link_id: i64) -> Result<Option<i64>, String> {
+    let conn = open(db)?;
+    match conn.query_row(
+        "SELECT id FROM needs_you WHERE link_id = ?1 AND kind = 'decide' AND status = 'open' AND lead_state = 'prompt'
+         ORDER BY id LIMIT 1",
+        [link_id],
+        |r| r.get(0),
+    ) {
+        Ok(id) => Ok(Some(id)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(format!("Failed to read entries: {e}")),
+    }
+}
+
+/// Closes the open prompt entries of a link: the agent left the prompt by itself.
+pub fn close_prompt(db: &Path, link_id: i64) -> Result<(), String> {
+    let conn = super::super::capture::open(db)?;
+    conn.execute(
+        "UPDATE needs_you SET status = 'dismissed', decided_by = 'app', reason = 'The agent went on', answered_at = datetime('now')
+         WHERE link_id = ?1 AND kind = 'decide' AND status = 'open' AND lead_state = 'prompt'",
+        [link_id],
+    )
+    .map_err(|e| format!("Failed to close the entry: {e}"))?;
+    Ok(())
+}
+
+/// The `outcome` of a link.
+pub fn link_outcome(db: &Path, link_id: i64) -> Result<Option<String>, String> {
+    let conn = open(db)?;
+    conn.query_row("SELECT outcome FROM task_agents WHERE id = ?1", [link_id], |r| r.get(0))
+        .map_err(|e| format!("Failed to read the link: {e}"))
+}
+
+/// The wrap-up request of a link, decided before the message is typed: `wrap_asked_at` is set and
+/// the report forgotten (`reported_at` cleared), so a result reported after the request reads as
+/// `reported` again, as after a failed check was sent back.
+pub fn ask_wrap_up(db: &Path, link_id: i64, at_ms: i64) -> Result<(), String> {
+    let at = chrono::DateTime::from_timestamp_millis(at_ms)
+        .ok_or("Invalid time")?
+        .format("%Y-%m-%d %H:%M:%S")
+        .to_string();
+    let mut conn = super::super::capture::open(db)?;
+    let tx = conn
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|e| format!("Failed to lock the database: {e}"))?;
+    let n = tx
+        .execute(
+            "UPDATE task_agents SET wrap_asked_at = ?2, reported_at = NULL
+             WHERE id = ?1 AND ended_at IS NULL AND wrap_asked_at IS NULL",
+            params![link_id, at],
+        )
+        .map_err(|e| format!("Failed to save the decision: {e}"))?;
+    if n == 0 {
+        return Err(format!("Link {link_id} was already asked to wrap up"));
+    }
+    tx.commit().map_err(|e| format!("Failed to save the decision: {e}"))?;
+    Ok(())
+}
+
 /// One of the counters of `task_agents`: each is bumped in the same transaction as the decision
 /// it limits, before the message or the start.
-// Only `CheckFails` is bumped yet (through `decide_send_back`); Tasks 11 and 12 bump the others.
+// Task 12 bumps the last two.
 #[allow(dead_code)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Counter {
@@ -222,7 +335,6 @@ fn bump_in(conn: &Connection, link_id: i64, c: Counter) -> Result<i64, String> {
 }
 
 /// Adds one to a counter of a link and returns the new value. The callers hold `crate::org_shared()`.
-#[allow(dead_code)] // Tasks 11 and 12 call it; Task 10 bumps inside `decide_send_back`.
 pub fn bump(db: &Path, link_id: i64, c: Counter) -> Result<i64, String> {
     let mut conn = super::super::capture::open(db)?;
     let tx = conn

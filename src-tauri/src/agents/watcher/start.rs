@@ -41,6 +41,9 @@ pub struct Env<'a> {
     pub send: &'a dyn Fn(&Agent, &str) -> Result<(), String>,
     /// The login shell's `PATH` for the check command, looked up only when one runs.
     pub path_env: &'a dyn Fn() -> String,
+    /// The last `events::TAIL_BYTES` of the transcript of a session id (read only, one file);
+    /// tests give text instead of reading `~/.claude`.
+    pub transcript_tail: &'a dyn Fn(&str) -> Option<String>,
 }
 
 // ---------------------------------------------------------------- the pending start
@@ -476,7 +479,7 @@ mod tests {
     fn go_with(f: &Fx, d: &Deps, mem: &mut Memory) -> Report {
         let get_cli = || Ok(Box::new(Shared(f.cli.clone())) as Box<dyn Cli>);
         let trusted = || vec![f.folder.clone()];
-        let env = Env { git: &f.git, cli: &get_cli, trusted: &trusted, dev: false, mcp_path: MCP, send: &no_send, path_env: &no_path };
+        let env = Env { git: &f.git, cli: &get_cli, trusted: &trusted, dev: false, mcp_path: MCP, send: &no_send, path_env: &no_path, transcript_tail: &|_: &str| None };
         tick(d, mem, Some(&env))
     }
 
@@ -708,7 +711,7 @@ mod tests {
         let f = fx("untrusted", vec![]);
         let get_cli = || Ok(Box::new(Shared(f.cli.clone())) as Box<dyn Cli>);
         let trusted = || vec!["/somewhere/else".to_string()];
-        let env = Env { git: &f.git, cli: &get_cli, trusted: &trusted, dev: false, mcp_path: MCP, send: &no_send, path_env: &no_path };
+        let env = Env { git: &f.git, cli: &get_cli, trusted: &trusted, dev: false, mcp_path: MCP, send: &no_send, path_env: &no_path, transcript_tail: &|_: &str| None };
         tick(&deps(&f.dir, &[]), &mut Memory::default(), Some(&env));
         assert_eq!(adds(&f), 0);
         let title: String = one(&f.db, "SELECT title FROM needs_you");
@@ -1031,7 +1034,7 @@ mod tests {
         Connection::open(&f.db).unwrap().execute("UPDATE projects SET folder_path = 'repo'", []).unwrap();
         let get_cli = || Ok(Box::new(Shared(f.cli.clone())) as Box<dyn Cli>);
         let trusted = || vec!["repo".to_string()];
-        let env = Env { git: &f.git, cli: &get_cli, trusted: &trusted, dev: false, mcp_path: MCP, send: &no_send, path_env: &no_path };
+        let env = Env { git: &f.git, cli: &get_cli, trusted: &trusted, dev: false, mcp_path: MCP, send: &no_send, path_env: &no_path, transcript_tail: &|_: &str| None };
         tick(&deps(&f.dir, &[]), &mut Memory::default(), Some(&env));
         assert_eq!(adds(&f), 0);
         let title: String = one(&f.db, "SELECT title FROM needs_you");

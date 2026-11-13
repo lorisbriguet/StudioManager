@@ -93,6 +93,18 @@ pub fn last_model(path: &Path) -> Option<String> {
     last_model_in(text)
 }
 
+/// The last `bytes` of one session's transcript (its first line may be cut), read from the file
+/// `locate` finds; None without such a file.
+pub fn tail_text(claude_dir: &Path, session_id: &str, bytes: u64) -> Option<String> {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut f = std::fs::File::open(locate(claude_dir, session_id)?).ok()?;
+    let len = f.metadata().ok()?.len();
+    f.seek(SeekFrom::Start(len.saturating_sub(bytes))).ok()?;
+    let mut buf = Vec::new();
+    f.take(bytes).read_to_end(&mut buf).ok()?;
+    Some(String::from_utf8_lossy(&buf).into_owned())
+}
+
 fn truncate(s: &str) -> String {
     s.chars().take(SUMMARY_MAX).collect()
 }
@@ -436,6 +448,20 @@ mod tests {
         }
         std::fs::write(&file, &body).unwrap();
         assert_eq!(read_tail(&file, 3), summarise(FIXTURE, 3));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn tail_text_reads_only_the_end_of_the_sessions_own_file() {
+        let sid = "00000000-1111-2222-3333-444444444444";
+        let dir = std::env::temp_dir().join(format!("sm-tail-text-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("projects").join("p")).unwrap();
+        std::fs::write(dir.join("projects").join("p").join(format!("{sid}.jsonl")), "0123456789\nabcdef\n").unwrap();
+        assert_eq!(tail_text(&dir, sid, 100).as_deref(), Some("0123456789\nabcdef\n"));
+        assert_eq!(tail_text(&dir, sid, 7).as_deref(), Some("abcdef\n"));
+        assert_eq!(tail_text(&dir, "11111111-1111-2222-3333-444444444444", 7), None);
+        assert_eq!(tail_text(&dir, "../x", 7), None);
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

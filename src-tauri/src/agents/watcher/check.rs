@@ -33,7 +33,7 @@ pub const SENT_TAIL: usize = 8 * 1024;
 /// The most of a diff that is stored (what `get_needs_you` of the MCP server reads).
 pub const DIFF_CAP: usize = 200 * 1024;
 /// A list older than this is not trusted to say a worker finished.
-const LIST_MAX_AGE_MS: i64 = 5 * 60_000;
+pub(super) const LIST_MAX_AGE_MS: i64 = 5 * 60_000;
 /// After a failed check was typed back, how long the agent may still list as done before the
 /// worker is taken to have ended without a new report.
 pub const AWAIT_REPORT_MS: i64 = 5 * 60_000;
@@ -204,7 +204,7 @@ fn write_diff(app_dir: &Path, org: &str, entry: i64, text: &str) -> Result<(), S
     write_atomic(&path, first_bytes(text, DIFF_CAP))
 }
 
-fn find_agent<'a>(agents: &'a [Agent], link: &WatcherLink) -> Option<&'a Agent> {
+pub(super) fn find_agent<'a>(agents: &'a [Agent], link: &WatcherLink) -> Option<&'a Agent> {
     agents.iter().find(|a| match &link.session_id {
         Some(s) => &a.session_id == s,
         None => a.short_id.as_deref() == Some(link.short_id.as_str()),
@@ -526,7 +526,7 @@ mod tests {
             f.send_result.lock().unwrap().clone()
         };
         let path = || "/usr/bin:/bin".to_string();
-        let env = Env { git: &f.git, cli: &get_cli, trusted: &trusted, dev: false, mcp_path: "/x", send: &send, path_env: &path };
+        let env = Env { git: &f.git, cli: &get_cli, trusted: &trusted, dev: false, mcp_path: "/x", send: &send, path_env: &path, transcript_tail: &|_: &str| None };
         tick(d, mem, Some(&env))
     }
 
