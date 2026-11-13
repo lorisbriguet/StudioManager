@@ -26,6 +26,21 @@ vi.mock("../lib/log", () => ({ logError: vi.fn(() => Promise.resolve()) }));
 
 // The Inbox and Needs you tabs read the database through these hooks.
 const capturesMock = vi.hoisted(() => ({ newCaptures: [] as unknown[], briefs: [] as unknown[] }));
+const needsMock = vi.hoisted(() => ({ open: [] as unknown[] }));
+const linksMock = vi.hoisted(() => ({ links: [] as unknown[] }));
+vi.mock("../db/hooks/useNeedsYou", () => ({
+  useOpenEntries: () => ({ data: needsMock.open }),
+  useNeedsYouCount: () => needsMock.open.length + capturesMock.briefs.length,
+  useAloneEntries: () => ({ data: [] }),
+  useAnswerEntry: () => ({ mutate: vi.fn() }),
+  useReopenEntry: () => ({ mutate: vi.fn() }),
+  useAddDecision: () => ({ mutate: vi.fn() }),
+  useSendBack: () => ({ mutate: vi.fn() }),
+}));
+vi.mock("../db/hooks/useTaskAgents", () => ({
+  useOpenLinks: () => ({ data: linksMock.links }),
+  useAcceptResult: () => ({ mutate: vi.fn() }),
+}));
 vi.mock("../db/hooks/useCaptures", () => ({
   useCaptures: () => ({ data: capturesMock.newCaptures, isLoading: false }),
   useBriefEntries: () => ({ data: capturesMock.briefs, isLoading: false }),
@@ -79,6 +94,8 @@ describe("AgentsPage", () => {
     useAppStore.setState({ agentsEnabled: true });
     capturesMock.newCaptures = [];
     capturesMock.briefs = [];
+    needsMock.open = [];
+    linksMock.links = [];
   });
 
   it("lists groups in order and shows the project label", async () => {
@@ -90,7 +107,7 @@ describe("AgentsPage", () => {
     ];
     setInvokeHandler((cmd) => (cmd === "agents_list" ? list : []));
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={["/agents?tab=all"]}>
         <AgentsPage />
       </MemoryRouter>,
     );
@@ -130,7 +147,7 @@ describe("AgentsPage", () => {
   it("selects it too when ?started= arrives while the page is open", async () => {
     setInvokeHandler((cmd) => (cmd === "agents_list" ? [agent("working", { shortId: "beef0001" })] : []));
     render(
-      <MemoryRouter initialEntries={["/agents"]}>
+      <MemoryRouter initialEntries={["/agents?tab=all"]}>
         <AgentsPage />
         <LocationProbe />
       </MemoryRouter>,
@@ -151,16 +168,34 @@ describe("AgentsPage", () => {
   };
 
   it("has the tabs Needs you, Inbox, All agents, in that order", async () => {
-    tabsSetup("/agents");
+    tabsSetup("/agents?tab=all");
     await screen.findByText("agent-idle");
     expect(screen.getAllByRole("tab").map((x) => x.textContent)).toEqual(["Needs you", "Inbox", "All agents"]);
   });
 
-  it("shows All agents without a tab parameter", async () => {
+  it("shows Needs you without a tab parameter", async () => {
     tabsSetup("/agents");
+    const panel = await screen.findByRole("tabpanel");
+    expect(panel).toHaveTextContent("Nothing waits for you.");
+    expect(screen.getByRole("tab", { name: "Needs you" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.queryByText("agent-idle")).not.toBeInTheDocument();
+  });
+
+  it("shows All agents for ?tab=all", async () => {
+    tabsSetup("/agents?tab=all");
     await screen.findByText("agent-idle");
     expect(screen.getByRole("tab", { name: "All agents" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByText("Select an agent to see its conversation.")).toBeInTheDocument();
+  });
+
+  it("leaves an agent with an open watcher link out of the All agents Needs you group", async () => {
+    linksMock.links = [{ kind: "task", item_id: 1, short_id: "feed0001", session_id: "sess-needs-you", started_by: "watcher" }];
+    tabsSetup("/agents?tab=all", [
+      agent("needs-you", { shortId: "feed0001" }),
+      agent("needs-you", { sessionId: "sess-hand", shortId: "feed0002", name: "agent-hand" }),
+    ]);
+    await screen.findByText("agent-hand");
+    expect(screen.queryByText("agent-needs-you")).not.toBeInTheDocument();
   });
 
   it("shows the Inbox for ?tab=inbox", async () => {
@@ -190,23 +225,24 @@ describe("AgentsPage", () => {
     expect(screen.getByRole("tab", { name: "All agents" })).toHaveAttribute("aria-selected", "true");
   });
 
-  it("clicking a tab sets ?tab= with replace; All agents clears it", async () => {
-    tabsSetup("/agents");
+  it("clicking a tab sets ?tab= with replace", async () => {
+    tabsSetup("/agents?tab=all");
     await screen.findByText("agent-idle");
     fireEvent.click(screen.getByRole("tab", { name: "Inbox" }));
     expect(screen.getByTestId("location")).toHaveTextContent("?tab=inbox");
     fireEvent.click(screen.getByRole("tab", { name: "Needs you" }));
     expect(screen.getByTestId("location")).toHaveTextContent("?tab=needs-you");
     fireEvent.click(screen.getByRole("tab", { name: "All agents" }));
-    expect(screen.getByTestId("location").textContent).toBe("");
+    expect(screen.getByTestId("location")).toHaveTextContent("?tab=all");
   });
 
   it("shows plain counts on the Needs you and Inbox tabs", async () => {
     capturesMock.newCaptures = [{ id: 1 }, { id: 2 }];
     capturesMock.briefs = [{ capture_id: 3 }];
-    tabsSetup("/agents");
+    needsMock.open = [{ id: 1 }, { id: 2 }];
+    tabsSetup("/agents?tab=all");
     await screen.findByText("agent-idle");
-    expect(screen.getByRole("tab", { name: "Needs you 1" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Needs you 3" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Inbox 2" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "All agents" })).toBeInTheDocument();
   });
@@ -224,7 +260,7 @@ describe("AgentsPage", () => {
       throw "Agents are switched off";
     });
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={["/agents?tab=all"]}>
         <AgentsPage />
       </MemoryRouter>,
     );

@@ -97,6 +97,7 @@ permissions = [
   "allow-routines-open-folder",
   "allow-menubar-open-main",
   "allow-menubar-hide",
+  "allow-menubar-set-needs-count",
   "allow-capture-hide",
   "allow-capture-hotkey-status",
   "allow-main-ready",

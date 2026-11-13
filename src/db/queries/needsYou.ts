@@ -9,12 +9,14 @@ export interface NeedsYouEntry extends NeedsYouRow {
   /** The link's short id and session id; null when the entry has no link. */
   short_id: string | null;
   session_id: string | null;
+  /** The link's pull request, when it has one. */
+  pr_url: string | null;
 }
 
 const SELECT_ENTRY = `
   SELECT n.*, COALESCE(t.title, s.title) AS item_title,
          p.id AS project_id, p.name AS project_name,
-         a.short_id AS short_id, a.session_id AS session_id
+         a.short_id AS short_id, a.session_id AS session_id, a.pr_url AS pr_url
   FROM needs_you n
   LEFT JOIN tasks t ON t.id = n.task_id
   LEFT JOIN subtasks s ON s.id = n.subtask_id

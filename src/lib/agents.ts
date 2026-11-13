@@ -209,6 +209,11 @@ export function saveImage(mime: string, data: string): Promise<string> {
   return invoke<string>("agents_save_image", { mime, data });
 }
 
+/** The number beside the menu bar icon: what waits in Needs you. 0 clears it. */
+export function setNeedsCount(n: number): Promise<void> {
+  return invoke<void>("menubar_set_needs_count", { n });
+}
+
 export function sendMessage(sessionId: string, text: string): Promise<void> {
   return invoke<void>("agents_send", { sessionId, text });
 }

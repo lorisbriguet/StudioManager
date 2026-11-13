@@ -5,7 +5,9 @@ import { useAppStore } from "../stores/app-store";
 import { useT } from "../i18n/useT";
 import { Button, EmptyState, ICONS, PageHeader, TabItem } from "../components/ui";
 import { TabList, tabIds } from "../components/ui/TabItem";
-import { useBriefEntries, useCaptures } from "../db/hooks/useCaptures";
+import { useCaptures } from "../db/hooks/useCaptures";
+import { useNeedsYouCount } from "../db/hooks/useNeedsYou";
+import { useOpenLinks } from "../db/hooks/useTaskAgents";
 import { useAgents } from "../components/agents/useAgents";
 import { AgentList } from "../components/agents/AgentList";
 import { AgentDetail } from "../components/agents/AgentDetail";
@@ -30,16 +32,19 @@ export function AgentsPage() {
   const [terminalFor, setTerminalFor] = useState<string | null>(null);
   const selected = agents.find((a) => a.sessionId === selectedId) ?? null;
 
-  // `?tab=needs-you|inbox`; no `tab` is All agents, and so is anything that points at an agent:
-  // `?agent=`, `?new=1` and `?started=` win over `tab`.
+  // `?tab=needs-you|inbox|all`; no `tab` is Needs you. Anything that points at an agent opens All
+  // agents instead: `?agent=`, `?new=1` and `?started=` win over `tab`.
   const rawTab = params.get("tab");
   const picksAgent = params.has("agent") || params.has("new") || params.has("started");
-  const tab: Tab = picksAgent ? "all" : rawTab === "needs-you" || rawTab === "inbox" ? rawTab : "all";
+  const tab: Tab = picksAgent ? "all" : rawTab === "inbox" || rawTab === "all" ? rawTab : "needs-you";
   const idBase = useId();
   const panel = tabIds(idBase, tab);
   const { data: newCaptures = [] } = useCaptures("new");
-  const { data: briefs = [] } = useBriefEntries();
-  const counts: Record<Tab, number> = { "needs-you": briefs.length, inbox: newCaptures.length, all: 0 };
+  const needsYouCount = useNeedsYouCount();
+  // An agent a watcher worker runs for an item is listed in Needs you, not in its group here.
+  const { data: openLinks = [] } = useOpenLinks();
+  const watcherAgents = new Set(openLinks.filter((l) => l.started_by === "watcher").map((l) => l.short_id));
+  const counts: Record<Tab, number> = { "needs-you": needsYouCount, inbox: newCaptures.length, all: 0 };
   const tabLabels: Record<Tab, string> = {
     "needs-you": t.agents_tab_needs_you,
     inbox: t.agents_tab_inbox,
@@ -63,7 +68,7 @@ export function AgentsPage() {
     setTerminalFor(null);
   }
   useEffect(() => {
-    if (wantsNew) setParams({}, { replace: true });
+    if (wantsNew) setParams({ tab: "all" }, { replace: true });
   }, [wantsNew, setParams]);
 
   // `?started=<shortId>` ("Start work with agent" on a task): select it once listed.
@@ -73,7 +78,7 @@ export function AgentsPage() {
     setPendingShortId(startedParam);
   }
   useEffect(() => {
-    if (startedParam) setParams({}, { replace: true });
+    if (startedParam) setParams({ tab: "all" }, { replace: true });
   }, [startedParam, setParams]);
 
   const select = (id: string) => {
@@ -84,7 +89,7 @@ export function AgentsPage() {
 
   // The New agent button works from any tab: the form lives in All agents.
   const startNew = () => {
-    if (tab !== "all") setParams(selectedId ? { agent: selectedId } : {}, { replace: true });
+    if (tab !== "all") setParams(selectedId ? { agent: selectedId } : { tab: "all" }, { replace: true });
     setStarting(true);
     setTerminalFor(null);
   };
@@ -114,7 +119,7 @@ export function AgentsPage() {
                   controls={ids.panel}
                   label={counts[k] > 0 ? `${tabLabels[k]} ${counts[k]}` : tabLabels[k]}
                   active={tab === k}
-                  onActivate={() => setParams(k === "all" ? {} : { tab: k }, { replace: true })}
+                  onActivate={() => setParams({ tab: k }, { replace: true })}
                 />
               );
             })}
@@ -135,7 +140,7 @@ export function AgentsPage() {
                 {agents.length === 0 ? (
                   <EmptyState icon={ICONS.agents} message={t.agents_empty} />
                 ) : (
-                  <AgentList byGroup={byGroup} selectedId={selectedId} onSelect={select} />
+                  <AgentList byGroup={byGroup} selectedId={selectedId} onSelect={select} leaveOut={watcherAgents} />
                 )}
               </section>
               <div className="flex-1 min-w-0 min-h-0 flex flex-col border-l border-[var(--color-border-divider)] pl-8">
@@ -157,7 +162,7 @@ export function AgentsPage() {
                       <AgentDetail
                         agent={selected}
                         onOpenTerminal={setTerminalFor}
-                        onDeleted={() => setParams({})}
+                        onDeleted={() => setParams({ tab: "all" })}
                         onSwitched={setPendingShortId}
                       />
                     </div>

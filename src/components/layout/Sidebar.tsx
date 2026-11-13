@@ -10,6 +10,8 @@ import { confirmIfDirty } from "../../lib/dirty-guard";
 import { useUnreadNotificationCount } from "../../db/hooks/useNotifications";
 import { useUpkeepOverview } from "../../db/hooks/useUpkeep";
 import { usePaperlessInbox } from "../../db/hooks/usePaperlessInbox";
+import { useNeedsYouCount } from "../../db/hooks/useNeedsYou";
+import { setNeedsCount } from "../../lib/agents";
 import { useTimerActions } from "../../hooks/useTimerActions";
 import { useT } from "../../i18n/useT";
 import type { UIKey } from "../../i18n/ui";
@@ -54,6 +56,12 @@ export function Sidebar() {
   const { overdueCount } = useUpkeepOverview();
   // Paperless documents waiting to be checked on the Expenses page (not linked or dismissed).
   const toCheckCount = usePaperlessInbox().items.filter((i) => i.state === "new").length;
+  // What waits in Agents › Needs you: the badge here and the number beside the menu bar icon.
+  const needsYouCount = useNeedsYouCount();
+  const agentsCount = agentsEnabled ? needsYouCount : 0;
+  useEffect(() => {
+    setNeedsCount(agentsCount).catch(() => {});
+  }, [agentsCount]);
   const openTab = useTabStore((s) => s.openTab);
   const t = useT();
   const navigate = useNavigate();
@@ -219,7 +227,16 @@ export function Sidebar() {
           const isNotifications = item.labelKey === "notifications";
           const isUpkeep = item.labelKey === "upkeep";
           const isExpenses = item.labelKey === "expenses";
-          const badgeCount = isNotifications ? unreadCount : isUpkeep ? overdueCount : isExpenses ? toCheckCount : 0;
+          const isAgents = item.labelKey === "agents";
+          const badgeCount = isNotifications
+            ? unreadCount
+            : isUpkeep
+              ? overdueCount
+              : isExpenses
+                ? toCheckCount
+                : isAgents
+                  ? agentsCount
+                  : 0;
           const isFocused = focusIdx === currentLinkIdx;
           // Collapsed, the link is only an icon: it takes its name from aria-label and shows it in a Tooltip.
           const collapsedName = badgeCount > 0 ? `${label} (${badgeCount})` : label;

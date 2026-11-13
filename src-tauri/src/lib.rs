@@ -1105,6 +1105,7 @@ pub fn run() {
             agents::routines::routines_open_folder,
             menubar::menubar_open_main,
             menubar::menubar_hide,
+            menubar::menubar_set_needs_count,
             menubar::capture::capture_hide,
             menubar::capture::capture_hotkey_status,
             menubar::main_ready,

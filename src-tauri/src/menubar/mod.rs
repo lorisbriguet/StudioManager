@@ -1,7 +1,7 @@
 //! Menu bar part of the Agents feature: app lifetime (keep running with the window closed,
 //! start hidden at login), the menu bar icon and its panel window.
 
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use tauri::image::Image;
@@ -36,6 +36,8 @@ const ICON_AMBER: &[u8] = include_bytes!("../../icons/menubar/arrow-amber@2x.png
 
 /// Whether an agent is waiting for you (amber icon), as last reported by the poller.
 static ATTENTION: AtomicBool = AtomicBool::new(false);
+/// How many things wait on you (open Needs you entries and briefs), as last sent by the app.
+static NEEDS_COUNT: AtomicU32 = AtomicU32::new(0);
 /// When the panel last hid because it lost focus (ms since epoch). A click on the icon
 /// takes the focus from the panel before the click arrives: without this, that click
 /// would open the panel again instead of closing it.
@@ -195,6 +197,9 @@ fn apply_tray(app: &AppHandle, enabled: bool) {
     if let Some(img) = icon(needs_you) {
         builder = builder.icon(img);
     }
+    if let Some(title) = count_title(NEEDS_COUNT.load(Ordering::Relaxed)) {
+        builder = builder.title(title);
+    }
     if let Err(e) = builder.build(app) {
         log::error!("[menubar] could not add the menu bar icon: {e}");
         return;
@@ -218,6 +223,32 @@ pub fn set_attention(app: &AppHandle, needs_you: bool) {
             let _ = tray.set_icon_with_as_template(icon(needs_you), !needs_you);
         }
     });
+}
+
+/// The text beside the menu bar icon: the number when something waits, nothing at 0.
+fn count_title(n: u32) -> Option<String> {
+    (n > 0).then(|| n.to_string())
+}
+
+/// The number beside the icon: what waits on you in Needs you (open entries and briefs).
+/// Sent by the app whenever the count changes; the amber icon stays the poller's.
+pub fn set_needs_count(app: &AppHandle, n: u32) {
+    if NEEDS_COUNT.swap(n, Ordering::Relaxed) == n {
+        return;
+    }
+    // The tray handle may only be touched on the main thread (see `sync_tray`).
+    let handle = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        if let Some(tray) = handle.tray_by_id(TRAY_ID) {
+            let _ = tray.set_title(count_title(n));
+        }
+    });
+}
+
+/// From the main window: the Needs you count for the menu bar.
+#[tauri::command]
+pub fn menubar_set_needs_count(app: AppHandle, n: u32) {
+    set_needs_count(&app, n);
 }
 
 fn ensure_panel(app: &AppHandle) -> tauri::Result<tauri::WebviewWindow> {
@@ -375,6 +406,13 @@ pub fn menubar_open_main(app: AppHandle, agent: Option<String>, new_agent: bool,
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_count_shows_beside_the_icon_only_above_zero() {
+        assert_eq!(count_title(0), None);
+        assert_eq!(count_title(3).as_deref(), Some("3"));
+        assert_eq!(count_title(12).as_deref(), Some("12"));
+    }
 
     #[test]
     fn the_click_that_closed_the_panel_does_not_reopen_it() {

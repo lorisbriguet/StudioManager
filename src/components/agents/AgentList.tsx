@@ -35,6 +35,8 @@ interface AgentListProps {
   compact?: boolean;
   /** Content under a row, outside its button (the panel's inline prompt answer). */
   renderExtra?: (agent: Agent) => ReactNode;
+  /** Short ids of agents left out of the Needs you group: the Needs you tab lists them instead. */
+  leaveOut?: ReadonlySet<string>;
 }
 
 const FOLDED_KEY = "agents.foldedGroups";
@@ -57,7 +59,7 @@ function readFolded(): Set<Section> {
   return new Set<Section>(["done"]);
 }
 
-export function AgentList({ byGroup, selectedId, onSelect, compact, renderExtra }: AgentListProps) {
+export function AgentList({ byGroup, selectedId, onSelect, compact, renderExtra, leaveOut }: AgentListProps) {
   const t = useT();
   const [folded, setFolded] = useState<Set<Section>>(readFolded);
   const flags = useFlaggedAgents();
@@ -88,7 +90,7 @@ export function AgentList({ byGroup, selectedId, onSelect, compact, renderExtra 
       key: g as Section,
       label: t[GROUP_KEYS[g]],
       dot: agentGroupDotClass(g),
-      agents: byGroup[g].filter((a) => !moved(a)),
+      agents: byGroup[g].filter((a) => !moved(a) && !(g === "needs-you" && a.shortId != null && leaveOut?.has(a.shortId))),
     })),
   ];
 

@@ -70,8 +70,8 @@ describe("getItemAgents, getOpenLinks, wasCaptured", () => {
     prep("INSERT INTO task_agents (task_id, short_id, name, ended_at) VALUES ($1, 'shut', 'c', '2026-11-12 11:00:00')").run(taskId);
     const rows = await getOpenLinks();
     expect(rows).toHaveLength(2);
-    expect(rows).toContainEqual({ kind: "task", item_id: taskId, short_id: "open1", session_id: "sess-1" });
-    expect(rows).toContainEqual({ kind: "subtask", item_id: subId, short_id: "open2", session_id: null });
+    expect(rows).toContainEqual({ kind: "task", item_id: taskId, short_id: "open1", session_id: "sess-1", started_by: null });
+    expect(rows).toContainEqual({ kind: "subtask", item_id: subId, short_id: "open2", session_id: null, started_by: null });
   });
 
   it("wasCaptured is true only for an item a capture was filed as", async () => {
