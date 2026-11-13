@@ -17,6 +17,7 @@ pub mod transcript;
 pub mod uploads;
 pub mod usage;
 pub mod validate;
+pub mod watcher;
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};

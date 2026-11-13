@@ -357,7 +357,14 @@ export function trustFolder(folder: string): Promise<string> {
 export interface BriefingStatus {
   /** `demo`, `off`, `agents_off`, `access_off`, `budget`, `too_soon`, `running`, `nothing`; null when a session may start at the next check. */
   paused: string | null;
+  /** With `budget`: the percent the reason is about (the week's, or the 5-hour window's). */
   percent: number | null;
+  /** With `budget`: why. */
+  reason?: "ahead_of_week" | "five_hour" | "no_data" | "stale" | null;
+  /** With `budget` and `ahead_of_week`: where the week's pace line stands, in percent. */
+  line?: number | null;
+  /** With `budget` and `stale`: the age of the last usage reading, in whole minutes. */
+  minutesOld?: number | null;
   /** When the next slot opens (epoch ms), with `too_soon`. */
   nextAt: number | null;
   running: boolean;
@@ -378,7 +385,16 @@ export interface BriefingLine {
 /** The muted lines under the brief session switch and in the Inbox: the next slot or why it waits, and the last failure. */
 export function briefingLines(
   status: BriefingStatus | null,
-  t: Record<"briefing_next" | "briefing_paused_budget" | "briefing_last_failed" | "briefing_access_off", string>,
+  t: Record<
+    | "briefing_next"
+    | "briefing_paused_week"
+    | "briefing_paused_five_hour"
+    | "briefing_paused_no_data"
+    | "briefing_paused_stale"
+    | "briefing_last_failed"
+    | "briefing_access_off",
+    string
+  >,
   now: number,
 ): BriefingLine[] {
   if (!status || ["demo", "off", "agents_off"].includes(status.paused ?? "")) return [];
@@ -386,8 +402,17 @@ export function briefingLines(
   if (status.paused === "too_soon" && status.nextAt != null) {
     const min = Math.max(1, Math.ceil((status.nextAt - now) / 60_000));
     lines.push({ text: t.briefing_next.replace("{min}", String(min)), warn: false });
-  } else if (status.paused === "budget" && status.percent != null) {
-    lines.push({ text: t.briefing_paused_budget.replace("{percent}", String(Math.round(status.percent))), warn: true });
+  } else if (status.paused === "budget") {
+    const whole = (n: number | null | undefined) => String(Math.round(n ?? 0));
+    const text =
+      status.reason === "ahead_of_week"
+        ? t.briefing_paused_week.replace("{percent}", whole(status.percent)).replace("{line}", whole(status.line))
+        : status.reason === "five_hour"
+          ? t.briefing_paused_five_hour.replace("{percent}", whole(status.percent))
+          : status.reason === "stale"
+            ? t.briefing_paused_stale.replace("{min}", whole(status.minutesOld))
+            : t.briefing_paused_no_data;
+    lines.push({ text, warn: true });
   } else if (status.paused === "access_off") {
     lines.push({ text: t.briefing_access_off, warn: true });
   }

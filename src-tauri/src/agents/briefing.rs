@@ -9,7 +9,8 @@
 use super::actions;
 use super::cli::{read_settings, AgentsSettings, Cli};
 use super::model::{Agent, Group};
-use super::usage::limits::{self, Meter};
+use super::usage::limits;
+use super::watcher::budget::{self, Budget};
 use crate::agent_access::{read_access, write_atomic, AccessSettings};
 use crate::orgs::{org_dir, Organisation, Registry, DB_FILE};
 use chrono::{DateTime, Local};
@@ -133,7 +134,6 @@ pub async fn agents_briefing_folder(
 
 pub const SLOT_MS: i64 = 15 * 60_000;
 pub const MAX_TRIES: i64 = 3;
-pub const FIVE_HOUR_CAP: f64 = 80.0;
 pub const RUN_LIMIT_MS: i64 = 20 * 60_000;
 pub const WAITING_LIMIT_MS: i64 = 2 * 60_000;
 /// A session just started may not be in the poller's list yet: not "finished" before this.
@@ -185,7 +185,8 @@ pub enum Paused {
     Off,
     AgentsOff,
     AccessOff,
-    Budget(f64),
+    /// Why the budget rule pauses (never `Budget::Ok`).
+    Budget(Budget),
     /// The epoch ms the next slot opens.
     TooSoon(i64),
     Running,
@@ -311,16 +312,14 @@ pub fn pick_org(app_dir: &Path, access: &AccessSettings) -> Option<(Organisation
         .map(|(org, found)| (org, found.into_iter().map(|(id, _)| id).collect()))
 }
 
-pub fn five_hour_percent(meters: &[Meter]) -> Option<f64> {
-    meters.iter().find(|m| m.window == "five_hour").map(|m| m.percent)
-}
-
-/// Why no session starts now, in the order the design gives; None when one may.
+/// Why no session starts now, in the order the design gives; None when one may. `budget` is the
+/// budget rule's verdict; None only for the cheap early pass that has not read the usage yet.
+/// Missing, stale or unreadable usage is `Budget::NoData` / `Budget::Stale`, which pause.
 pub fn paused(
     s: &BriefState,
     settings: &AgentsSettings,
     demo: bool,
-    five_hour: Option<f64>,
+    budget: Option<Budget>,
     has_work: bool,
     now: i64,
 ) -> Option<Paused> {
@@ -339,8 +338,8 @@ pub fn paused(
     if let Some(at) = s.last_start_at.filter(|at| now - at < SLOT_MS) {
         return Some(Paused::TooSoon(at + SLOT_MS));
     }
-    if let Some(p) = five_hour.filter(|p| *p >= FIVE_HOUR_CAP) {
-        return Some(Paused::Budget(p));
+    if let Some(b) = budget.filter(|b| *b != Budget::Ok) {
+        return Some(Paused::Budget(b));
     }
     (!has_work).then_some(Paused::Nothing)
 }
@@ -422,13 +421,14 @@ struct Evaluation {
 }
 
 /// Nothing is read before the cheap reasons (demo, switches, running, slot) have been ruled out.
-fn evaluate(app_dir: &Path, s: &BriefState, settings: &AgentsSettings, demo: bool, now: i64) -> Evaluation {
+fn evaluate(app_dir: &Path, limits_dir: &Path, s: &BriefState, settings: &AgentsSettings, demo: bool, now: i64) -> Evaluation {
     let early = paused(s, settings, demo, None, true, now);
     if early.is_some() {
         return Evaluation { paused: early, work: None };
     }
-    let five = limits::load(app_dir, now).and_then(|(m, _)| five_hour_percent(&m));
-    if let Some(p) = paused(s, settings, demo, five, true, now) {
+    // Read only: in the dev build `limits_dir` is the installed app's folder.
+    let rule = budget::budget(limits::load(limits_dir, now), now);
+    if let Some(p) = paused(s, settings, demo, Some(rule), true, now) {
         return Evaluation { paused: Some(p), work: None };
     }
     match pick_org(app_dir, &read_access(app_dir)) {
@@ -446,20 +446,54 @@ pub struct BriefingStatus {
     /// `demo`, `off`, `agents_off`, `access_off`, `budget`, `too_soon`, `running` or `nothing`;
     /// None when a session may start at the next check.
     pub paused: Option<String>,
-    /// The five-hour percentage, with `budget`.
+    /// With `budget`: the percent the reason is about (the week's, or the 5-hour window's).
     pub percent: Option<f64>,
+    /// With `budget`: `ahead_of_week`, `five_hour`, `no_data` or `stale`.
+    pub reason: Option<String>,
+    /// With `budget` and `ahead_of_week`: where the week's pace line stands, in percent.
+    pub line: Option<f64>,
+    /// With `budget` and `stale`: how old the last usage reading is, in whole minutes.
+    pub minutes_old: Option<i64>,
     /// When the next slot opens, with `too_soon`.
     pub next_at: Option<i64>,
     pub running: bool,
     pub last: Option<LastRun>,
 }
 
-fn status_of(app_dir: &Path, s: &BriefState, settings: &AgentsSettings, demo: bool, now: i64) -> BriefingStatus {
-    let p = evaluate(app_dir, s, settings, demo, now).paused;
+fn status_of(
+    app_dir: &Path,
+    limits_dir: &Path,
+    s: &BriefState,
+    settings: &AgentsSettings,
+    demo: bool,
+    now: i64,
+) -> BriefingStatus {
+    let p = evaluate(app_dir, limits_dir, s, settings, demo, now).paused;
+    let why = match &p {
+        Some(Paused::Budget(b)) => Some(b),
+        _ => None,
+    };
     BriefingStatus {
         paused: p.as_ref().map(|p| p.key().to_string()),
-        percent: match p {
-            Some(Paused::Budget(x)) => Some(x),
+        percent: match why {
+            Some(Budget::AheadOfWeek { percent, .. }) | Some(Budget::FiveHour(percent)) => Some(*percent),
+            _ => None,
+        },
+        reason: why.map(|b| {
+            match b {
+                Budget::AheadOfWeek { .. } => "ahead_of_week",
+                Budget::FiveHour(_) => "five_hour",
+                Budget::NoData | Budget::Ok => "no_data",
+                Budget::Stale { .. } => "stale",
+            }
+            .to_string()
+        }),
+        line: match why {
+            Some(Budget::AheadOfWeek { line, .. }) => Some(*line),
+            _ => None,
+        },
+        minutes_old: match why {
+            Some(Budget::Stale { saved_at }) => Some(((now - saved_at) / 60_000).max(0)),
             _ => None,
         },
         next_at: match p {
@@ -474,6 +508,8 @@ fn status_of(app_dir: &Path, s: &BriefState, settings: &AgentsSettings, demo: bo
 /// What one tick works with. `cli` is looked up only when a `claude` call is needed.
 pub struct Deps<'a> {
     pub app_dir: &'a Path,
+    /// Where `limits.json` is read from (read only): `budget::limits_dir`.
+    pub limits_dir: &'a Path,
     pub home: &'a Path,
     pub trusted: &'a [String],
     pub mcp_path: &'a str,
@@ -620,7 +656,7 @@ pub fn tick(d: &Deps, s: &mut BriefState, may_start: bool) -> bool {
     } else if let Some(p) = s.pending.clone() {
         resolve_pending(d, s, p);
     } else if may_start {
-        if let Some((org, ids)) = evaluate(d.app_dir, s, &settings, false, d.now).work {
+        if let Some((org, ids)) = evaluate(d.app_dir, d.limits_dir, s, &settings, false, d.now).work {
             begin(d, s, org, ids);
         }
     }
@@ -663,6 +699,7 @@ fn check(app: &AppHandle, sched: &mut Option<Scheduler>, scheduler_started: i64)
     let state = app.state::<super::AgentsState>();
     let app_dir = state.app_dir.clone();
     let home = actions::home_dir();
+    let limits_dir = budget::limits_dir(&app_dir, crate::host::running_dev(), &home);
     let trusted = super::projects::read_trusted(&home);
     let agents = state.cached();
     let get_cli = || -> Result<Box<dyn Cli>, String> {
@@ -677,6 +714,7 @@ fn check(app: &AppHandle, sched: &mut Option<Scheduler>, scheduler_started: i64)
     sched.step(
         &Deps {
             app_dir: &app_dir,
+            limits_dir: &limits_dir,
             home: &home,
             trusted: &trusted,
             mcp_path: &crate::agent_access::mcp_path(),
@@ -728,9 +766,10 @@ pub async fn briefing_status(
 ) -> Result<BriefingStatus, String> {
     actions::switched_on(&state)?;
     let app_dir = state.app_dir.clone();
+    let limits_dir = budget::limits_dir(&app_dir, crate::host::running_dev(), &actions::home_dir());
     super::pty::blocking(move || {
         let demo = crate::host::is_demo(&app);
-        Ok(status_of(&app_dir, &read_state(&app_dir), &read_settings(&app_dir), demo, limits::now_ms()))
+        Ok(status_of(&app_dir, &limits_dir, &read_state(&app_dir), &read_settings(&app_dir), demo, limits::now_ms()))
     })
     .await
 }
@@ -946,33 +985,33 @@ mod tests {
     fn paused_gives_each_reason_in_order() {
         let idle = BriefState::default();
         let on = settings(true, true);
-        let go = |s: &BriefState, st: &AgentsSettings, demo, five, work| paused(s, st, demo, five, work, T0);
-        assert_eq!(go(&idle, &on, true, Some(99.0), false), Some(Paused::Demo));
-        assert_eq!(go(&idle, &settings(true, false), false, Some(99.0), false), Some(Paused::Off));
-        assert_eq!(go(&idle, &settings(false, true), false, Some(99.0), false), Some(Paused::AgentsOff));
+        let go = |s: &BriefState, st: &AgentsSettings, demo, b: Option<Budget>, work| paused(s, st, demo, b, work, T0);
+        let five = |p: f64| Some(Budget::FiveHour(p));
+        assert_eq!(go(&idle, &on, true, five(99.0), false), Some(Paused::Demo));
+        assert_eq!(go(&idle, &settings(true, false), false, five(99.0), false), Some(Paused::Off));
+        assert_eq!(go(&idle, &settings(false, true), false, five(99.0), false), Some(Paused::AgentsOff));
         let running = BriefState { current: Some(run_at(T0)), last_start_at: Some(T0), ..Default::default() };
-        assert_eq!(go(&running, &on, false, Some(99.0), false), Some(Paused::Running));
+        assert_eq!(go(&running, &on, false, five(99.0), false), Some(Paused::Running));
         let soon = BriefState { last_start_at: Some(T0 - 14 * MIN), ..Default::default() };
-        assert_eq!(go(&soon, &on, false, Some(99.0), false), Some(Paused::TooSoon(T0 + MIN)));
-        assert_eq!(go(&idle, &on, false, Some(99.0), false), Some(Paused::Budget(99.0)));
-        assert_eq!(go(&idle, &on, false, Some(10.0), false), Some(Paused::Nothing));
-        assert_eq!(go(&idle, &on, false, Some(10.0), true), None);
-        // 79.9 runs, 80.0 pauses; no five-hour meter counts as under.
-        assert_eq!(go(&idle, &on, false, Some(79.9), true), None);
-        assert_eq!(go(&idle, &on, false, Some(80.0), true), Some(Paused::Budget(80.0)));
+        assert_eq!(go(&soon, &on, false, five(99.0), false), Some(Paused::TooSoon(T0 + MIN)));
+        // The budget check stays where the 80% check was: after the slot, before "nothing".
+        assert_eq!(go(&idle, &on, false, five(99.0), false), Some(Paused::Budget(Budget::FiveHour(99.0))));
+        assert_eq!(go(&idle, &on, false, Some(Budget::Ok), false), Some(Paused::Nothing));
+        assert_eq!(go(&idle, &on, false, Some(Budget::Ok), true), None);
+        // Every reason of the rule pauses, including a missing or stale reading (fails closed).
+        for b in [
+            Budget::AheadOfWeek { percent: 50.0, line: 42.5 },
+            Budget::FiveHour(80.0),
+            Budget::NoData,
+            Budget::Stale { saved_at: T0 - 31 * MIN },
+        ] {
+            assert_eq!(go(&idle, &on, false, Some(b.clone()), true), Some(Paused::Budget(b)));
+        }
+        // None is only the early pass that has not read the usage.
         assert_eq!(go(&idle, &on, false, None, true), None);
         // 14 minutes after the last start: too soon; 15: free.
         let at15 = BriefState { last_start_at: Some(T0 - 15 * MIN), ..Default::default() };
-        assert_eq!(go(&at15, &on, false, None, true), None);
-    }
-
-    #[test]
-    fn five_hour_percent_reads_the_five_hour_meter() {
-        use crate::agents::usage::limits::Meter;
-        let m = |w: &str, p: f64| Meter { window: w.into(), label: w.into(), percent: p, resets_at: 1, pace: None };
-        assert_eq!(five_hour_percent(&[m("seven_day", 90.0), m("five_hour", 42.0)]), Some(42.0));
-        assert_eq!(five_hour_percent(&[m("seven_day", 90.0)]), None);
-        assert_eq!(five_hour_percent(&[]), None);
+        assert_eq!(go(&at15, &on, false, Some(Budget::Ok), true), None);
     }
 
     #[test]
@@ -1127,15 +1166,34 @@ mod tests {
         }
     }
 
+    /// A `limits.json` as the status line writes it, saved at `now`: the 5-hour window at `five`
+    /// percent, the week at `week` percent with half of it gone (the pace line stands at 42.5%).
+    fn write_limits_at(dir: &Path, now: i64, five: f64, week: f64) {
+        std::fs::create_dir_all(dir).unwrap();
+        let (five_reset, week_reset) = ((now + 3_600_000) / 1000, (now + 302_400_000) / 1000);
+        std::fs::write(
+            dir.join("limits.json"),
+            format!(
+                r#"{{"savedAt":{},"rate_limits":{{
+                  "five_hour":{{"used_percentage":{five},"resets_at":{five_reset}}},
+                  "seven_day":{{"used_percentage":{week},"resets_at":{week_reset}}}}}}}"#,
+                now / 1000
+            ),
+        )
+        .unwrap();
+    }
+
     struct Harness {
         dir: PathBuf,
         cli: FakeCli,
         changed: RefCell<u32>,
+        /// Write a fresh, roomy `limits.json` before each tick (the rule pauses without one).
+        fresh_limits: bool,
     }
 
     impl Harness {
         fn new(name: &str) -> Self {
-            Harness { dir: app(name, &["aaa111"], &["aaa111"]), cli: FakeCli::default(), changed: RefCell::new(0) }
+            Harness { dir: app(name, &["aaa111"], &["aaa111"]), cli: FakeCli::default(), changed: RefCell::new(0), fresh_limits: true }
         }
         fn tick_with(&self, st: &mut BriefState, now: i64, agents: &[Agent], demo: bool) -> bool {
             self.tick_full(st, now, agents, demo, Some(now), true)
@@ -1149,6 +1207,9 @@ mod tests {
             listed_at: Option<i64>,
             may_start: bool,
         ) -> bool {
+            if self.fresh_limits && !demo {
+                write_limits_at(&self.dir, now, 10.0, 10.0);
+            }
             let dir = self.dir.canonicalize().unwrap_or_else(|_| self.dir.clone());
             let trusted = vec![dir.to_string_lossy().into_owned()];
             let cli = self.cli.clone();
@@ -1157,6 +1218,7 @@ mod tests {
             tick(
                 &Deps {
                     app_dir: &self.dir,
+                    limits_dir: &self.dir,
                     home: &self.dir,
                     trusted: &trusted,
                     mcp_path: "/opt/app/studiomanager-mcp",
@@ -1305,9 +1367,11 @@ mod tests {
         // Same tick as the harness's, with nothing trusted.
         let get_cli = || Ok(Box::new(h.cli.clone()) as Box<dyn Cli>);
         let on_change = || {};
+        write_limits_at(&h.dir, T0, 10.0, 10.0);
         tick(
             &Deps {
                 app_dir: &h.dir,
+                limits_dir: &h.dir,
                 home: &h.dir,
                 trusted: &[],
                 mcp_path: "/x",
@@ -1459,9 +1523,11 @@ mod tests {
         let get_cli = move || Ok(Box::new(cli.clone()) as Box<dyn Cli>);
         let on_change = || {};
         let step = |sched: &mut Scheduler, now: i64| {
+            write_limits_at(&h.dir, now, 10.0, 10.0);
             sched.step(
                 &Deps {
                     app_dir: &h.dir,
+                    limits_dir: &h.dir,
                     home: &h.dir,
                     trusted: &trusted,
                     mcp_path: "/x",
@@ -1507,6 +1573,7 @@ mod tests {
         sched.step(
             &Deps {
                 app_dir: &h.dir,
+                limits_dir: &h.dir,
                 home: &h.dir,
                 trusted: &trusted,
                 mcp_path: "/x",
@@ -1535,36 +1602,92 @@ mod tests {
         assert_eq!(h.cli.starts().len(), 1);
     }
 
-    #[test]
-    fn a_budget_pause_starts_nothing_and_counts_no_try() {
-        let h = Harness::new("budget");
-        let id = add_capture(&h.dir, "aaa111", "one", "2026-11-01 10:00:00");
-        // A five-hour window at 85%, resetting in the future.
-        let resets = (T0 / 1000) + 3600;
-        std::fs::write(
-            h.dir.join("limits.json"),
-            format!(r#"{{"savedAt":{},"rate_limits":{{"five_hour":{{"used_percentage":85,"resets_at":{resets}}}}}}}"#, T0 / 1000),
-        )
-        .unwrap();
+    /// The tick pauses with no capture counted and nothing started; returns the status.
+    fn paused_status(h: &Harness, id: i64) -> BriefingStatus {
         let mut st = BriefState::default();
         assert!(!h.tick(&mut st, T0, &[]));
         assert!(h.cli.starts().is_empty());
         assert_eq!(count_of(&db_of(&h.dir, "aaa111"), &format!("SELECT brief_tries FROM captures WHERE id={id}")), 0);
         assert_eq!(st.last_start_at, None);
-        let status = status_of(&h.dir, &st, &settings(true, true), false, T0);
+        status_of(&h.dir, &h.dir, &st, &settings(true, true), false, T0)
+    }
+
+    fn budget_harness(name: &str) -> (Harness, i64) {
+        let mut h = Harness::new(name);
+        h.fresh_limits = false;
+        let id = add_capture(&h.dir, "aaa111", "one", "2026-11-01 10:00:00");
+        (h, id)
+    }
+
+    #[test]
+    fn a_budget_pause_starts_nothing_and_counts_no_try() {
+        let (h, id) = budget_harness("budget");
+        write_limits_at(&h.dir, T0, 85.0, 10.0);
+        let status = paused_status(&h, id);
         assert_eq!(status.paused.as_deref(), Some("budget"));
+        assert_eq!(status.reason.as_deref(), Some("five_hour"));
         assert_eq!(status.percent, Some(85.0));
+        assert_eq!((status.line, status.minutes_old), (None, None));
+    }
+
+    #[test]
+    fn a_week_ahead_of_its_line_pauses_and_the_status_carries_both_percents() {
+        let (h, id) = budget_harness("budget-week");
+        write_limits_at(&h.dir, T0, 10.0, 60.0);
+        let status = paused_status(&h, id);
+        assert_eq!(status.paused.as_deref(), Some("budget"));
+        assert_eq!(status.reason.as_deref(), Some("ahead_of_week"));
+        assert_eq!((status.percent, status.line), (Some(60.0), Some(42.5)));
+        // On the line it runs.
+        write_limits_at(&h.dir, T0, 10.0, 42.5);
+        let mut st = BriefState::default();
+        assert!(h.tick(&mut st, T0, &[]));
+    }
+
+    #[test]
+    fn no_limits_file_pauses_the_brief_session() {
+        let (h, id) = budget_harness("budget-nodata");
+        let status = paused_status(&h, id);
+        assert_eq!(status.paused.as_deref(), Some("budget"));
+        assert_eq!(status.reason.as_deref(), Some("no_data"));
+        assert_eq!((status.percent, status.line, status.minutes_old), (None, None, None));
+    }
+
+    #[test]
+    fn a_stale_limits_file_pauses_the_brief_session() {
+        let (h, id) = budget_harness("budget-stale");
+        write_limits_at(&h.dir, T0 - 31 * MIN, 10.0, 10.0);
+        let status = paused_status(&h, id);
+        assert_eq!(status.paused.as_deref(), Some("budget"));
+        assert_eq!(status.reason.as_deref(), Some("stale"));
+        assert_eq!(status.minutes_old, Some(31));
+        // Just inside the limit it runs.
+        write_limits_at(&h.dir, T0 - 30 * MIN, 10.0, 10.0);
+        let mut st = BriefState::default();
+        assert!(h.tick(&mut st, T0, &[]));
+    }
+
+    #[test]
+    fn the_scheduler_reads_the_limits_folder_it_is_given() {
+        let (h, _) = budget_harness("budget-dir");
+        // The app's own folder has a good reading; the limits folder has none: it pauses.
+        write_limits_at(&h.dir, T0, 10.0, 10.0);
+        let other = std::env::temp_dir().join(format!("sm-briefing-limits-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&other);
+        let status = status_of(&h.dir, &other, &BriefState::default(), &settings(true, true), false, T0);
+        assert_eq!(status.reason.as_deref(), Some("no_data"));
+        assert!(!other.exists(), "reading creates nothing");
     }
 
     #[test]
     fn nothing_starts_when_agent_access_is_off_and_the_status_says_why() {
         let dir = app("access", &["aaa111"], &[]);
         add_capture(&dir, "aaa111", "one", "2026-11-01 10:00:00");
-        let h = Harness { dir, cli: FakeCli::default(), changed: RefCell::new(0) };
+        let h = Harness { dir, cli: FakeCli::default(), changed: RefCell::new(0), fresh_limits: true };
         let mut st = BriefState::default();
         h.tick(&mut st, T0, &[]);
         assert!(h.cli.starts().is_empty());
-        let status = status_of(&h.dir, &st, &settings(true, true), false, T0);
+        let status = status_of(&h.dir, &h.dir, &st, &settings(true, true), false, T0);
         assert_eq!(status.paused.as_deref(), Some("access_off"));
     }
 
@@ -1572,13 +1695,13 @@ mod tests {
     fn a_tick_in_the_demo_reads_no_file_and_starts_nothing() {
         let dir = std::env::temp_dir().join(format!("sm-briefing-demo-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
-        let h = Harness { dir: dir.clone(), cli: FakeCli::default(), changed: RefCell::new(0) };
+        let h = Harness { dir: dir.clone(), cli: FakeCli::default(), changed: RefCell::new(0), fresh_limits: true };
         let mut st = BriefState { current: Some(run_at(T0)), ..Default::default() };
         assert!(!h.tick_with(&mut st, T0 + 40 * MIN, &[], true));
         assert!(h.cli.calls.lock().unwrap().is_empty());
         assert!(st.current.is_some());
         assert!(!dir.exists(), "nothing was created or read");
-        let status = status_of(&dir, &st, &settings(false, false), true, T0);
+        let status = status_of(&dir, &dir, &st, &settings(false, false), true, T0);
         assert_eq!(status.paused.as_deref(), Some("demo"));
     }
 
@@ -1597,11 +1720,12 @@ mod tests {
         let dir = app("status", &["aaa111"], &["aaa111"]);
         add_capture(&dir, "aaa111", "one", "2026-11-01 10:00:00");
         let st = BriefState { last_start_at: Some(T0 - 6 * MIN), ..Default::default() };
-        let s = status_of(&dir, &st, &settings(true, true), false, T0);
+        write_limits_at(&dir, T0, 10.0, 10.0);
+        let s = status_of(&dir, &dir, &st, &settings(true, true), false, T0);
         assert_eq!(s.paused.as_deref(), Some("too_soon"));
         assert_eq!(s.next_at, Some(T0 + 9 * MIN));
         assert!(!s.running);
-        let none = status_of(&dir, &BriefState::default(), &settings(true, true), false, T0);
+        let none = status_of(&dir, &dir, &BriefState::default(), &settings(true, true), false, T0);
         assert_eq!(none.paused, None);
     }
 }

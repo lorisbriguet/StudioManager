@@ -207,11 +207,16 @@ describe("AgentsCard", () => {
       expect(screen.getByText("Last brief session failed: 1 capture was not filed")).toBeInTheDocument();
     });
 
-    it("says the 5-hour limit pauses the briefs", async () => {
-      status = { paused: "budget", percent: 84.4, nextAt: null, running: false, last: null };
+    it.each([
+      [{ reason: "five_hour", percent: 84.4 }, "Paused: the 5-hour window is at 84%"],
+      [{ reason: "ahead_of_week", percent: 60.4, line: 42.5 }, "Paused: ahead of the week's pace (60% used, line at 43%)"],
+      [{ reason: "no_data" }, "Paused: no usage reading yet"],
+      [{ reason: "stale", minutesOld: 31 }, "Paused: the last usage reading is 31 minutes old"],
+    ])("words the budget pause %j", async (extra, text) => {
+      status = { paused: "budget", percent: null, line: null, minutesOld: null, nextAt: null, running: false, last: null, ...extra };
       info = { enabled: true, claudePath: "/bin/claude", menuBar: false, limitAlerts: true, briefing: true };
       renderCard();
-      await screen.findByText("Briefs paused: the 5-hour limit is at 84%");
+      await screen.findByText(text);
     });
 
     it("asks for no status while the switch is off", async () => {
