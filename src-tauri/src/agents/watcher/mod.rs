@@ -523,12 +523,16 @@ pub fn tick(d: &Deps, mem: &mut Memory, env: Option<&start::Env>) -> Report {
             }
             // The listed agent's ids on the links: a worker's question needs its session id, and a
             // copy made by a resume has its own short id.
-            if sync_link_ids(d, &pass.links) {
+            // The pass may have been read again above: with a closed gate (an organisation's links
+            // unreadable, a mode switched on) its links are only a part, so they are left alone.
+            if pass.gate.is_none() && sync_link_ids(d, &pass.links) {
                 changed = true;
                 pass = fresh(d, lock, mem);
             }
             // A finished worker's check: not gated by the budget (no model is used).
-            changed |= check::step(env, d, mem, &pass.links);
+            if pass.gate.is_none() {
+                changed |= check::step(env, d, mem, &pass.links);
+            }
             // A check can run for ten minutes: what follows uses the time and the list read again,
             // and stops at once when the settings or the mode closed the gate meanwhile.
             refreshed = d.refresh.map(|r| r());

@@ -120,31 +120,38 @@ fn covers(above: &str, folder: &str) -> bool {
     folder == above || (folder.starts_with(above) && (above.ends_with('/') || folder[above.len()..].starts_with('/')))
 }
 
+/// `path` with its symlinks resolved, as Claude Code sees a folder it is started in. A path that
+/// cannot be resolved (it does not exist, or cannot be read) is kept as written.
+fn resolved(path: &str) -> String {
+    std::fs::canonicalize(path).map(|p| p.to_string_lossy().to_string()).unwrap_or_else(|_| path.to_string())
+}
+
 /// The root of the git repository `folder` is in, if any: the nearest folder at or above it
 /// that holds `.git`. For a linked worktree (`.git` is a file naming `<root>/.git/worktrees/…`)
-/// it is the root of the repository the worktree belongs to.
+/// that sits inside the repository it belongs to, it is that repository's root. A linked worktree
+/// outside its repository is its own root: trust given to the repository does not reach it.
 fn repo_root(folder: &str) -> Option<String> {
     let at = Path::new(folder).ancestors().find(|a| a.join(".git").exists())?;
+    let at_s = at.to_string_lossy().to_string();
     let main = std::fs::read_to_string(at.join(".git")).ok().and_then(|text| {
         let dir = text.lines().find_map(|l| l.strip_prefix("gitdir:"))?.trim().to_string();
         let end = dir.find("/.git/worktrees/")?;
-        Some(dir[..end].to_string())
+        Some(resolved(&dir[..end]))
     });
-    Some(main.unwrap_or_else(|| at.to_string_lossy().to_string()))
+    Some(main.filter(|root| covers(root, &at_s)).unwrap_or(at_s))
 }
 
 /// `folder` is trusted when it, or a folder above it, is: Claude Code's own rule (trust given
 /// to a folder covers everything inside it). Inside a git repository Claude looks no higher than
 /// the repository's root, so trust on a folder above a repository (the home folder) does not
-/// cover it; a linked worktree is covered by its repository.
+/// cover it; a linked worktree inside its repository is covered by it. Symlinks in `folder` are
+/// resolved first, so a linked folder is judged by where it really is.
 pub fn is_trusted(trusted: &[String], folder: &str) -> bool {
-    let root = repo_root(folder);
+    let folder = resolved(folder);
+    let root = repo_root(&folder);
     trusted.iter().any(|t| {
-        if !covers(t, folder) && !root.as_deref().is_some_and(|r| trim_slash(t) == trim_slash(r)) {
-            return false;
-        }
         // In a repository: only trust given at its root or below counts.
-        root.as_deref().map_or(true, |r| covers(r, t))
+        covers(t, &folder) && root.as_deref().map_or(true, |r| covers(r, t))
     })
 }
 
@@ -465,6 +472,47 @@ mod tests {
         let inside = vec![s(&sub)];
         assert!(is_trusted(&inside, &s(&sub)));
         assert!(!is_trusted(&inside, &s(&repo)));
+    }
+
+    #[test]
+    fn a_worktree_outside_its_repository_is_not_covered_by_it() {
+        let home = std::fs::canonicalize(temp_dir("wt-outside")).unwrap();
+        let s = |p: &std::path::Path| p.to_string_lossy().to_string();
+        let repo = home.join("code/repo");
+        let outside = home.join("elsewhere/w2");
+        let sub = outside.join("docs");
+        for d in [&sub, &repo.join(".git/worktrees/w2")] {
+            std::fs::create_dir_all(d).unwrap();
+        }
+        std::fs::write(outside.join(".git"), format!("gitdir: {}\n", s(&repo.join(".git/worktrees/w2")))).unwrap();
+        // Trust on the repository does not reach a worktree that sits outside it.
+        assert!(!is_trusted(&[s(&repo)], &s(&outside)));
+        assert!(!is_trusted(&[s(&repo)], &s(&sub)));
+        // Nor does trust on a folder above the worktree: it is a repository of its own.
+        assert!(!is_trusted(&[s(&home), s(&repo)], &s(&outside)));
+        // Trust given to the worktree itself counts.
+        assert!(is_trusted(&[s(&outside)], &s(&outside)));
+        assert!(is_trusted(&[s(&outside)], &s(&sub)));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_symlinked_folder_is_judged_by_where_it_really_is() {
+        let home = std::fs::canonicalize(temp_dir("symlink-trust")).unwrap();
+        let s = |p: &std::path::Path| p.to_string_lossy().to_string();
+        let repo = home.join("code/repo");
+        let sub = repo.join("docs");
+        let plain = home.join("plain");
+        std::fs::create_dir_all(repo.join(".git")).unwrap();
+        std::fs::create_dir_all(&sub).unwrap();
+        std::fs::create_dir_all(&plain).unwrap();
+        // A link in a plain trusted folder that leads into a repository nobody trusted.
+        let link = plain.join("link");
+        std::os::unix::fs::symlink(&sub, &link).unwrap();
+        assert!(!is_trusted(&[s(&plain)], &s(&link)), "the repository behind the link is not trusted");
+        assert!(is_trusted(&[s(&repo)], &s(&link)), "trust on the real repository covers the link");
+        // A folder that cannot be resolved keeps its written path.
+        assert!(is_trusted(&[s(&plain)], &s(&plain.join("not-there"))));
     }
 
     #[test]

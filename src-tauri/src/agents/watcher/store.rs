@@ -406,13 +406,15 @@ pub fn has_open_work(db: &Path, link_id: i64) -> Result<bool, String> {
     Ok(n > 0)
 }
 
-/// Ends an open watcher link (`ended_at` and the outcome). True when it was open.
+/// Ends an open watcher link whose check is done (`ended_at` and the outcome). True when it was
+/// ended. A link whose `check_state` was cleared meanwhile (a Send back clicked while the link was
+/// being closed) is left open: the worker has work again.
 pub fn end_link(db: &Path, link_id: i64, outcome: &str) -> Result<bool, String> {
     let conn = super::super::capture::open(db)?;
     let n = conn
         .execute(
             "UPDATE task_agents SET ended_at = datetime('now'), outcome = ?2
-             WHERE id = ?1 AND ended_at IS NULL AND started_by = 'watcher'",
+             WHERE id = ?1 AND ended_at IS NULL AND started_by = 'watcher' AND check_state IS NOT NULL",
             params![link_id, outcome],
         )
         .map_err(|e| format!("Failed to end the link: {e}"))?;
@@ -974,6 +976,27 @@ mod tests {
         )
         .unwrap();
         db
+    }
+
+    /// A Send back clears `check_state`: a close that read the link before it must not end it.
+    #[test]
+    fn end_link_leaves_a_link_whose_check_was_cleared() {
+        let db = migrated("end-link-cleared");
+        let c = Connection::open(&db).unwrap();
+        c.execute("INSERT INTO tasks (project_id, title, stage) VALUES (1, 'Poster tool', 'running')", []).unwrap();
+        c.execute(
+            "INSERT INTO task_agents (task_id, short_id, name, started_at, started_by, check_state)
+             VALUES (1, 'abc12345', 'sm-w-task-1', '2027-01-15 08:00:00', 'watcher', NULL)",
+            [],
+        )
+        .unwrap();
+        assert_eq!(end_link(&db, 1, "result"), Ok(false));
+        let open: i64 = c.query_row("SELECT ended_at IS NULL FROM task_agents", [], |r| r.get(0)).unwrap();
+        assert_eq!(open, 1, "the link stays open");
+        c.execute("UPDATE task_agents SET check_state = 'failed'", []).unwrap();
+        assert_eq!(end_link(&db, 1, "result"), Ok(true));
+        let outcome: String = c.query_row("SELECT outcome FROM task_agents WHERE ended_at IS NOT NULL", [], |r| r.get(0)).unwrap();
+        assert_eq!(outcome, "result");
     }
 
     fn today() -> NaiveDate {
