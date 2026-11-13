@@ -8,7 +8,7 @@
 //! menu"), the app starts as usual: the error is logged and kept for Settings › Agents
 //! (`capture_hotkey_status`), and the menu bar field still works.
 
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicI32, AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -31,6 +31,23 @@ static HOTKEY_ERROR: Mutex<Option<String>> = Mutex::new(None);
 /// When the panel last hid because it lost focus (ms since epoch): the shortcut pressed to close
 /// it takes the focus first, and must not open it again (as `PANEL_BLURRED_AT` for the icon).
 static BLURRED_AT: AtomicU64 = AtomicU64::new(0);
+
+/// The app that was in front when the panel opened (its process id; 0 for none or this app):
+/// it gets the keyboard back when the panel closes after a save, Escape or the shortcut.
+static OPENED_OVER: AtomicI32 = AtomicI32::new(0);
+
+/// Hides the panel and gives the keyboard back to the app it opened over. Not for the hide
+/// on losing focus: there you already chose where the keyboard goes.
+fn close(panel: &tauri::WebviewWindow) {
+    let _ = panel.hide();
+    let pid = OPENED_OVER.swap(0, Ordering::Relaxed);
+    #[cfg(target_os = "macos")]
+    if pid > 0 {
+        super::nspanel::reactivate(pid);
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = pid;
+}
 
 fn shortcut() -> Shortcut {
     Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::Space)
@@ -152,7 +169,7 @@ fn toggle(app: &AppHandle) {
     let _ = app.run_on_main_thread(move || {
         let Ok(panel) = ensure_panel(&handle) else { return };
         if panel.is_visible().unwrap_or(false) {
-            let _ = panel.hide();
+            close(&panel);
             return;
         }
         if super::reopen_suppressed(now_ms(), BLURRED_AT.load(Ordering::Relaxed)) {
@@ -174,6 +191,8 @@ fn toggle(app: &AppHandle) {
         }
         let _ = handle.emit_to(CAPTURE_LABEL, SHOWN_EVENT, ());
         #[cfg(target_os = "macos")]
+        OPENED_OVER.store(super::nspanel::frontmost_other_app().unwrap_or(0), Ordering::Relaxed);
+        #[cfg(target_os = "macos")]
         if super::nspanel::show(&handle, CAPTURE_LABEL) {
             return;
         }
@@ -185,9 +204,13 @@ fn toggle(app: &AppHandle) {
 /// From the capture panel: hide it (after saving, or Escape).
 #[tauri::command]
 pub fn capture_hide(app: AppHandle) {
-    if let Some(p) = app.get_webview_window(CAPTURE_LABEL) {
-        let _ = p.hide();
-    }
+    let handle = app.clone();
+    // AppKit calls are for the main thread.
+    let _ = app.run_on_main_thread(move || {
+        if let Some(p) = handle.get_webview_window(CAPTURE_LABEL) {
+            close(&p);
+        }
+    });
 }
 
 /// For Settings › Agents: None while the shortcut is registered, else why it is not.
