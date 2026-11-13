@@ -53,6 +53,60 @@ One click starts an agent on Opus in the project's linked folder and opens it on
 
 Design: [the design spec](superpowers/specs/2026-11-05-agent-from-task-design.md).
 
+## A task carries its agent
+
+A task or subtask that has a brief or an agent shows a small **stage** next to its title. It tells you where the work stands without opening the agent. The stages are:
+
+- **Briefed:** the item has a brief. The brief session sets it when a capture needs your word. You can set it yourself.
+- **Ready:** the brief is complete. The brief session sets it when the capture is clear. You can set it yourself. For now it changes nothing else: no agent starts by itself.
+- **Running:** an agent works on it. Only the app sets it, the moment an agent starts from the item.
+- **To check:** the agent has finished and its work waits for you. Only the app sets it.
+
+The stage is hidden once the item is done, and while Agents is off.
+
+### The link
+
+When you use **Start work with agent** on a task or a subtask ([Start from a task](#start-from-a-task)), the app also writes a **link** between the item and that agent, and sets the stage to Running. The link is written only then. An agent started from a project, from the **New agent** form, from a [review report](#start-from-a-review-report) or in a terminal has no task to link to, so it gets none. A link is kept with its task: delete the task and its links go too.
+
+A Running item says **waiting on you** next to its stage when its agent asks you a question or needs a permission.
+
+### `report_result`
+
+The agent started from a task is asked to call `report_result` when it is done, or when it stops with work left. It is one of the tools of [Agent access](agent-access.md#tools). The agent writes a short result: what was done, what is left open and how to check it (at most 4,000 characters). It can add the branch and the pull request link. The result shows on the item. `report_result` never changes the stage or the status: that stays with you and the app. It writes the branch and pull request link on the item's newest open link. With no open link (an agent started by hand) it writes the result only.
+
+### When an item goes to To check
+
+Every 30 seconds the app looks at the agents linked to your items. An item goes from Running to **To check** when one of these holds:
+
+- the agent has reported a result and is no longer working;
+- the agent shows as done;
+- the agent is gone from the list: stopped and removed, or it never started.
+
+An agent that is idle without a result keeps the item in Running. It may simply be waiting for your answer, and the list shows that the same way as a finished agent. The link closes at the same time and notes how it ended: with a result, or without one.
+
+### The panel
+
+Open a task (it expands to show its subtasks) and a **panel** sits at the top. On a subtask, click its stage to open the same panel under it. It shows the steps Idea, Briefed (or Ready), Running, To check and Done, with the current one in bold, then:
+
+- **Stage:** you can set No stage, Briefed or Ready. Running and To check are the app's.
+- **Brief:** editable. It saves when you leave the field.
+- **Agents:** each linked agent with its state (working, waiting on you, finished, or "ended without a result"), its model, its branch and pull request link, and **Open** to go to it on this page.
+- **Result:** the agent's last result, read-only, or a note that there is none yet.
+
+On an item in To check, **Accept** marks the task or subtask done and clears its stage. **Clear stage** removes the stage and leaves the item open.
+
+### Where it does not apply
+
+- In test or presentation mode, **Start work with agent** still starts the agent, but no link and no stage are written. The copy of the data it would go to is thrown away when the mode ends.
+- Stages and the panel never show in the demo build, or while Agents is off.
+- If the agent starts but its link cannot be written, the app says so. The agent keeps running.
+
+### The dev build
+
+In the dev build (`npm run dev:test`, see the [README](../README.md)), an agent started from a task uses the dev build's own StudioManager server and data folder, not the installed app's. This lets you try the whole flow on fictional data. Release builds start agents as they always did.
+
+Design and reasons: [agent orchestrator design](superpowers/specs/2026-11-12-agent-orchestrator-design.md). Plan: [orchestrator part 2](superpowers/plans/2026-11-13-agent-orchestrator-2-task-agent.md).
+
 ## Answer buttons
 
 When an agent asks a question or wants to run a command, the page shows what is being asked and a button for each option. A click answers only if the same prompt is still on screen and the option you chose is highlighted. If not, it tells you to use the terminal. Options that need typed text go to the terminal too.
