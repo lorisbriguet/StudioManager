@@ -282,8 +282,12 @@ npm install
 # (test, clippy, build) fail without it (needs Rust 1.88+)
 bash scripts/build-mcp.sh
 
-# Run in development mode
+# Run in development mode (same data folder as the installed app)
 npm run tauri dev
+
+# Run in development mode with its own data folder (ch.studiomanager.dev),
+# with the Agents page available: the one to use for trying things out
+npm run dev:test
 
 # Build for production
 npm run tauri build

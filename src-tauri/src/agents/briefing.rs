@@ -85,7 +85,12 @@ pub fn prepare_folder(app_dir: &Path, mcp_path: &str) -> Result<PathBuf, String>
         .map_err(|e| format!("Failed to create {}: {e}", claude.display()))?;
     let mcp = json!({ "mcpServers": { "studiomanager": {
         "command": mcp_path,
-        "env": { "STUDIOMANAGER_TOOLS": server_tool_list() }
+        // The data folder is named, never left to the server to work out: outside an
+        // app bundle (a dev build) it would fall back to the installed app's folder.
+        "env": {
+            "STUDIOMANAGER_TOOLS": server_tool_list(),
+            "STUDIOMANAGER_DATA_DIR": app_dir.to_string_lossy()
+        }
     } } });
     write_if_changed(&folder.join(MCP_FILE), &to_json(&mcp))?;
     let settings = json!({ "permissions": { "deny": DENIED_TOOLS } });
@@ -757,7 +762,10 @@ mod tests {
             read(&folder.join("mcp.json")),
             json!({ "mcpServers": { "studiomanager": {
                 "command": "/opt/app/studiomanager-mcp",
-                "env": { "STUDIOMANAGER_TOOLS": "list_captures,file_capture,list_projects,get_project,list_tasks,list_wiki,get_wiki_article" }
+                "env": {
+                    "STUDIOMANAGER_TOOLS": "list_captures,file_capture,list_projects,get_project,list_tasks,list_wiki,get_wiki_article",
+                    "STUDIOMANAGER_DATA_DIR": app.to_string_lossy()
+                }
             } } })
         );
         assert_eq!(
