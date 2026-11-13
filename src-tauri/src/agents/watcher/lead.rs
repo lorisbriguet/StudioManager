@@ -12,7 +12,7 @@
 //!   that fails at once leaves the entry `skipped` and the counter spent.
 //! - Nothing here merges anything. A check the lead would accept goes back to the owner open,
 //!   with "The lead would accept: ...".
-//! - The only agent this module stops or removes is the lead session the watcher started.
+//! - The only agent this module stops is the lead session the watcher started; it removes none.
 
 use super::budget::Budget;
 use super::check::{find_agent, LIST_MAX_AGE_MS};
@@ -294,42 +294,40 @@ fn read_entries(d: &Deps) -> Vec<Read> {
     out
 }
 
-/// Whether the agent id is the lead session the watcher started and not an agent of anyone else:
-/// never one of the watcher's workers.
-fn is_own(run: &LeadRun, links: &[(PathBuf, WatcherLink)]) -> bool {
-    !links.iter().any(|(_, l)| l.short_id == run.short_id)
+/// The listed agent that is the lead session this watcher started: a background agent with the
+/// run's session id, the lead's name (prefix included) and the lead folder as its folder. An
+/// agent that only shares the short id (a worker, or one started by hand after the lead's id was
+/// reused) is never the lead.
+fn own_agent<'a>(d: &Deps<'a>, run: &LeadRun) -> Option<&'a Agent> {
+    let folder = d.app_dir.join(FOLDER).to_string_lossy().into_owned();
+    let name = session_name(&run.org, run.entry_id);
+    d.agents.iter().find(|a| {
+        a.kind == Kind::Background
+            && a.short_id.as_deref() == Some(run.short_id.as_str())
+            && a.name.starts_with(NAME_PREFIX)
+            && a.name == name
+            && same_dir(&a.cwd, &folder)
+    })
 }
 
-/// The lead ended or went wrong: stop it (only its own id), and an entry it did not settle goes
-/// to the owner (`skipped`). A session that did its job and ended by itself is removed from
-/// Claude's list (`claude rm`: the list entry only, no file, branch or worktree), as the brief
-/// session's; one that was stopped is kept.
-fn settle(env: &Env, d: &Deps, links: &[(PathBuf, WatcherLink)], run: &LeadRun, v: Verdict) {
-    let own = is_own(run, links);
-    if !own {
-        log::warn!("[watcher] lead: the session id {} is a worker's: not touched", run.short_id);
-    }
-    let cli = if own { (env.cli)().ok() } else { None };
-    if let Some(cli) = &cli {
-        // "Not running" is fine: it may have ended by itself.
-        let _ = actions::stop(cli.as_ref(), &actions::home_dir(), &run.short_id);
+/// The lead ended or went wrong: stop it (only the listed agent that is its own; the watcher never
+/// deletes an agent, so a session that did its job is kept), and an entry it did not settle goes
+/// to the owner (`skipped`).
+fn settle(env: &Env, d: &Deps, own: Option<&Agent>, run: &LeadRun) {
+    if own.is_some() {
+        if let Ok(cli) = (env.cli)() {
+            // "Not running" is fine: it may have ended by itself.
+            let _ = actions::stop(cli.as_ref(), &actions::home_dir(), &run.short_id);
+        }
+    } else {
+        log::info!("[watcher] lead: no listed session is the lead's own: nothing is stopped");
     }
     let db = db_of(d, &run.org);
-    let state = {
-        let _shared = crate::org_shared();
-        store::lead_state_of(&db, run.entry_id)
-    };
-    match state {
+    let _shared = crate::org_shared();
+    match store::lead_state_of(&db, run.entry_id) {
         Ok(Some(s)) if s == "running" => {
-            let _shared = crate::org_shared();
             if let Err(e) = store::move_lead_state(&db, run.entry_id, "running", "skipped") {
                 warn("could not skip the entry", &e);
-            }
-        }
-        Ok(Some(s)) if s == "done" && v == Verdict::Finished => {
-            if let Some(cli) = &cli {
-                // Keeps the list short; a failure leaves a stopped agent behind, nothing worse.
-                let _ = actions::delete(cli.as_ref(), &actions::home_dir(), &run.short_id);
             }
         }
         Ok(_) => {}
@@ -367,9 +365,9 @@ fn resolve_pending(d: &Deps, mem: &mut Memory) -> bool {
 }
 
 /// The running lead: waits, or is settled by the verdict. True when something changed.
-fn watch(env: &Env, d: &Deps, mem: &mut Memory, links: &[(PathBuf, WatcherLink)]) -> bool {
+fn watch(env: &Env, d: &Deps, mem: &mut Memory) -> bool {
     let Some(run) = mem.lead.clone() else { return false };
-    let agent = d.agents.iter().find(|a| a.short_id.as_deref() == Some(run.short_id.as_str()));
+    let agent = own_agent(d, &run);
     match verdict(agent, &run, d.now, d.listed_at, mem.started) {
         Verdict::Wait => {
             let waiting = agent.is_some_and(|a| a.group == crate::agents::model::Group::NeedsYou);
@@ -386,8 +384,8 @@ fn watch(env: &Env, d: &Deps, mem: &mut Memory, links: &[(PathBuf, WatcherLink)]
             }
             true
         }
-        v => {
-            settle(env, d, links, &run, v);
+        _ => {
+            settle(env, d, agent, &run);
             mem.lead = None;
             true
         }
@@ -451,8 +449,13 @@ fn action_of(e: &LeadEntry) -> Action {
 }
 
 fn reopen(db: &Path, entry: i64, text: &str) -> bool {
+    reopen_with(db, entry, text, false)
+}
+
+/// `clear_reason`: the text already holds the lead's reason, so it is not kept a second time.
+fn reopen_with(db: &Path, entry: i64, text: &str, clear_reason: bool) -> bool {
     let _shared = crate::org_shared();
-    match store::reopen_for_owner(db, entry, text) {
+    match store::reopen_for_owner(db, entry, text, clear_reason) {
         Ok(c) => c,
         Err(e) => {
             warn("could not reopen the entry", &e);
@@ -485,7 +488,7 @@ pub fn act_on_resolution(
     let answer = e.answer.clone().unwrap_or_default();
     let action = action_of(e);
     let (text, notes) = match &action {
-        Action::Accept => return reopen(db, e.id, &format!("The lead would accept: {reason}")),
+        Action::Accept => return reopen_with(db, e.id, &format!("The lead would accept: {reason}"), true),
         Action::Unclear => return reopen(db, e.id, &format!("From the lead: {answer}")),
         Action::Answer(a) => (clean(&format!("Answer: {a} ({reason})")), None),
         Action::SendBack(n) => {
@@ -605,25 +608,42 @@ fn start_next(env: &Env, d: &Deps, mem: &mut Memory, pass: &Pass, allowed: &dyn 
             return changed;
         }
     };
-    let (counter, prompt) = match row.kind {
-        EntryKind::Question => (Counter::QuestionSessions, question_prompt(&row.org, row.id)),
-        EntryKind::Check => (Counter::CheckSessions, check_prompt(&row.org, row.id)),
+    let (counter, cap, prompt) = match row.kind {
+        EntryKind::Question => (Counter::QuestionSessions, MAX_QUESTION_SESSIONS, question_prompt(&row.org, row.id)),
+        EntryKind::Check => (Counter::CheckSessions, MAX_CHECK_SESSIONS, check_prompt(&row.org, row.id)),
     };
     let db = db_of(d, &row.org);
+    let name = session_name(&row.org, row.id);
+    // The pending start is saved to watcher.json first: a crash after `claude` started can never
+    // leave a live lead nobody tracks. If it cannot be saved, nothing is started or spent.
+    mem.lead_pending =
+        Some(LeadPending { org: row.org.clone(), entry_id: row.id, name: name.clone(), started_at: d.now, title: entry.title.clone() });
+    save(d, mem);
+    if mem.lead_dirty {
+        mem.lead_pending = None;
+        return changed;
+    }
     // The count and `running` are written before `claude` is started: a start that fails still
     // counts, and a crash in between never allows a second start for the same entry.
     let begun = {
         let _shared = crate::org_shared();
-        store::begin_lead(&db, row.id, link.id, counter)
+        store::begin_lead(&db, row.id, link.id, counter, cap)
     };
-    if let Err(e) = begun {
-        warn("could not save the decision to start", &e);
-        return changed;
+    match begun {
+        Ok(true) => {}
+        other => {
+            if let Err(e) = other {
+                warn("could not save the decision to start", &e);
+            }
+            mem.lead_pending = None;
+            save(d, mem);
+            return true;
+        }
     }
-    let name = session_name(&row.org, row.id);
     let started = actions::start_with(cli.as_ref(), &(env.trusted)(), &folder_s, &prompt, "opus", &name, &lead_args(&folder));
     match started {
         Ok(short_id) => {
+            mem.lead_pending = None;
             mem.lead = Some(LeadRun {
                 org: row.org.clone(),
                 entry_id: row.id,
@@ -634,18 +654,18 @@ fn start_next(env: &Env, d: &Deps, mem: &mut Memory, pass: &Pass, allowed: &dyn 
             });
         }
         Err(e) if e == actions::START_TIMED_OUT => {
-            // The session may exist: the next passes look for it by name.
-            mem.lead_pending =
-                Some(LeadPending { org: row.org.clone(), entry_id: row.id, name, started_at: d.now, title: entry.title.clone() });
+            // The session may exist: the next passes look for it by name (already saved).
         }
         Err(e) => {
             warn("could not start the session", &e);
+            mem.lead_pending = None;
             let _shared = crate::org_shared();
             if let Err(err) = store::move_lead_state(&db, row.id, "running", "skipped") {
                 warn("could not skip the entry", &err);
             }
         }
     }
+    save(d, mem);
     true
 }
 
@@ -670,7 +690,7 @@ pub fn step(env: &Env, d: &Deps, mem: &mut Memory, pass: &Pass) -> bool {
     let before = (mem.lead.clone(), mem.lead_pending.clone());
     let mut changed = false;
     let mut reads = read_entries(d);
-    if resolve_pending(d, mem) | watch(env, d, mem, &pass.links) | skip_strays(mem, &reads) {
+    if resolve_pending(d, mem) | watch(env, d, mem) | skip_strays(mem, &reads) {
         changed = true;
         reads = read_entries(d);
     }

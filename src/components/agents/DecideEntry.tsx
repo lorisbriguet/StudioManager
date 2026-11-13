@@ -110,7 +110,7 @@ export function DecideEntry({ entry: e }: { entry: NeedsYouEntry }) {
       )}
       {!e.recommendation && e.reason && <p className="mt-1 text-sm text-muted">{e.reason}</p>}
       {e.lead_state === "running" && <p className="text-xs text-muted">{t.lead_reading}</p>}
-      {e.lead_state === "done" &&<p className="text-xs text-muted">{t.decide_from_lead}</p>}
+      {e.lead_state === "done" && <p className="text-xs text-muted">{t.decide_from_lead}</p>}
       <div className="mt-2 flex flex-wrap items-center gap-2">
         {!simple &&
           options.map((o) => (

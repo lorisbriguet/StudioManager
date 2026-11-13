@@ -459,7 +459,7 @@ pub fn lead_state_of(db: &Path, entry_id: i64) -> Result<Option<String>, String>
 /// The decision to start a lead session, in one transaction before `claude` is started: the
 /// link's session counter is bumped and the entry goes from `waiting` to `running`. Nothing is
 /// written when the entry is no longer waiting.
-pub fn begin_lead(db: &Path, entry_id: i64, link_id: i64, counter: Counter) -> Result<(), String> {
+pub fn begin_lead(db: &Path, entry_id: i64, link_id: i64, counter: Counter, cap: i64) -> Result<bool, String> {
     let mut conn = super::super::capture::open(db)?;
     let tx = conn
         .transaction_with_behavior(TransactionBehavior::Immediate)
@@ -473,9 +473,17 @@ pub fn begin_lead(db: &Path, entry_id: i64, link_id: i64, counter: Counter) -> R
     if n == 0 {
         return Err(format!("Entry {entry_id} is no longer waiting for the lead"));
     }
-    bump_in(&tx, link_id, counter)?;
+    let col = counter.column();
+    let bumped = tx
+        .execute(&format!("UPDATE task_agents SET {col} = {col} + 1 WHERE id = ?1 AND {col} < ?2"), params![link_id, cap])
+        .map_err(|e| format!("Failed to bump {col}: {e}"))?;
+    if bumped == 0 {
+        // Past the cap (or no link): nothing is spent and the entry goes to the owner.
+        tx.execute("UPDATE needs_you SET lead_state = 'skipped' WHERE id = ?1", [entry_id])
+            .map_err(|e| format!("Failed to save the decision: {e}"))?;
+    }
     tx.commit().map_err(|e| format!("Failed to save the decision: {e}"))?;
-    Ok(())
+    Ok(bumped == 1)
 }
 
 /// `lead_state` from `from` to `to` on an open entry (one the lead did not settle goes from
@@ -493,15 +501,16 @@ pub fn move_lead_state(db: &Path, entry_id: i64, from: &str, to: &str) -> Result
 
 /// The lead's answer goes back to the owner: the entry is open again with nobody's decision on
 /// it and `text` as its recommendation. Only an entry the lead answered is touched.
-pub fn reopen_for_owner(db: &Path, entry_id: i64, text: &str) -> Result<bool, String> {
+pub fn reopen_for_owner(db: &Path, entry_id: i64, text: &str, clear_reason: bool) -> Result<bool, String> {
     let text: String = text.chars().take(2000).collect();
     let conn = super::super::capture::open(db)?;
     let n = conn
         .execute(
             "UPDATE needs_you SET status = 'open', decided_by = NULL, answered_at = NULL, answer = NULL,
-                    delivered_at = NULL, recommendation = ?2, lead_state = 'done'
+                    delivered_at = NULL, recommendation = ?2, lead_state = 'done',
+                    reason = CASE WHEN ?3 = 1 THEN NULL ELSE reason END
              WHERE id = ?1 AND status = 'answered' AND decided_by = 'lead'",
-            params![entry_id, text],
+            params![entry_id, text, clear_reason as i64],
         )
         .map_err(|e| format!("Failed to reopen the entry: {e}"))?;
     Ok(n == 1)

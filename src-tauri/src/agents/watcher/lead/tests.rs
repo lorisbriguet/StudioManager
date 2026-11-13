@@ -222,6 +222,10 @@ impl Cli for Shared {
     fn run(&self, a: &[String], cwd: &Path) -> CliOutput {
         self.0.calls.lock().unwrap().push(a.to_vec());
         self.0.cwds.lock().unwrap().push(cwd.to_path_buf());
+        assert!(
+            !matches!(a.first().map(String::as_str), Some("rm" | "delete" | "remove")),
+            "the watcher never deletes an agent: {a:?}"
+        );
         if a.first().map(String::as_str) == Some("--bg") {
             if let Some(f) = self.0.during_start.lock().unwrap().as_ref() {
                 f();
@@ -239,9 +243,6 @@ fn started() -> CliOutput {
 }
 fn stopped() -> CliOutput {
     reply(&format!("stopped {LEAD_SHORT}\n"))
-}
-fn removed() -> CliOutput {
-    reply(&format!("removed {LEAD_SHORT}\n"))
 }
 fn failed(why: &str) -> CliOutput {
     CliOutput { code: 1, stdout: String::new(), stderr: why.into() }
@@ -771,7 +772,7 @@ fn the_lead_sends_a_check_back_and_the_worker_is_checked_again() {
 
 #[test]
 fn lead_sends_back_once() {
-    let f = fx("sendback-twice", vec![started(), stopped(), removed(), started()]);
+    let f = fx("sendback-twice", vec![started(), stopped(), started()]);
     let first = f.check_entry();
     let mut mem = Memory::default();
     lead_on(&f, first, &mut mem);
@@ -826,6 +827,8 @@ fn an_accepted_check_goes_back_open_and_nothing_merges() {
     assert_eq!(stage, "to_check", "the item is untouched");
     assert_ne!(task_status, "done");
     assert!(f.sent().is_empty());
+    let reason: Option<String> = f.one(&format!("SELECT reason FROM needs_you WHERE id = {id}"));
+    assert_eq!(reason, None, "the reason is in the recommendation, not kept twice");
     let (sent_back, state): (i64, Option<String>) = f
         .conn()
         .query_row("SELECT sent_back, check_state FROM task_agents WHERE id = 1", [], |r| Ok((r.get(0)?, r.get(1)?)))
@@ -899,8 +902,8 @@ fn a_lead_that_ended_without_resolving_skips_the_entry_and_is_kept() {
 }
 
 #[test]
-fn a_lead_that_resolved_and_ended_is_stopped_and_removed() {
-    let f = fx("done", vec![started(), stopped(), removed()]);
+fn a_lead_that_resolved_and_ended_is_stopped_and_kept() {
+    let f = fx("done", vec![started(), stopped()]);
     let id = f.question();
     let mut mem = Memory::default();
     lead_on(&f, id, &mut mem);
@@ -908,31 +911,106 @@ fn a_lead_that_resolved_and_ended_is_stopped_and_removed() {
     go(&f, &list(&[worker("busy"), lead_agent(&f, "idle")]), &mut mem, 2);
     let calls = f.calls();
     assert_eq!(calls[1], vec!["stop".to_string(), LEAD_SHORT.to_string()]);
-    assert_eq!(calls[2], vec!["rm".to_string(), LEAD_SHORT.to_string()]);
+    assert_eq!(calls.len(), 2, "no rm: {calls:?}");
     assert_eq!(f.state(id), "done");
     assert!(mem.lead.is_none());
 }
 
 #[test]
-fn a_worker_or_a_hand_started_agent_is_never_stopped_or_removed() {
-    // The saved run's session id is, by mistake, a worker's: nothing is called for it.
-    let f = fx("own", vec![]);
-    let id = f.question();
-    f.conn().execute("UPDATE needs_you SET lead_state = 'running' WHERE id = ?1", [id]).unwrap();
-    let hand = r#"{"sessionId":"hand-1","id":"11112222","name":"mine","cwd":"/x","kind":"bg","status":"idle","pid":1}"#;
-    let state = WatcherState {
-        lead: Some(LeadRun { org: "a".into(), entry_id: id, short_id: "abc12345".into(), started_at: T0, waiting_since: None, title: String::new() }),
-        ..Default::default()
+fn no_watcher_path_ever_records_a_delete() {
+    // resolved and ended; timed out; skipped (ended without resolving); the fake also panics on rm.
+    for (n, status, minutes, resolve) in [("a", "idle", 2, true), ("b", "busy", 20, false), ("c", "idle", 2, false)] {
+        let f = fx(&format!("nodelete-{n}"), vec![started(), stopped()]);
+        let id = f.question();
+        let mut mem = Memory::default();
+        lead_on(&f, id, &mut mem);
+        if resolve {
+            f.conn().execute("UPDATE needs_you SET recommendation = 'x', reason = 'y', lead_state = 'done' WHERE id = ?1", [id]).unwrap();
+        }
+        go(&f, &list(&[worker("busy"), lead_agent(&f, status)]), &mut mem, minutes);
+        assert!(f.calls().iter().all(|c| !matches!(c[0].as_str(), "rm" | "delete" | "remove")), "{:?}", f.calls());
+        assert!(mem.lead.is_none());
+    }
+}
+
+#[test]
+fn a_worker_or_a_hand_started_agent_is_never_stopped() {
+    let hand_with_lead_id = |name: &str, cwd: &str| {
+        format!(r#"{{"sessionId":"hand-1","id":"{LEAD_SHORT}","name":"{name}","cwd":"{cwd}","kind":"bg","status":"busy","pid":1}}"#)
     };
-    super::super::start::save_state(&f.dir, &state).unwrap();
-    go(&f, &list(&[worker("idle"), hand.to_string()]), &mut Memory::default(), 30);
-    assert!(f.calls().is_empty(), "no stop, no rm, no call at all: {:?}", f.calls());
+    // (the saved run's short id, the extra listed agent)
+    let cases: Vec<(&str, Option<String>)> = vec![
+        ("abc12345", None),                                              // a worker's id
+        (LEAD_SHORT, Some(hand_with_lead_id("mine", "/x"))),              // other name, other folder
+        (LEAD_SHORT, Some(hand_with_lead_id("sm-lead-a-1", "/elsewhere"))), // the name, not the folder
+        (LEAD_SHORT, None),                                              // nothing listed with that id
+    ];
+    for (n, (short, extra)) in cases.into_iter().enumerate() {
+        let f = fx(&format!("own{n}"), vec![]);
+        let id = f.question();
+        f.conn().execute("UPDATE needs_you SET lead_state = 'running' WHERE id = ?1", [id]).unwrap();
+        let state = WatcherState {
+            lead: Some(LeadRun { org: "a".into(), entry_id: id, short_id: short.into(), started_at: T0, waiting_since: None, title: String::new() }),
+            ..Default::default()
+        };
+        super::super::start::save_state(&f.dir, &state).unwrap();
+        let mut agents = vec![worker("idle")];
+        agents.extend(extra);
+        let mut mem = Memory::default();
+        go(&f, &list(&agents), &mut mem, 30);
+        assert!(f.calls().is_empty(), "case {n}: no stop, no call at all: {:?}", f.calls());
+        assert!(f.sent().is_empty(), "case {n}");
+        assert_eq!(f.state(id), "skipped", "case {n}");
+        assert!(mem.lead.is_none(), "case {n}");
+    }
+}
+
+#[test]
+fn the_pending_start_is_saved_before_claude_is_started() {
+    let f = fx("pending-first", vec![started()]);
+    let id = f.question();
+    let dir = f.dir.clone();
+    let seen: Arc<Mutex<Option<LeadPending>>> = Arc::new(Mutex::new(None));
+    let sink = seen.clone();
+    *f.cli.during_start.lock().unwrap() = Some(Box::new(move || {
+        *sink.lock().unwrap() = super::super::start::read_state(&dir).lead_pending;
+    }));
+    let mut mem = Memory::default();
+    go(&f, &list(&[worker("busy")]), &mut mem, 0);
+    let p = seen.lock().unwrap().clone().expect("saved before the start");
+    assert_eq!((p.org.as_str(), p.entry_id, p.name.as_str()), ("a", id, session_name("a", id).as_str()));
+    let after = super::super::start::read_state(&f.dir);
+    assert!(after.lead_pending.is_none() && after.lead.is_some(), "after the start: the run replaces the pending");
+}
+
+#[test]
+fn nothing_is_started_or_spent_when_the_state_cannot_be_saved() {
+    let f = fx("save-fails", vec![]);
+    let id = f.question();
+    // A directory where the file should be: the save fails.
+    let _ = std::fs::remove_file(f.dir.join("watcher.json"));
+    std::fs::create_dir_all(f.dir.join("watcher.json")).unwrap();
+    let mut mem = Memory::default();
+    go(&f, &list(&[worker("busy")]), &mut mem, 0);
+    assert!(f.calls().is_empty());
+    assert_eq!(f.state(id), "waiting");
+    assert_eq!(f.sessions(), (0, 0));
+    assert!(mem.lead.is_none() && mem.lead_pending.is_none());
+}
+
+#[test]
+fn begin_lead_rechecks_the_cap_inside_the_transaction() {
+    let f = fx("begin-cap", vec![]);
+    f.conn().execute("UPDATE task_agents SET question_sessions = 3", []).unwrap();
+    let id = f.question();
+    let began = store::begin_lead(&f.db, id, 1, Counter::QuestionSessions, MAX_QUESTION_SESSIONS).unwrap();
+    assert!(!began);
     assert_eq!(f.state(id), "skipped");
-    // The ownership check in isolation.
-    let run = LeadRun { org: "a".into(), entry_id: 1, short_id: LEAD_SHORT.into(), started_at: T0, waiting_since: None, title: String::new() };
-    let links = vec![(f.db.clone(), link("a", 1, 0, 0))];
-    assert!(is_own(&run, &links));
-    assert!(!is_own(&LeadRun { short_id: "abc12345".into(), ..run }, &links));
+    assert_eq!(f.sessions(), (3, 0), "nothing is spent");
+    let g = fx("begin-ok", vec![]);
+    let id = g.question();
+    assert!(store::begin_lead(&g.db, id, 1, Counter::QuestionSessions, MAX_QUESTION_SESSIONS).unwrap());
+    assert_eq!((g.state(id).as_str(), g.sessions()), ("running", (1, 0)));
 }
 
 #[test]
