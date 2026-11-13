@@ -1,7 +1,8 @@
 //! Ends the link of a worker whose work was checked and decided, so the cap counts it no more. A
 //! watcher link is open while the worker is "running"; without this an accepted task would keep
 //! its place for ever and the cap would fill up. The UI accept flow is unchanged: it answers the
-//! entry, and this step sees the answer on the next pass.
+//! entry, and this step sees the answer on the next pass. A link whose change the lead merged alone
+//! is ended by `lead::accept` itself (outcome `merged`), which also stops its worker.
 //!
 //! A link is closed only when all of these hold: the agent list is fresh, the check is done
 //! (`check_state` passed, failed, none or error), no entry of the link is open and no answer of the

@@ -1046,3 +1046,5 @@ fn a_running_lead_does_not_take_a_worker_slot() {
     let r = go(&f, &list(&[worker("busy"), lead_agent(&f, "busy")]), &mut mem, 1);
     assert_eq!(r.outlook.running, 1, "the worker only");
 }
+
+mod merging;

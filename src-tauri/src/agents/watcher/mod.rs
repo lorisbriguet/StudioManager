@@ -14,6 +14,7 @@ pub mod close;
 pub mod events;
 pub mod git;
 pub mod lead;
+pub mod merge;
 pub mod start;
 pub mod store;
 
