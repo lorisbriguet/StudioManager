@@ -102,7 +102,12 @@ pub fn open_watcher_links(db: &Path, org: &str) -> Result<Vec<WatcherLink>, Stri
     Ok(out)
 }
 
-/// The id of the open `decide` entry of a link, if it has one.
+/// The title of the app's "idle without a result" entry.
+pub const IDLE_ENTRY: &str = "Stopped without a result or a question";
+
+/// The id of the open question of a link's worker, if it has one: an open `decide` entry written by
+/// the MCP `ask` tool, which gives a watcher link's question a lead state (`waiting`, `running`,
+/// `done`, `skipped`). The app's own entries have none or `prompt` and are not questions.
 pub fn open_ask(db: &Path, link_id: i64) -> Result<Option<i64>, String> {
     let conn = open(db)?;
     open_ask_in(&conn, link_id)
@@ -116,7 +121,8 @@ fn open_ask_in(conn: &Connection, link_id: i64) -> Result<Option<i64>, String> {
         return Ok(None);
     }
     match conn.query_row(
-        "SELECT id FROM needs_you WHERE link_id = ?1 AND kind = 'decide' AND status = 'open' ORDER BY id LIMIT 1",
+        "SELECT id FROM needs_you WHERE link_id = ?1 AND kind = 'decide' AND status = 'open'
+           AND lead_state IN ('waiting', 'running', 'done', 'skipped') ORDER BY id LIMIT 1",
         [link_id],
         |r| r.get(0),
     ) {
@@ -679,6 +685,15 @@ pub fn add_check(db: &Path, c: &NewCheck) -> Result<Option<i64>, String> {
         tx.execute("UPDATE task_agents SET check_state = ?1 WHERE id = ?2", params![c.check_state, c.link_id])
             .map_err(e)?;
     }
+    // The app's own idle and prompt entries of the link are stale beside the Check entry.
+    let why = if c.close == Some("wrapped_up") { "The worker was wrapped up" } else { "The worker finished" };
+    tx.execute(
+        "UPDATE needs_you SET status = 'dismissed', decided_by = 'app', reason = ?2, answered_at = datetime('now')
+         WHERE link_id = ?1 AND kind = 'decide' AND status = 'open'
+           AND (lead_state = 'prompt' OR (lead_state IS NULL AND title = ?3))",
+        params![c.link_id, why, IDLE_ENTRY],
+    )
+    .map_err(e)?;
     let (table, col) = table_of(c.kind);
     if let Some(outcome) = c.close {
         tx.execute(
@@ -969,8 +984,12 @@ mod tests {
         c.execute("INSERT INTO needs_you (kind, task_id, link_id, title, status) VALUES ('decide', 1, 1, 'Which size?', 'answered')", []).unwrap();
         c.execute("INSERT INTO needs_you (kind, task_id, link_id, title) VALUES ('check', 1, 1, 'Done')", []).unwrap();
         assert_eq!(open_ask(&db, 1).unwrap(), None);
-        c.execute("INSERT INTO needs_you (kind, task_id, link_id, title) VALUES ('decide', 1, 1, 'Which size?')", []).unwrap();
-        assert_eq!(open_ask(&db, 1).unwrap(), Some(3));
+        // The app's own entries are not questions.
+        c.execute("INSERT INTO needs_you (kind, task_id, link_id, title) VALUES ('decide', 1, 1, 'Idle')", []).unwrap();
+        c.execute("INSERT INTO needs_you (kind, task_id, link_id, title, lead_state) VALUES ('decide', 1, 1, 'Prompt', 'prompt')", []).unwrap();
+        assert_eq!(open_ask(&db, 1).unwrap(), None);
+        c.execute("INSERT INTO needs_you (kind, task_id, link_id, title, lead_state) VALUES ('decide', 1, 1, 'Which size?', 'waiting')", []).unwrap();
+        assert_eq!(open_ask(&db, 1).unwrap(), Some(5));
     }
 
     #[test]

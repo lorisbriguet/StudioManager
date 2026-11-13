@@ -939,7 +939,7 @@ mod tests {
             )
             .unwrap();
         }
-        c.execute("INSERT INTO needs_you (kind, task_id, link_id, title) VALUES ('decide', 1, 1, 'Which size?')", []).unwrap();
+        c.execute("INSERT INTO needs_you (kind, task_id, link_id, title, lead_state) VALUES ('decide', 1, 1, 'Which size?', 'waiting')", []).unwrap();
         let agents = crate::agents::model::parse_agents(
             r#"[{"sessionId":"s1","id":"abc12345","name":"work","cwd":"/x","kind":"bg","status":"busy"},
                 {"sessionId":"s2","id":"def67890","name":"work","cwd":"/x","kind":"bg","status":"idle","state":"done"}]"#,

@@ -237,7 +237,13 @@ pub fn step(env: &Env, d: &Deps, mem: &mut Memory, links: &[(PathBuf, WatcherLin
         } else {
             mem.awaiting.remove(&key);
         }
-        let reported = match notice(link, agent, false, None, d.now, d.listed_at) {
+        // An idle agent that reported is finished once it has been idle a while: it needs the time
+        // it has been in that state.
+        let seen = WatcherLink {
+            seen_since: agent.map(|a| super::act::since_of(mem, link, a, d.now)),
+            ..link.clone()
+        };
+        let reported = match notice(&seen, agent, false, None, d.now, d.listed_at) {
             Some(Event::Finished { reported }) => {
                 mem.misses.remove(&key);
                 if !trusted {

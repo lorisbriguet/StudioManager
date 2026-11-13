@@ -28,12 +28,13 @@ pub const WRAP_WAIT_MS: i64 = 30 * 60_000;
 pub const CONTINUE: &str = "Continue where you stopped.";
 pub const WRAP_UP: &str = "Write your result with report_result now, then stop.";
 pub const STUCK_ENTRY: &str = "Stuck after three restarts";
-pub const NO_RESULT_OR_QUESTION: &str = "Stopped without a result or a question";
+pub const NO_RESULT_OR_QUESTION: &str = store::IDLE_ENTRY;
+pub const WRAP_FAILED: &str = "Could not ask the worker to wrap up";
 pub const WAITING: &str = "Waiting at a prompt";
 pub const WRAPPED_UP: &str = "Wrapped up after a day";
 pub const WRAP_STOPPED: &str = "Stopped after a day without a result";
 
-fn since_of(mem: &Memory, link: &WatcherLink, agent: &Agent, now: i64) -> i64 {
+pub(super) fn since_of(mem: &Memory, link: &WatcherLink, agent: &Agent, now: i64) -> i64 {
     match mem.seen.get(&(link.org.clone(), link.id)) {
         Some((g, t)) if *g == agent.group => *t,
         _ => now,
@@ -77,19 +78,16 @@ pub fn step(env: &Env, d: &Deps, mem: &mut Memory, budget: &Budget, links: &[(Pa
                 continue;
             }
         }
-        // Already handed to the owner after the restarts: never resumed again.
-        if link.resumes >= MAX_RESUMES {
-            let outcome = {
-                let _shared = crate::org_shared();
-                store::link_outcome(db, link.id)
-            };
-            if matches!(outcome, Ok(Some(o)) if o == "stuck") {
-                continue;
-            }
-        }
+        // Already handed to the owner after the restarts: never resumed again (it may still be
+        // wrapped up when old).
+        let given_up = link.resumes >= MAX_RESUMES && {
+            let _shared = crate::org_shared();
+            matches!(store::link_outcome(db, link.id), Ok(Some(o)) if o == "stuck")
+        };
         let since = since_of(mem, link, agent, d.now);
         // The transcript is read only for an idle agent that has been idle for a while.
-        let stuck = agent.group == Group::Idle
+        let stuck = !given_up
+            && agent.group == Group::Idle
             && d.now - since >= STUCK_IDLE_MS
             && (env.transcript_tail)(&agent.session_id).is_some_and(|t| stuck_in(&t));
         let ask = {
@@ -229,6 +227,11 @@ fn resume(env: &Env, d: &Deps, mem: &mut Memory, budget: &Budget, db: &Path, lin
 /// result it is stopped (never deleted) and the owner gets a Check entry. A result reported after
 /// the request is `check`'s: nothing here.
 fn old(env: &Env, d: &Deps, db: &Path, link: &WatcherLink, agent: &Agent) -> bool {
+    // A reported result is handed in: `check` handles it (`notice` says Finished once the agent is
+    // idle), never a wrap-up.
+    if link.reported {
+        return false;
+    }
     let Some(asked) = link.wrap_asked_at else {
         // Decided first: `wrap_asked_at` is set before the message is typed.
         let decided = {
@@ -247,11 +250,29 @@ fn old(env: &Env, d: &Deps, db: &Path, link: &WatcherLink, agent: &Agent) -> boo
                     warn(link, "could not record the request", &e);
                 }
             }
-            Err(e) => warn(link, "could not type the request", &e),
+            Err(e) => {
+                warn(link, "could not type the request", &e);
+                // Not asked: the worker is left alone and the owner is told.
+                let body = format!("{WRAP_FAILED}. The worker has been idle for a day and the request could not be typed into it: {e}");
+                let written = {
+                    let _shared = crate::org_shared();
+                    store::add_link_entry(db, &LinkEntry { title: WRAP_FAILED, body: &body, outcome: Some("wrap_failed"), ..entry(link) })
+                };
+                if let Err(e) = written {
+                    warn(link, "could not write the entry", &e);
+                }
+            }
         }
         return true;
     };
-    if link.reported || d.now - asked < WRAP_WAIT_MS {
+    if d.now - asked < WRAP_WAIT_MS {
+        return false;
+    }
+    let failed = {
+        let _shared = crate::org_shared();
+        store::link_outcome(db, link.id)
+    };
+    if matches!(failed, Ok(Some(o)) if o == "wrap_failed") {
         return false;
     }
     let short = agent.short_id.as_deref().unwrap_or(&link.short_id);
@@ -495,6 +516,7 @@ mod tests {
         assert_eq!(one::<String>(&f, "SELECT outcome FROM task_agents"), "stuck");
         assert_eq!(one::<i64>(&f, "SELECT ended_at IS NULL FROM task_agents"), 1, "kept open");
         // Even a new process never resumes it again, nor writes a second entry.
+        mem.lock = None; // the old process is gone and its lock with it
         let mut fresh = Memory::default();
         go(&f, &idle(), &mut fresh, 40);
         go(&f, &idle(), &mut fresh, 50);
@@ -642,6 +664,7 @@ mod tests {
         go(&f, &waiting(), &mut mem, 3);
         assert_eq!(prompts(&f).len(), 1);
         // A new process remembers nothing of the wait.
+        mem.lock = None; // the old process is gone and its lock with it
         let mut fresh = Memory::default();
         go(&f, &waiting(), &mut fresh, 10);
         go(&f, &waiting(), &mut fresh, 14);
@@ -677,7 +700,7 @@ mod tests {
         let g = watcher("idle-asked");
         Connection::open(&g.db)
             .unwrap()
-            .execute("INSERT INTO needs_you (kind, task_id, link_id, title) VALUES ('decide', 1, 1, 'Which size?')", [])
+            .execute("INSERT INTO needs_you (kind, task_id, link_id, title, lead_state) VALUES ('decide', 1, 1, 'Which size?', 'waiting')", [])
             .unwrap();
         let mut mem = Memory::default();
         go(&g, &idle(), &mut mem, 0);
@@ -694,7 +717,6 @@ mod tests {
     #[test]
     fn wrap_up_asks_once_stops_after_thirty_minutes_and_never_removes() {
         let f = fx("wrap", DAY_AGO, Some("watcher"), vec![reply("stopped abc12345\n")]);
-        Connection::open(&f.db).unwrap().execute("UPDATE task_agents SET reported_at = datetime('now')", []).unwrap();
         let mut mem = Memory::default();
         go(&f, &idle(), &mut mem, 0);
         assert!(texts(&f).is_empty());
@@ -702,7 +724,6 @@ mod tests {
         assert_eq!(texts(&f), vec![WRAP_UP]);
         assert_eq!(wrap_asked(&f).as_deref(), Some("2027-01-15 08:03:00"));
         assert_eq!(f.sent.lock().unwrap()[0].2, 0);
-        assert_eq!(one::<i64>(&f, "SELECT reported_at IS NULL FROM task_agents"), 1, "the old report is forgotten");
         go(&f, &idle(), &mut mem, 10);
         go(&f, &idle(), &mut mem, 32);
         assert_eq!(texts(&f), vec![WRAP_UP], "asked once");
@@ -722,8 +743,15 @@ mod tests {
         assert_eq!(calls(&f).len(), 1);
     }
 
+    fn check_entries(f: &Fx) -> Vec<String> {
+        let c = Connection::open(&f.db).unwrap();
+        let mut st = c.prepare("SELECT title FROM needs_you WHERE kind = 'check' ORDER BY id").unwrap();
+        st.query_map([], |r| r.get(0)).unwrap().map(Result::unwrap).collect()
+    }
+
     #[test]
-    fn a_result_reported_after_the_request_is_not_wrapped_up() {
+    fn a_result_reported_after_the_request_goes_the_check_path_not_the_wrap_up() {
+        // Done, or idle for a while: either way the work is handed in; the check runs.
         for state in [agent_json("idle", Some("done"), true, None), idle()] {
             let f = fx("late", DAY_AGO, Some("watcher"), vec![]);
             Connection::open(&f.db)
@@ -735,12 +763,131 @@ mod tests {
                 .unwrap();
             let mut mem = Memory::default();
             go(&f, &state, &mut mem, 0);
+            go(&f, &state, &mut mem, 3);
             go(&f, &state, &mut mem, 40);
             assert!(calls(&f).is_empty(), "nothing is stopped");
             assert!(texts(&f).is_empty());
+            // The link has no worktree here, which the check path reports.
+            assert_eq!(check_entries(&f), vec![super::super::check::WORKTREE_GONE], "one Check entry, from the check path");
+            assert_eq!(one::<String>(&f, "SELECT check_state FROM task_agents"), "error");
             assert_ne!(one::<Option<String>>(&f, "SELECT outcome FROM task_agents").as_deref(), Some("wrapped_up"));
             assert!(!alone(&f).iter().any(|t| t == WRAP_STOPPED));
+            assert_eq!(one::<String>(&f, "SELECT stage FROM tasks"), "to_check");
         }
+    }
+
+    #[test]
+    fn a_reported_idle_agent_is_not_finished_again_after_the_send_back_until_it_reports_again() {
+        let f = fx("sendback", NOW, Some("watcher"), vec![]);
+        // The send back cleared the report and counted the failure.
+        Connection::open(&f.db).unwrap().execute("UPDATE task_agents SET check_fails = 1, reported_at = NULL", []).unwrap();
+        let mut mem = Memory::default();
+        go(&f, &idle(), &mut mem, 0);
+        go(&f, &idle(), &mut mem, 3);
+        go(&f, &idle(), &mut mem, 4);
+        assert!(check_entries(&f).is_empty());
+        // It reports again, and goes quiet.
+        Connection::open(&f.db).unwrap().execute("UPDATE task_agents SET reported_at = datetime('now')", []).unwrap();
+        go(&f, &idle(), &mut mem, 5);
+        go(&f, &idle(), &mut mem, 8);
+        assert_eq!(check_entries(&f).len(), 1);
+    }
+
+    #[test]
+    fn a_failed_wrap_up_request_leaves_the_worker_alone_and_tells_the_user() {
+        let f = fx("wrapfail", DAY_AGO, Some("watcher"), vec![]);
+        *f.send_result.lock().unwrap() = Err("no terminal".into());
+        let mut mem = Memory::default();
+        go(&f, &idle(), &mut mem, 0);
+        go(&f, &idle(), &mut mem, 3);
+        go(&f, &idle(), &mut mem, 40);
+        go(&f, &idle(), &mut mem, 80);
+        assert_eq!(texts(&f), vec![WRAP_UP], "tried once");
+        assert!(calls(&f).is_empty(), "never stopped");
+        assert!(check_entries(&f).is_empty());
+        assert_eq!(one::<String>(&f, "SELECT title FROM needs_you WHERE kind = 'decide'"), WRAP_FAILED);
+        assert_eq!(decide_count(&f), 1);
+        assert_eq!(one::<i64>(&f, "SELECT ended_at IS NULL FROM task_agents"), 1);
+    }
+
+    #[test]
+    fn old_fires_behind_an_open_idle_entry_and_closes_it_with_the_check_entry() {
+        let f = fx("oldidle", DAY_AGO, Some("watcher"), vec![reply("stopped abc12345\n")]);
+        let mut mem = Memory::default();
+        go(&f, &idle(), &mut mem, 0);
+        go(&f, &idle(), &mut mem, 3);
+        // The idle entry is written for a link that started a day ago only when it is not old yet:
+        // here the wrap-up comes first, so write the idle entry by hand as an ignored one.
+        Connection::open(&f.db)
+            .unwrap()
+            .execute(
+                "INSERT INTO needs_you (kind, task_id, link_id, title, lead_state) VALUES ('decide', 1, 1, ?1, NULL)",
+                [NO_RESULT_OR_QUESTION],
+            )
+            .unwrap();
+        go(&f, &idle(), &mut mem, 34);
+        assert_eq!(calls(&f).len(), 1, "stopped although the idle entry is open");
+        assert_eq!(check_entries(&f), vec![WRAPPED_UP]);
+        let rows: Vec<(String, String, Option<String>)> = {
+            let c = Connection::open(&f.db).unwrap();
+            let mut st = c.prepare("SELECT title, status, reason FROM needs_you WHERE kind = 'decide' ORDER BY id").unwrap();
+            st.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?))).unwrap().map(Result::unwrap).collect()
+        };
+        assert_eq!(rows.len(), 1);
+        assert!(rows.iter().all(|r| r.1 == "dismissed" && r.2.as_deref() == Some("The worker was wrapped up")));
+    }
+
+    #[test]
+    fn an_open_idle_entry_stays_one_across_passes_and_a_restart_and_is_closed_when_the_worker_finishes() {
+        let f = watcher("idleone");
+        let mut mem = Memory::default();
+        go(&f, &idle(), &mut mem, 0);
+        for m in [31, 32, 33, 40] {
+            go(&f, &idle(), &mut mem, m);
+        }
+        mem.lock = None; // the old process is gone and its lock with it
+        let mut fresh = Memory::default();
+        for m in [50, 55, 90, 95] {
+            go(&f, &idle(), &mut fresh, m);
+        }
+        assert_eq!(decide_count(&f), 1, "exactly one open entry");
+        // The worker reports and finishes: the stale idle entry is closed beside the Check entry.
+        Connection::open(&f.db).unwrap().execute("UPDATE task_agents SET reported_at = datetime('now')", []).unwrap();
+        Connection::open(&f.db)
+            .unwrap()
+            .execute("INSERT INTO needs_you (kind, task_id, link_id, title, lead_state) VALUES ('decide', 1, 1, 'Allow?', 'prompt')", [])
+            .unwrap();
+        let done = agent_json("idle", Some("done"), true, None);
+        go(&f, &done, &mut fresh, 100);
+        assert_eq!(check_entries(&f).len(), 1);
+        assert_eq!(
+            one::<i64>(
+                &f,
+                "SELECT COUNT(*) FROM needs_you WHERE kind = 'decide' AND status = 'dismissed' AND reason = 'The worker finished'"
+            ),
+            2,
+            "the idle and the prompt entries are closed beside the Check entry"
+        );
+    }
+
+    #[test]
+    fn a_stuck_entry_stays_open_and_old_may_still_wrap_the_worker_up() {
+        let f = fx("stuckold", DAY_AGO, Some("watcher"), vec![]);
+        Connection::open(&f.db)
+            .unwrap()
+            .execute("UPDATE task_agents SET resumes = 3, outcome = 'stuck'", [])
+            .unwrap();
+        Connection::open(&f.db)
+            .unwrap()
+            .execute("INSERT INTO needs_you (kind, task_id, link_id, title, lead_state) VALUES ('decide', 1, 1, ?1, NULL)", [STUCK_ENTRY])
+            .unwrap();
+        *f.tail.lock().unwrap() = Some(ERROR_TAIL.to_string());
+        let mut mem = Memory::default();
+        go(&f, &idle(), &mut mem, 0);
+        go(&f, &idle(), &mut mem, 3);
+        assert_eq!(texts(&f), vec![WRAP_UP], "wrapped up, not resumed");
+        assert_eq!(one::<i64>(&f, "SELECT resumes FROM task_agents"), 3);
+        assert_eq!(one::<String>(&f, "SELECT status FROM needs_you WHERE title = 'Stuck after three restarts'"), "open");
     }
 
     // ------------------------------------------------------------ the rules
