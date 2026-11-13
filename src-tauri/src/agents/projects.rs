@@ -135,7 +135,8 @@ fn repo_root(folder: &str) -> Option<String> {
     let at_s = at.to_string_lossy().to_string();
     let main = std::fs::read_to_string(at.join(".git")).ok().and_then(|text| {
         let dir = text.lines().find_map(|l| l.strip_prefix("gitdir:"))?.trim().to_string();
-        let end = dir.find("/.git/worktrees/")?;
+        // No root before `/.git/worktrees/` names no repository: the folder is its own root.
+        let end = dir.find("/.git/worktrees/").filter(|end| *end > 0)?;
         Some(resolved(&dir[..end]))
     });
     Some(main.filter(|root| covers(root, &at_s)).unwrap_or(at_s))
@@ -493,6 +494,12 @@ mod tests {
         // Trust given to the worktree itself counts.
         assert!(is_trusted(&[s(&outside)], &s(&outside)));
         assert!(is_trusted(&[s(&outside)], &s(&sub)));
+        // A `.git` file that names no repository root makes the folder its own root.
+        let odd = home.join("odd");
+        std::fs::create_dir_all(&odd).unwrap();
+        std::fs::write(odd.join(".git"), "gitdir: /.git/worktrees/x\n").unwrap();
+        assert!(!is_trusted(&[s(&home)], &s(&odd)));
+        assert!(is_trusted(&[s(&odd)], &s(&odd)));
     }
 
     #[cfg(unix)]
