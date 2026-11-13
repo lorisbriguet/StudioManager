@@ -23,6 +23,8 @@ const base = {
   running: 0,
   cap: 3,
   wouldStart: null,
+  reason: null,
+  blockedItem: null,
   lead: null,
 };
 let status: unknown = null;
@@ -61,6 +63,25 @@ describe("the watcher line on the Needs you tab", () => {
     status = { ...base, wouldStart: "Contact sheet export" };
     show();
     expect(await screen.findByText("Would start: Contact sheet export")).toBeTruthy();
+  });
+
+  it("says agent access is off instead of nothing ready", async () => {
+    status = { ...base, paused: "access_off" };
+    show();
+    expect(await screen.findByText("Waiting: agent access is off for every organisation")).toBeTruthy();
+  });
+
+  it("says why the first Ready item cannot start", async () => {
+    status = { ...base, paused: "not_startable", reason: "not_git", blockedItem: "Poster tool" };
+    show();
+    expect(await screen.findByText('Waiting: the folder of "Poster tool" is not a git folder')).toBeTruthy();
+  });
+
+  it("shows no line while a start is under way", async () => {
+    status = { ...base, paused: "starting" };
+    show();
+    await waitFor(() => expect(screen.getByText("Nothing waits for you.")).toBeTruthy());
+    expect(screen.queryByText(/Waiting|Would start|Nothing ready/)).toBeNull();
   });
 
   it("shows nothing while the watcher switch is off", async () => {

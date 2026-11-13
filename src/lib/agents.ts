@@ -404,8 +404,15 @@ function budgetText(
 }
 
 export interface WatcherStatus {
-  /** `demo`, `off`, `agents_off`, `mode`, `locked`, `budget`, `cap`, `nothing`; null when it would start something. */
+  /**
+   * `demo`, `off`, `agents_off`, `mode`, `locked`, `starting`, `access_off`, `budget`, `cap`,
+   * `not_startable`, `nothing`; null when it would start something.
+   */
   paused: string | null;
+  /** With `not_startable`: `no_folder`, `not_git` or `failed_start`. */
+  reason: string | null;
+  /** With `not_startable`: the title of the first Ready item, which cannot start. */
+  blockedItem: string | null;
   /** With `budget`: `ahead_of_week`, `five_hour`, `no_data` or `stale`. */
   budget: string | null;
   percent: number | null;
@@ -418,7 +425,7 @@ export interface WatcherStatus {
   lead: string | null;
 }
 
-/** Why the watcher waits, or what it would start. In this version it starts nothing. */
+/** Why the watcher waits, or what it would start next. */
 export function watcherStatus(): Promise<WatcherStatus> {
   return invoke<WatcherStatus>("watcher_status");
 }
@@ -427,7 +434,18 @@ export function watcherStatus(): Promise<WatcherStatus> {
 export function watcherLine(
   status: WatcherStatus | null,
   t: BudgetLabels &
-    Record<"watcher_paused_mode" | "watcher_paused_locked" | "watcher_paused_cap" | "watcher_nothing" | "watcher_would_start", string>,
+    Record<
+      | "watcher_paused_mode"
+      | "watcher_paused_locked"
+      | "watcher_paused_cap"
+      | "watcher_nothing"
+      | "watcher_access_off"
+      | "watcher_blocked_no_folder"
+      | "watcher_blocked_not_git"
+      | "watcher_blocked_failed_start"
+      | "watcher_would_start",
+      string
+    >,
 ): string | null {
   if (!status || ["demo", "off", "agents_off"].includes(status.paused ?? "")) return null;
   switch (status.paused) {
@@ -441,6 +459,17 @@ export function watcherLine(
       return t.watcher_paused_cap.replace("{n}", String(status.running)).replace("{cap}", String(status.cap));
     case "nothing":
       return t.watcher_nothing;
+    case "access_off":
+      return t.watcher_access_off;
+    case "not_startable": {
+      const label =
+        status.reason === "no_folder"
+          ? t.watcher_blocked_no_folder
+          : status.reason === "not_git"
+            ? t.watcher_blocked_not_git
+            : t.watcher_blocked_failed_start;
+      return label.replace("{title}", status.blockedItem ?? "");
+    }
     default:
       return status.wouldStart ? t.watcher_would_start.replace("{title}", status.wouldStart) : null;
   }

@@ -1,10 +1,11 @@
 //! What the watcher reads from an organisation's database: its own open links, the items that
-//! are Ready, and whether a link has an open question. Reads only: the watcher of this task
-//! writes nothing.
+//! are Ready, and whether a link has an open question. It writes only what starting a worker
+//! needs: the link and the Running stage (`add_link`) and a "Could not start" entry
+//! (`add_entry`); the callers hold `crate::org_shared()`.
 
 use super::super::links::{has_table, parse_utc_ms, ItemKind};
 use chrono::NaiveDate;
-use rusqlite::{Connection, OpenFlags};
+use rusqlite::{params, Connection, OpenFlags, TransactionBehavior};
 use std::cmp::Reverse;
 use std::path::Path;
 use std::time::Duration;
@@ -123,6 +124,106 @@ fn open_ask_in(conn: &Connection, link_id: i64) -> Result<Option<i64>, String> {
         Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
         Err(e) => Err(format!("Failed to read questions: {e}")),
     }
+}
+
+/// The title prefix of the entry a failed start leaves.
+pub const COULD_NOT_START: &str = "Could not start: ";
+
+/// The items with an open "Could not start" entry (decide, open, no link): the watcher skips them.
+pub fn open_could_not_start(db: &Path) -> Result<Vec<(ItemKind, i64)>, String> {
+    let conn = open(db)?;
+    let has = conn
+        .query_row("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'needs_you'", [], |_| Ok(()))
+        .is_ok();
+    if !has {
+        return Ok(vec![]);
+    }
+    let e = |e: rusqlite::Error| format!("Failed to read entries: {e}");
+    let mut st = conn
+        .prepare(
+            "SELECT task_id, subtask_id FROM needs_you
+             WHERE kind = 'decide' AND status = 'open' AND link_id IS NULL AND title LIKE 'Could not start: %'",
+        )
+        .map_err(e)?;
+    let rows = st
+        .query_map([], |r| Ok((r.get::<_, Option<i64>>(0)?, r.get::<_, Option<i64>>(1)?)))
+        .map_err(e)?;
+    let mut out = Vec::new();
+    for row in rows {
+        match row.map_err(e)? {
+            (Some(t), None) => out.push((ItemKind::Task, t)),
+            (None, Some(s)) => out.push((ItemKind::Subtask, s)),
+            _ => {}
+        }
+    }
+    Ok(out)
+}
+
+fn table_of(kind: ItemKind) -> (&'static str, &'static str) {
+    match kind {
+        ItemKind::Task => ("tasks", "task_id"),
+        ItemKind::Subtask => ("subtasks", "subtask_id"),
+    }
+}
+
+/// A Decide entry on an item with no link (status open, no lead state). Task 10 extends this.
+pub fn add_entry(db: &Path, kind: ItemKind, item_id: i64, title: &str, body: &str) -> Result<i64, String> {
+    let conn = super::super::capture::open(db)?;
+    let (task, sub) = match kind {
+        ItemKind::Task => (Some(item_id), None),
+        ItemKind::Subtask => (None, Some(item_id)),
+    };
+    let title: String = title.chars().take(200).collect();
+    let body: String = body.chars().take(2000).collect();
+    conn.execute(
+        "INSERT INTO needs_you (kind, task_id, subtask_id, link_id, title, body, status, lead_state)
+         VALUES ('decide', ?1, ?2, NULL, ?3, ?4, 'open', NULL)",
+        params![task, sub, title, body],
+    )
+    .map_err(|e| format!("Failed to write the entry: {e}"))?;
+    Ok(conn.last_insert_rowid())
+}
+
+/// What a started worker is recorded as.
+#[derive(Clone, Debug, PartialEq)]
+pub struct NewLink {
+    pub kind: ItemKind,
+    pub item_id: i64,
+    pub short_id: String,
+    pub name: String,
+    pub worktree: String,
+    pub base_ref: String,
+}
+
+/// One transaction: the link (`started_by = 'watcher'`, as part 2 writes its rows: the session id
+/// comes later from the agent list) and the item's stage Running, only if it is still Ready and
+/// not done. Returns the link id.
+pub fn add_link(db: &Path, l: &NewLink) -> Result<i64, String> {
+    let mut conn = super::super::capture::open(db)?;
+    let tx = conn
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|e| format!("Failed to lock the database: {e}"))?;
+    let (table, col) = table_of(l.kind);
+    let e = |e: rusqlite::Error| format!("Failed to write the link: {e}");
+    tx.execute(
+        &format!(
+            "INSERT INTO task_agents ({col}, short_id, name, model, started_by, worktree, base_ref)
+             VALUES (?1, ?2, ?3, 'opus', 'watcher', ?4, ?5)"
+        ),
+        params![l.item_id, l.short_id, l.name, l.worktree, l.base_ref],
+    )
+    .map_err(e)?;
+    let id = tx.last_insert_rowid();
+    tx.execute(
+        &format!(
+            "UPDATE {table} SET stage = 'running', updated_at = datetime('now')
+             WHERE id = ?1 AND stage = 'ready' AND status <> 'done'"
+        ),
+        [l.item_id],
+    )
+    .map_err(e)?;
+    tx.commit().map_err(e)?;
+    Ok(id)
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -345,5 +446,54 @@ mod tests {
         assert_eq!(open_ask(&db, 1).unwrap(), None);
         c.execute("INSERT INTO needs_you (kind, task_id, link_id, title) VALUES ('decide', 1, 1, 'Which size?')", []).unwrap();
         assert_eq!(open_ask(&db, 1).unwrap(), Some(3));
+    }
+
+    #[test]
+    fn a_could_not_start_entry_is_found_only_while_open_and_without_a_link() {
+        let db = migrated("cns");
+        let c = Connection::open(&db).unwrap();
+        c.execute("INSERT INTO tasks (project_id, title, stage) VALUES (1, 'Poster tool', 'ready')", []).unwrap();
+        c.execute("INSERT INTO subtasks (task_id, title, stage) VALUES (1, 'Contact sheet export', 'ready')", []).unwrap();
+        assert_eq!(open_could_not_start(&db).unwrap(), vec![]);
+        add_entry(&db, ItemKind::Task, 1, "Could not start: No base branch", "body").unwrap();
+        let sub = add_entry(&db, ItemKind::Subtask, 1, &format!("{COULD_NOT_START}{}", "x".repeat(400)), "body").unwrap();
+        // Another decide entry of the item is not one.
+        add_entry(&db, ItemKind::Task, 1, "Which size?", "").unwrap();
+        assert_eq!(open_could_not_start(&db).unwrap(), vec![(ItemKind::Task, 1), (ItemKind::Subtask, 1)]);
+        let (kind, link, status, lead, len): (String, Option<i64>, String, Option<String>, i64) = c
+            .query_row("SELECT kind, link_id, status, lead_state, LENGTH(title) FROM needs_you WHERE id = ?1", [sub], |r| {
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?))
+            })
+            .unwrap();
+        assert_eq!((kind.as_str(), link, status.as_str(), lead, len), ("decide", None, "open", None, 200));
+        c.execute("UPDATE needs_you SET status = 'dismissed'", []).unwrap();
+        assert_eq!(open_could_not_start(&db).unwrap(), vec![]);
+    }
+
+    #[test]
+    fn add_link_writes_the_link_and_moves_only_a_ready_item_to_running() {
+        let db = migrated("addlink");
+        let c = Connection::open(&db).unwrap();
+        c.execute("INSERT INTO tasks (project_id, title, stage) VALUES (1, 'Poster tool', 'ready')", []).unwrap();
+        c.execute("INSERT INTO tasks (project_id, title, stage, status) VALUES (1, 'Done one', 'ready', 'done')", []).unwrap();
+        let link = |id| NewLink {
+            kind: ItemKind::Task,
+            item_id: id,
+            short_id: "0a1b2c3d".into(),
+            name: "sm-w-task-1".into(),
+            worktree: "/x/.claude/worktrees/sm-task-1".into(),
+            base_ref: "origin/main".into(),
+        };
+        assert_eq!(add_link(&db, &link(1)).unwrap(), 1);
+        assert_eq!(add_link(&db, &link(2)).unwrap(), 2);
+        let stage = |id: i64| -> String { c.query_row("SELECT stage FROM tasks WHERE id = ?1", [id], |r| r.get(0)).unwrap() };
+        assert_eq!((stage(1).as_str(), stage(2).as_str()), ("running", "ready"));
+        let links = open_watcher_links(&db, "o").unwrap();
+        assert_eq!(links.len(), 2);
+        assert_eq!(links[0].worktree.as_deref(), Some("/x/.claude/worktrees/sm-task-1"));
+        assert_eq!(links[0].base_ref.as_deref(), Some("origin/main"));
+        // A link that cannot be written leaves the stage alone (one transaction).
+        let bad = NewLink { item_id: 99, ..link(1) };
+        assert!(add_link(&db, &bad).is_err());
     }
 }
