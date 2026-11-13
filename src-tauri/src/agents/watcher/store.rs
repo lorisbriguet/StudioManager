@@ -250,19 +250,12 @@ pub fn decide_send_back(db: &Path, link_id: i64) -> Result<i64, String> {
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(|e| format!("Failed to lock the database: {e}"))?;
     let n = bump_in(&tx, link_id, Counter::CheckFails)?;
-    tx.execute("UPDATE task_agents SET check_state = NULL WHERE id = ?1", [link_id])
+    // The report is forgotten here too (before the message is typed), so a fast worker's next
+    // `report_result`, which writes `reported_at` again, is never erased.
+    tx.execute("UPDATE task_agents SET check_state = NULL, reported_at = NULL WHERE id = ?1", [link_id])
         .map_err(|e| format!("Failed to write the check state: {e}"))?;
     tx.commit().map_err(|e| format!("Failed to save the decision: {e}"))?;
     Ok(n)
-}
-
-/// Forgets that the worker reported, so its next `report_result` is a new report (the MCP server
-/// writes `reported_at` again).
-pub fn clear_report(db: &Path, link_id: i64) -> Result<(), String> {
-    let conn = super::super::capture::open(db)?;
-    conn.execute("UPDATE task_agents SET reported_at = NULL WHERE id = ?1 AND ended_at IS NULL", [link_id])
-        .map_err(|e| format!("Failed to clear the report: {e}"))?;
-    Ok(())
 }
 
 /// Something the app did by itself that the owner should see: an answered `alone` entry decided

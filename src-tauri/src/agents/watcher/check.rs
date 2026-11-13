@@ -21,7 +21,7 @@ use super::{Deps, Memory};
 use crate::agent_access::write_atomic;
 use crate::agents::briefing::list_is_fresh;
 use crate::agents::model::{Agent, Group};
-use crate::agents::routines::run::run_command;
+use crate::agents::routines::run::{run_command, TAIL_BYTES};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -38,9 +38,17 @@ const LIST_MAX_AGE_MS: i64 = 5 * 60_000;
 /// worker is taken to have ended without a new report.
 pub const AWAIT_REPORT_MS: i64 = 5 * 60_000;
 
+/// First line of a stored diff whose beginning `run_command` did not keep.
+pub const DIFF_CUT_NOTICE: &str = "[The diff is longer than what was kept: its beginning is missing.]";
+/// A cut output can be a few bytes shorter than `TAIL_BYTES` (the cut starts at a character).
+const CUT_MARGIN: usize = 4;
 pub const NO_RESULT: &str = "Ended without a result";
 pub const WORKTREE_GONE: &str = "The worktree is gone";
 pub const SENT_BACK: &str = "Sent the failed check back to the worker";
+
+/// A finished check whose entry could not be written yet, per (organisation, link id), with the
+/// diff text to store: kept in memory so the command is not run again.
+pub type Unwritten = std::collections::HashMap<(String, i64), (NewCheck, Option<String>)>;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CheckRun {
@@ -110,9 +118,13 @@ pub fn for_agent(tail: &str) -> String {
 pub struct DiffFacts {
     /// Added plus removed lines; None when a binary file changed.
     pub lines: Option<i64>,
+    /// False when the numstat or the name-status output was cut: `lines`, `paths` and `deleted`
+    /// are then not to be trusted (`lines` is None, the lists are partial).
+    pub complete: bool,
     pub paths: Vec<String>,
     pub deleted: Vec<String>,
-    /// The diff text, at most `DIFF_CAP` bytes.
+    /// The diff text, at most `DIFF_CAP` bytes; starts with `DIFF_CUT_NOTICE` when its beginning
+    /// was lost.
     pub head: String,
     /// Nothing uncommitted in the worktree.
     pub clean: bool,
@@ -130,22 +142,26 @@ pub fn diff_facts(g: &dyn Git, worktree: &str, base: &str) -> Result<DiffFacts, 
         return Err(git::first_line(&mb, "git merge-base failed"));
     }
     let mb = mb.tail.trim().to_string();
-    let run = |a: &[&str], what: &str| -> Result<String, String> {
+    // `run_command` keeps only the last `TAIL_BYTES` of an output (a little less after the cut
+    // at a character): an output that long may have lost its beginning.
+    let run = |a: &[&str], what: &str| -> Result<(String, bool), String> {
         let mut args: Vec<&str> = a.to_vec();
         args.push(&mb);
         args.push("--");
         let o = git::git(g, worktree, &args);
         if git::succeeded(&o) {
-            Ok(o.tail)
+            let cut = o.tail.len() + CUT_MARGIN >= TAIL_BYTES;
+            Ok((o.tail, cut))
         } else {
             Err(git::first_line(&o, what))
         }
     };
-    let numstat = run(&["diff", "--numstat", "--no-renames"], "git diff failed")?;
-    let names = run(&["diff", "--name-status", "--no-renames"], "git diff failed")?;
-    let text = run(&["diff", "--no-ext-diff", "--no-color", "--no-renames"], "git diff failed")?;
+    let (numstat, numstat_cut) = run(&["diff", "--numstat", "--no-renames"], "git diff failed")?;
+    let (names, names_cut) = run(&["diff", "--name-status", "--no-renames"], "git diff failed")?;
+    let (text, text_cut) = run(&["diff", "--no-ext-diff", "--no-color", "--no-renames"], "git diff failed")?;
     let status = git::git(g, worktree, &["status", "--porcelain"]);
-    let mut lines = Some(0i64);
+    let complete = !numstat_cut && !names_cut;
+    let mut lines = if complete { Some(0i64) } else { None };
     for l in numstat.lines() {
         let mut f = l.split('\t');
         if let (Some(a), Some(d)) = (f.next(), f.next()) {
@@ -164,13 +180,14 @@ pub fn diff_facts(g: &dyn Git, worktree: &str, base: &str) -> Result<DiffFacts, 
             }
         }
     }
-    Ok(DiffFacts {
-        lines,
-        paths,
-        deleted,
-        head: first_bytes(&text, DIFF_CAP).to_string(),
-        clean: git::succeeded(&status) && status.tail.trim().is_empty(),
-    })
+    let head = if text_cut {
+        // Start at the first complete line.
+        let rest = text.split_once('\n').map_or("", |(_, r)| r);
+        first_bytes(&format!("{DIFF_CUT_NOTICE}\n{rest}"), DIFF_CAP).to_string()
+    } else {
+        first_bytes(&text, DIFF_CAP).to_string()
+    };
+    Ok(DiffFacts { lines, paths, deleted, complete, head, clean: git::succeeded(&status) && status.tail.trim().is_empty() })
 }
 
 /// `<app data>/lead/checks/<org id>-<entry id>.diff`: the file `get_needs_you` of the MCP server
@@ -203,6 +220,7 @@ fn same_link(key: &(String, i64), l: &WatcherLink) -> bool {
 pub fn step(env: &Env, d: &Deps, mem: &mut Memory, links: &[(PathBuf, WatcherLink)]) -> bool {
     mem.misses.retain(|k, _| links.iter().any(|(_, l)| same_link(k, l)));
     mem.awaiting.retain(|k, _| links.iter().any(|(_, l)| same_link(k, l)));
+    mem.unwritten.retain(|k, _| links.iter().any(|(_, l)| same_link(k, l)));
     let trusted = d.listed_at.is_some_and(|t| t > mem.started && d.now - t <= LIST_MAX_AGE_MS);
     let mut changed = false;
     for (db, link) in links {
@@ -253,7 +271,7 @@ pub fn step(env: &Env, d: &Deps, mem: &mut Memory, links: &[(PathBuf, WatcherLin
                 continue;
             }
         };
-        let (wrote, ran) = handle(env, d, db, link, agent, reported);
+        let (wrote, ran) = handle(env, d, db, link, agent, reported, &mut mem.unwritten);
         changed |= wrote;
         if ran {
             break;
@@ -272,7 +290,45 @@ fn failure_output(run: &CheckRun) -> String {
 }
 
 /// One finished link: (something was written, a check command ran).
-fn handle(env: &Env, d: &Deps, db: &Path, link: &WatcherLink, agent: Option<&Agent>, reported: bool) -> (bool, bool) {
+fn handle(
+    env: &Env,
+    d: &Deps,
+    db: &Path,
+    link: &WatcherLink,
+    agent: Option<&Agent>,
+    reported: bool,
+    unwritten: &mut Unwritten,
+) -> (bool, bool) {
+    let key = (link.org.clone(), link.id);
+    let pending = std::cell::RefCell::new(unwritten);
+    // Writes the entry; a failure keeps it (with its diff) so the next pass only retries the
+    // write and never runs the command again.
+    let write = |c: NewCheck, diff: Option<&str>| -> bool {
+        let id = {
+            let _shared = crate::org_shared();
+            store::add_check(db, &c)
+        };
+        match id {
+            Ok(id) => {
+                pending.borrow_mut().remove(&key);
+                if let (Some(id), Some(text)) = (id, diff) {
+                    if let Err(e) = write_diff(d.app_dir, &link.org, id, text) {
+                        log::warn!("[watcher] could not store the diff of entry {id}: {e}");
+                    }
+                }
+                true
+            }
+            Err(e) => {
+                log::warn!("[watcher] could not write the Check entry of link {}: {e}", link.id);
+                pending.borrow_mut().insert(key.clone(), (c, diff.map(String::from)));
+                false
+            }
+        }
+    };
+    let held = pending.borrow().get(&key).cloned();
+    if let Some((c, text)) = held {
+        return (write(c, text.as_deref()), false);
+    }
     let facts = {
         let _shared = crate::org_shared();
         store::item_facts(db, link.kind, link.item_id)
@@ -296,27 +352,6 @@ fn handle(env: &Env, d: &Deps, db: &Path, link: &WatcherLink, agent: Option<&Age
         touches: None,
         check_state: None,
         close: None,
-    };
-    let write = |c: NewCheck, diff: Option<&str>| -> bool {
-        let id = {
-            let _shared = crate::org_shared();
-            store::add_check(db, &c)
-        };
-        match id {
-            Ok(Some(id)) => {
-                if let Some(text) = diff {
-                    if let Err(e) = write_diff(d.app_dir, &link.org, id, text) {
-                        log::warn!("[watcher] could not store the diff of entry {id}: {e}");
-                    }
-                }
-                true
-            }
-            Ok(None) => true,
-            Err(e) => {
-                log::warn!("[watcher] could not write the Check entry of link {}: {e}", link.id);
-                false
-            }
-        }
     };
     if !reported {
         let c = NewCheck {
@@ -347,7 +382,8 @@ fn handle(env: &Env, d: &Deps, db: &Path, link: &WatcherLink, agent: Option<&Age
     let finish = |passed: Option<bool>, output: Option<String>, state: &'static str| -> bool {
         let diff = link.base_ref.as_deref().map(|b| diff_facts(env.git, worktree, b));
         let (lines, touches, text) = match &diff {
-            Some(Ok(f)) => (f.lines, Some("[]".to_string()), Some(f.head.clone())),
+            // Incomplete facts (a cut git output) say nothing about what the change touches.
+            Some(Ok(f)) => (f.lines, f.complete.then(|| "[]".to_string()), Some(f.head.clone())),
             Some(Err(e)) => {
                 log::warn!("[watcher] could not measure the change of link {}: {e}", link.id);
                 (None, None, None)
@@ -369,7 +405,7 @@ fn handle(env: &Env, d: &Deps, db: &Path, link: &WatcherLink, agent: Option<&Age
     };
     let run = run_check(&command, worktree, &(env.path_env)());
     if let Some(e) = &run.error {
-        return (finish(None, Some(e.chars().take(SENT_TAIL).collect()), "error"), true);
+        return (finish(None, Some(for_agent(e)), "error"), true);
     }
     if run.passed {
         return (finish(Some(true), Some(for_agent(&run.tail)), "passed"), true);
@@ -393,10 +429,7 @@ fn handle(env: &Env, d: &Deps, db: &Path, link: &WatcherLink, agent: Option<&Age
                         let _shared = crate::org_shared();
                         // A failure here only leaves the old report: the worker's own report
                         // still writes `reported_at` again, and a second send back is never made.
-                        if let Err(e) = store::clear_report(db, link.id) {
-                            log::warn!("[watcher] link {}: {e}", link.id);
-                        }
-                        let reason = "The check command failed, so the worker was asked once to fix it and report again.";
+                                                let reason = "The check command failed, so the worker was asked once to fix it and report again.";
                         if let Err(e) = store::record_alone(db, link.kind, link.item_id, Some(link.id), SENT_BACK, reason) {
                             log::warn!("[watcher] link {}: {e}", link.id);
                         }
@@ -574,15 +607,95 @@ mod tests {
     }
 
     #[test]
-    fn the_diff_is_capped_at_200_kb_on_a_char_boundary() {
+    fn a_small_diff_is_stored_whole_and_a_long_one_is_capped_with_a_notice() {
         let mut f = fx("diffcap", Some("true"));
-        f.git = numstat_git("1\t0\ta.txt\n", format!("{}{}", "x".repeat(DIFF_CAP - 1), "é".repeat(5000)));
+        f.git = numstat_git("1\t0\ta.txt\n", "é".repeat(100_000));
         go(&f, DONE, &mut Memory::default(), 10);
         let id: i64 = one(&f.db, "SELECT id FROM needs_you");
         let text = std::fs::read_to_string(diff_path(&f.dir, "a", id)).unwrap();
-        assert_eq!(text.len(), DIFF_CAP - 1);
-        let facts = diff_facts(&f.git, &f.wt, "origin/main").unwrap();
-        assert!(facts.head.len() <= DIFF_CAP);
+        assert!(text.len() <= DIFF_CAP && text.starts_with(DIFF_CUT_NOTICE));
+        let lines = "x".repeat(9) + "\n";
+        let g = numstat_git("1\t0\ta.txt\n", lines.repeat(30_000));
+        let facts = diff_facts(&g, &f.wt, "origin/main").unwrap();
+        assert!(facts.head.len() <= DIFF_CAP && facts.head.starts_with(DIFF_CUT_NOTICE));
+        let body: Vec<&str> = facts.head.lines().skip(1).collect();
+        assert!(body[..body.len() - 1].iter().all(|l| *l == "xxxxxxxxx"), "complete lines follow the notice");
+    }
+
+    #[test]
+    fn an_over_64_kb_diff_is_stored_with_the_notice_and_a_small_one_without() {
+        let big = "+added line of the change\n".repeat(4_000);
+        assert!(big.len() > TAIL_BYTES);
+        let tail = &big[big.len() - TAIL_BYTES..];
+        let g = numstat_git("1\t0\ta.txt\n", tail.to_string());
+        let facts = diff_facts(&g, "/x", "origin/main").unwrap();
+        let (first, rest) = facts.head.split_once('\n').unwrap();
+        assert_eq!(first, DIFF_CUT_NOTICE);
+        assert!(rest.lines().all(|l| l == "+added line of the change"), "continues from a complete line");
+        assert!(facts.complete && facts.lines == Some(1));
+        let small = numstat_git("1\t0\ta.txt\n", "+x\n".to_string());
+        assert_eq!(diff_facts(&small, "/x", "origin/main").unwrap().head, "+x\n");
+    }
+
+    #[test]
+    fn a_cut_numstat_gives_no_lines_and_no_touches() {
+        // Over 64 KB, and a cut in the middle of a line that parses as a smaller number.
+        let long = "12\t3\tsome/path/to/a/file.txt\n".repeat(3_000);
+        let cut = long[long.len() - TAIL_BYTES..].to_string();
+        let g = FakeGit::new(move |c| match c {
+            "merge-base origin/main HEAD" => out(0, "abc123\n"),
+            "diff --numstat --no-renames abc123 --" => out(0, &format!("3\t4\tx\n{cut}")),
+            _ => out(0, ""),
+        });
+        let facts = diff_facts(&g, "/x", "origin/main").unwrap();
+        assert_eq!((facts.lines, facts.complete), (None, false));
+        let mut f = fx("cutnumstat", Some("true"));
+        let tail = "23\t4\tx\n".repeat(10_000);
+        let tail = tail[tail.len() - TAIL_BYTES..].to_string();
+        f.git = FakeGit::new(move |c| match c {
+            "merge-base origin/main HEAD" => out(0, "abc123\n"),
+            "diff --numstat --no-renames abc123 --" => out(0, &tail),
+            _ => out(0, "M\ta.txt\n"),
+        });
+        go(&f, DONE, &mut Memory::default(), 10);
+        assert_eq!(entries(&f), 1);
+        assert_eq!(one::<Option<i64>>(&f.db, "SELECT change_lines FROM needs_you"), None);
+        assert_eq!(one::<Option<String>>(&f.db, "SELECT touches FROM needs_you"), None);
+        assert_eq!(one::<i64>(&f.db, "SELECT check_passed FROM needs_you"), 1);
+    }
+
+    #[test]
+    fn a_cut_name_status_makes_the_facts_incomplete() {
+        let names = "M\tsome/path/to/a/file.txt\n".repeat(4_000);
+        let names = names[names.len() - TAIL_BYTES..].to_string();
+        let g = FakeGit::new(move |c| match c {
+            "merge-base origin/main HEAD" => out(0, "abc123\n"),
+            "diff --name-status --no-renames abc123 --" => out(0, &names),
+            "diff --numstat --no-renames abc123 --" => out(0, "1\t0\ta.txt\n"),
+            _ => out(0, ""),
+        });
+        let facts = diff_facts(&g, "/x", "origin/main").unwrap();
+        assert_eq!((facts.complete, facts.lines), (false, None));
+    }
+
+    #[test]
+    fn a_failing_entry_write_does_not_run_the_command_again() {
+        let f = fx("nowrite", Some("echo run >> ran.log"));
+        let log = Path::new(&f.wt).join("ran.log");
+        let c = Connection::open(&f.db).unwrap();
+        c.execute_batch("ALTER TABLE needs_you RENAME TO needs_you_away").unwrap();
+        let mut mem = Memory::default();
+        go(&f, DONE, &mut mem, 10);
+        go(&f, DONE, &mut mem, 11);
+        go(&f, DONE, &mut mem, 12);
+        assert_eq!(std::fs::read_to_string(&log).unwrap().lines().count(), 1);
+        c.execute_batch("ALTER TABLE needs_you_away RENAME TO needs_you").unwrap();
+        go(&f, DONE, &mut mem, 13);
+        go(&f, DONE, &mut mem, 14);
+        assert_eq!(std::fs::read_to_string(&log).unwrap().lines().count(), 1, "the command ran once");
+        assert_eq!(entries(&f), 1);
+        assert_eq!(one::<i64>(&f.db, "SELECT check_passed FROM needs_you"), 1);
+        assert_eq!(one::<String>(&f.db, "SELECT check_state FROM task_agents"), "passed");
     }
 
     #[test]
@@ -679,6 +792,8 @@ mod tests {
         let mut mem = Memory::default();
         go(&f, DONE, &mut mem, 10);
         assert_eq!(f.sent.lock().unwrap().len(), 1, "typing was tried once");
+        assert_eq!(one::<i64>(&f.db, "SELECT reported_at IS NULL FROM task_agents"), 1, "cleared with the decision");
+        assert_eq!(one::<String>(&f.db, "SELECT check_state FROM task_agents"), "failed");
         assert_eq!(one::<i64>(&f.db, "SELECT check_fails FROM task_agents"), 1);
         assert_eq!(entries(&f), 1);
         assert!(one::<String>(&f.db, "SELECT check_output FROM needs_you").contains("nope"));

@@ -357,6 +357,8 @@ pub struct Memory {
     /// Per link whose failed check was sent back: when the watcher first saw it waiting for the
     /// worker's next report, and whether the agent was seen working since.
     awaiting: HashMap<(String, i64), (i64, bool)>,
+    /// Finished checks whose entry could not be written (`check::Unwritten`).
+    unwritten: check::Unwritten,
 }
 
 #[derive(Clone, Debug, PartialEq)]
