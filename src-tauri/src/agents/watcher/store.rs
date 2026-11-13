@@ -3,9 +3,9 @@
 //! needs: the link and the Running stage (`add_link`) and a "Could not start" entry
 //! (`add_entry`); the callers hold `crate::org_shared()`.
 
-use super::super::links::{has_table, parse_utc_ms, ItemKind};
+use super::super::links::{parse_utc_ms, ItemKind};
 use chrono::NaiveDate;
-use rusqlite::{params, Connection, OpenFlags, TransactionBehavior};
+use rusqlite::{params, Connection, OpenFlags, OptionalExtension, TransactionBehavior};
 use std::cmp::Reverse;
 use std::path::Path;
 use std::time::Duration;
@@ -50,7 +50,13 @@ pub struct WatcherLink {
 
 pub fn open_watcher_links(db: &Path, org: &str) -> Result<Vec<WatcherLink>, String> {
     let conn = open(db)?;
-    if !has_table(&conn) {
+    // A file that cannot be read is an error (the pass pauses), not "no links": only a readable
+    // database without the table has none.
+    let has: Option<i64> = conn
+        .query_row("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'task_agents'", [], |r| r.get(0))
+        .optional()
+        .map_err(|e| format!("Failed to read links: {e}"))?;
+    if has.is_none() {
         return Ok(vec![]);
     }
     let e = |e: rusqlite::Error| format!("Failed to read links: {e}");
@@ -349,6 +355,70 @@ pub fn bump(db: &Path, link_id: i64, c: Counter) -> Result<i64, String> {
     Ok(n)
 }
 
+/// Fills a watcher link's `session_id` (only when it has none) and corrects its `short_id` from
+/// the listed agent. Only an open watcher link is written: the tracker in `links.rs` never changes
+/// these, and an ended link stays as it was. True when something changed. The caller holds
+/// `crate::org_shared()`.
+pub fn sync_ids(db: &Path, link_id: i64, session: Option<&str>, short: Option<&str>) -> Result<bool, String> {
+    let conn = super::super::capture::open(db)?;
+    let n = conn
+        .execute(
+            "UPDATE task_agents SET session_id = COALESCE(session_id, ?2), short_id = COALESCE(?3, short_id)
+             WHERE id = ?1 AND ended_at IS NULL AND started_by = 'watcher'
+               AND ((session_id IS NULL AND ?2 IS NOT NULL) OR (?3 IS NOT NULL AND short_id <> ?3))",
+            params![link_id, session, short],
+        )
+        .map_err(|e| format!("Failed to write the agent ids: {e}"))?;
+    Ok(n > 0)
+}
+
+/// The link follows the copy a resume made: its new short id is recorded and the session id is
+/// forgotten (the copy has its own, filled again from the list). Errs when the link is not an
+/// open watcher link. The caller holds `crate::org_shared()`.
+pub fn follow_copy(db: &Path, link_id: i64, short: &str) -> Result<(), String> {
+    let conn = super::super::capture::open(db)?;
+    let n = conn
+        .execute(
+            "UPDATE task_agents SET short_id = ?2, session_id = NULL
+             WHERE id = ?1 AND ended_at IS NULL AND started_by = 'watcher'",
+            params![link_id, short],
+        )
+        .map_err(|e| format!("Failed to record the copy: {e}"))?;
+    if n == 0 {
+        return Err("The link is not open any more".to_string());
+    }
+    Ok(())
+}
+
+/// True when the link still has something for a person or the lead: an open entry, or an answer
+/// the lead wrote that the app has not carried out yet. A checked link is not closed while one
+/// exists. The caller treats an error as "yes": nothing is closed on a failed read.
+pub fn has_open_work(db: &Path, link_id: i64) -> Result<bool, String> {
+    let conn = open(db)?;
+    let n: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM needs_you WHERE link_id = ?1
+               AND (status = 'open' OR (status = 'answered' AND decided_by = 'lead' AND delivered_at IS NULL))",
+            [link_id],
+            |r| r.get(0),
+        )
+        .map_err(|e| format!("Failed to read entries: {e}"))?;
+    Ok(n > 0)
+}
+
+/// Ends an open watcher link (`ended_at` and the outcome). True when it was open.
+pub fn end_link(db: &Path, link_id: i64, outcome: &str) -> Result<bool, String> {
+    let conn = super::super::capture::open(db)?;
+    let n = conn
+        .execute(
+            "UPDATE task_agents SET ended_at = datetime('now'), outcome = ?2
+             WHERE id = ?1 AND ended_at IS NULL AND started_by = 'watcher'",
+            params![link_id, outcome],
+        )
+        .map_err(|e| format!("Failed to end the link: {e}"))?;
+    Ok(n > 0)
+}
+
 /// `check_state` of a link (running, passed, failed, none, error; None clears it).
 pub fn set_check_state(db: &Path, link_id: i64, state: Option<&str>) -> Result<(), String> {
     let conn = super::super::capture::open(db)?;
@@ -365,6 +435,12 @@ pub fn decide_send_back(db: &Path, link_id: i64) -> Result<i64, String> {
     let tx = conn
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(|e| format!("Failed to lock the database: {e}"))?;
+    let open: i64 = tx
+        .query_row("SELECT COUNT(*) FROM task_agents WHERE id = ?1 AND ended_at IS NULL", [link_id], |r| r.get(0))
+        .map_err(|e| format!("Failed to read the link: {e}"))?;
+    if open == 0 {
+        return Err("The link is ended".to_string());
+    }
     let n = bump_in(&tx, link_id, Counter::CheckFails)?;
     // The report is forgotten here too (before the message is typed), so a fast worker's next
     // `report_result`, which writes `reported_at` again, is never erased.
@@ -699,8 +775,8 @@ pub fn add_check(db: &Path, c: &NewCheck) -> Result<Option<i64>, String> {
     tx.execute(
         "UPDATE needs_you SET status = 'dismissed', decided_by = 'app', reason = ?2, answered_at = datetime('now')
          WHERE link_id = ?1 AND kind = 'decide' AND status = 'open'
-           AND (lead_state = 'prompt' OR (lead_state IS NULL AND title = ?3))",
-        params![c.link_id, why, IDLE_ENTRY],
+           AND (lead_state = 'prompt' OR (lead_state IS NULL AND title IN (?3, ?4, ?5)))",
+        params![c.link_id, why, IDLE_ENTRY, super::act::STUCK_ENTRY, super::act::WRAP_FAILED],
     )
     .map_err(e)?;
     let (table, col) = table_of(c.kind);
@@ -1021,6 +1097,45 @@ mod tests {
         assert_eq!((kind.as_str(), link, status.as_str(), lead, len), ("decide", None, "open", None, 200));
         c.execute("UPDATE needs_you SET status = 'dismissed'", []).unwrap();
         assert_eq!(open_could_not_start(&db).unwrap(), vec![]);
+    }
+
+    #[test]
+    fn a_send_back_is_decided_only_for_an_open_link() {
+        let db = migrated("sendback-ended");
+        let c = Connection::open(&db).unwrap();
+        c.execute("INSERT INTO tasks (project_id, title, stage) VALUES (1, 'Poster tool', 'to_check')", []).unwrap();
+        c.execute(
+            "INSERT INTO task_agents (task_id, short_id, name, started_by, check_state, ended_at)
+             VALUES (1, 'abc12345', 'work', 'watcher', 'failed', datetime('now'))",
+            [],
+        )
+        .unwrap();
+        assert!(decide_send_back(&db, 1).is_err(), "an ended link is not sent back");
+        let (fails, state): (i64, Option<String>) =
+            c.query_row("SELECT check_fails, check_state FROM task_agents", [], |r| Ok((r.get(0)?, r.get(1)?))).unwrap();
+        assert_eq!((fails, state.as_deref()), (0, Some("failed")), "nothing was counted or cleared");
+        c.execute("UPDATE task_agents SET ended_at = NULL", []).unwrap();
+        assert_eq!(decide_send_back(&db, 1).unwrap(), 1);
+    }
+
+    #[test]
+    fn the_session_and_a_followed_copy_are_written_only_to_an_open_link() {
+        let db = migrated("ids");
+        let c = Connection::open(&db).unwrap();
+        c.execute("INSERT INTO tasks (project_id, title, stage) VALUES (1, 'Poster tool', 'running')", []).unwrap();
+        c.execute("INSERT INTO task_agents (task_id, short_id, name, started_by) VALUES (1, 'abc12345', 'work', 'watcher')", []).unwrap();
+        sync_ids(&db, 1, Some("sess-1"), None).unwrap();
+        let row = |c: &Connection| -> (Option<String>, String) {
+            c.query_row("SELECT session_id, short_id FROM task_agents", [], |r| Ok((r.get(0)?, r.get(1)?))).unwrap()
+        };
+        assert_eq!(row(&c), (Some("sess-1".into()), "abc12345".into()));
+        sync_ids(&db, 1, Some("other"), Some("0a1b2c3d")).unwrap();
+        assert_eq!(row(&c), (Some("sess-1".into()), "0a1b2c3d".into()), "a session already known is kept; the short id follows the list");
+        follow_copy(&db, 1, "99999999").unwrap();
+        assert_eq!(row(&c), (None, "99999999".into()), "the copy has its own session, filled in from the list later");
+        c.execute("UPDATE task_agents SET ended_at = datetime('now')", []).unwrap();
+        follow_copy(&db, 1, "11111111").unwrap_err();
+        assert_eq!(row(&c).1, "99999999");
     }
 
     #[test]

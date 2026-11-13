@@ -286,7 +286,30 @@ describe("AgentsCard", () => {
       await waitFor(() => expect(invokedCommands.find((c) => c.cmd === "agents_set_watcher")?.args).toEqual({ on: true, cap: 3 }));
     });
 
+    it("asks about the lead's folder when another cap is saved with the watcher on and the folder untrusted", async () => {
+      info = { enabled: true, claudePath: "/bin/claude", menuBar: false, limitAlerts: true, watcher: true, workerCap: 3 };
+      renderCard();
+      const cap = await screen.findByRole("spinbutton", { name: "Workers at once" });
+      fireEvent.change(cap, { target: { value: "4" } });
+      fireEvent.blur(cap);
+      fireEvent.click(await screen.findByRole("button", { name: "Trust and start" }));
+      await waitFor(() => expect(invokedCommands.find((c) => c.cmd === "agents_set_watcher")?.args).toEqual({ on: true, cap: 4 }));
+      expect(invokedCommands.find((c) => c.cmd === "agents_trust_folder")?.args).toEqual({ folder: LEAD });
+    });
+
+    it("declining the trust question with the watcher already on still saves the cap", async () => {
+      info = { enabled: true, claudePath: "/bin/claude", menuBar: false, limitAlerts: true, watcher: true, workerCap: 3 };
+      renderCard();
+      const cap = await screen.findByRole("spinbutton", { name: "Workers at once" });
+      fireEvent.change(cap, { target: { value: "2" } });
+      fireEvent.blur(cap);
+      fireEvent.click(await screen.findByRole("button", { name: "Cancel" }));
+      await waitFor(() => expect(invokedCommands.find((c) => c.cmd === "agents_set_watcher")?.args).toEqual({ on: true, cap: 2 }));
+      expect(cmds()).not.toContain("agents_trust_folder");
+    });
+
     it("saves another cap on blur, 1 to 5", async () => {
+      folderTrusted = true;
       info = { enabled: true, claudePath: "/bin/claude", menuBar: false, limitAlerts: true, watcher: true, workerCap: 3 };
       render(<AgentsCard />);
       const cap = await screen.findByRole("spinbutton", { name: "Workers at once" });

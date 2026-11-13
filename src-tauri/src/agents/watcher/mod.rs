@@ -10,6 +10,7 @@
 pub mod act;
 pub mod budget;
 pub mod check;
+pub mod close;
 pub mod events;
 pub mod git;
 pub mod lead;
@@ -51,6 +52,9 @@ pub enum Paused {
     Budget(Budget),
     /// The number of workers running (the cap is in the settings).
     Cap(usize),
+    /// An organisation's links could not be read: with them unknown the cap cannot be trusted, so
+    /// nothing starts and nothing is acted on this pass.
+    LinksUnreadable,
     /// Items are Ready but none can start: the first one's title and why (`no_folder`,
     /// `not_git` or `failed_start`).
     NotStartable { title: String, reason: &'static str },
@@ -69,6 +73,7 @@ impl Paused {
             Paused::AccessOff => "access_off",
             Paused::Budget(_) => "budget",
             Paused::Cap(_) => "cap",
+            Paused::LinksUnreadable => "links_unreadable",
             Paused::NotStartable { .. } => "not_startable",
             Paused::Nothing => "nothing",
         }
@@ -131,6 +136,15 @@ pub fn acquire_lock(app_dir: &Path) -> Option<std::fs::File> {
     got.then_some(file)
 }
 
+/// What the world looks like after a slow step (a check can run for ten minutes): the time and the
+/// poller's list, read again.
+pub struct Fresh {
+    pub now: i64,
+    pub agents: Vec<Agent>,
+    pub listed_at: Option<i64>,
+}
+
+#[derive(Clone, Copy)]
 pub struct Deps<'a> {
     pub app_dir: &'a Path,
     /// Where `limits.json` is read from (read only): `budget::limits_dir`.
@@ -140,6 +154,9 @@ pub struct Deps<'a> {
     /// The poller's last list, and when it last succeeded.
     pub agents: &'a [Agent],
     pub listed_at: Option<i64>,
+    /// Reads the time and the list again; `tick` calls it once after the check step so that what
+    /// follows acts on the world as it is then. None: the first reading stands (tests, status).
+    pub refresh: Option<&'a dyn Fn() -> Fresh>,
 }
 
 /// What the watcher would do now.
@@ -235,7 +252,13 @@ fn read_pass(d: &Deps, lock: LockState, pending: usize) -> Pass {
         let _shared = crate::org_shared();
         match open_watcher_links(&db, &org) {
             Ok(links) => pass.links.extend(links.into_iter().map(|l| (db.clone(), l))),
-            Err(e) => log::warn!("[watcher] organisation {org}: {e}"),
+            Err(e) => {
+                // Without its links the pass cannot tell what runs (the cap) or what to act on:
+                // it starts nothing and acts on nothing until the next read works.
+                log::warn!("[watcher] organisation {org}: {e}");
+                pass.gate = Some(Paused::LinksUnreadable);
+                return pass;
+            }
         }
         if !allowed {
             continue;
@@ -414,6 +437,34 @@ fn fresh(d: &Deps, lock: LockState, mem: &Memory) -> Pass {
     pass
 }
 
+/// `d` with the time and the list of `fresh`, when it was read again.
+fn deps_with<'b>(d: &Deps<'b>, fresh: &'b Option<Fresh>) -> Deps<'b> {
+    match fresh {
+        Some(f) => Deps { now: f.now, agents: &f.agents, listed_at: f.listed_at, ..*d },
+        None => *d,
+    }
+}
+
+/// Writes the listed agent's session id (when the link has none) and short id on each open watcher
+/// link. True when one changed.
+fn sync_link_ids(d: &Deps, links: &[(PathBuf, WatcherLink)]) -> bool {
+    let mut changed = false;
+    for (db, link) in links {
+        let Some(agent) = check::find_agent(d.agents, link) else { continue };
+        let session = (!agent.session_id.is_empty()).then_some(agent.session_id.as_str());
+        let short = agent.short_id.as_deref();
+        if link.session_id.is_some() && short == Some(link.short_id.as_str()) {
+            continue;
+        }
+        let _shared = crate::org_shared();
+        match store::sync_ids(db, link.id, session, short) {
+            Ok(c) => changed |= c,
+            Err(e) => log::warn!("[watcher] link {} of organisation {}: {e}", link.id, link.org),
+        }
+    }
+    changed
+}
+
 /// One pass. In the demo build it returns before any file is read. Without `env` nothing is
 /// started (the pass only looks). Something starts only when this thread holds the lock.
 pub fn tick(d: &Deps, mem: &mut Memory, env: Option<&start::Env>) -> Report {
@@ -444,6 +495,7 @@ pub fn tick(d: &Deps, mem: &mut Memory, env: Option<&start::Env>) -> Report {
         }
     };
     let mut pass = fresh(d, lock, mem);
+    let mut refreshed: Option<Fresh> = None;
     mem.repos.clear();
     if lock == LockState::Held && pass.gate.is_none() {
         if let Some(env) = env {
@@ -464,17 +516,31 @@ pub fn tick(d: &Deps, mem: &mut Memory, env: Option<&start::Env>) -> Report {
             if mem.pending != before {
                 save_pending(d, mem);
             }
+            // The listed agent's ids on the links: a worker's question needs its session id, and a
+            // copy made by a resume has its own short id.
+            if sync_link_ids(d, &pass.links) {
+                pass = fresh(d, lock, mem);
+            }
             // A finished worker's check: not gated by the budget (no model is used).
-            if check::step(env, d, mem, &pass.links) {
-                pass = fresh(d, lock, mem);
-            }
-            // Stuck, at a prompt, idle or old: resume, an entry for the owner, or wrap up.
-            if act::step(env, d, mem, &pass.budget, &pass.links) {
-                pass = fresh(d, lock, mem);
-            }
-            // A short lead session for one waiting entry, and what the lead wrote carried out.
-            if lead::step(env, d, mem, &pass) {
-                pass = fresh(d, lock, mem);
+            check::step(env, d, mem, &pass.links);
+            // A check can run for ten minutes: what follows uses the time and the list read again,
+            // and stops at once when the settings or the mode closed the gate meanwhile.
+            refreshed = d.refresh.map(|r| r());
+            let d = deps_with(d, &refreshed);
+            pass = fresh(&d, lock, mem);
+            if pass.gate.is_none() {
+                // A checked and decided link is ended, so its place is free.
+                if close::step(env, &d, mem, &pass.links) {
+                    pass = fresh(&d, lock, mem);
+                }
+                // Stuck, at a prompt, idle or old: resume, an entry for the owner, or wrap up.
+                if act::step(env, &d, mem, &pass.budget, &pass.links) {
+                    pass = fresh(&d, lock, mem);
+                }
+                // A short lead session for one waiting entry, and what the lead wrote carried out.
+                if lead::step(env, &d, mem, &pass) {
+                    pass = fresh(&d, lock, mem);
+                }
             }
         }
     }
@@ -484,7 +550,8 @@ pub fn tick(d: &Deps, mem: &mut Memory, env: Option<&start::Env>) -> Report {
         outlook.paused,
         Some(Paused::Demo | Paused::Off | Paused::AgentsOff | Paused::Mode | Paused::Locked)
     );
-    let noticed = if watching { notice_links(d, mem, pass.links) } else { vec![] };
+    let d = deps_with(d, &refreshed);
+    let noticed = if watching { notice_links(&d, mem, pass.links) } else { vec![] };
     if !watching {
         mem.seen.clear();
     }
@@ -497,10 +564,7 @@ fn notice_links(d: &Deps, mem: &mut Memory, links: Vec<(PathBuf, WatcherLink)>) 
     mem.seen.retain(|(org, id), _| links.iter().any(|(_, l)| l.org == *org && l.id == *id));
     let mut out = Vec::new();
     for (db, mut link) in links {
-        let agent = d.agents.iter().find(|a| match &link.session_id {
-            Some(s) => &a.session_id == s,
-            None => a.short_id.as_deref() == Some(link.short_id.as_str()),
-        });
+        let agent = check::find_agent(d.agents, &link);
         let key = (link.org.clone(), link.id);
         match agent.map(|a| a.group) {
             Some(g @ (Group::NeedsYou | Group::Idle)) => {
@@ -624,6 +688,7 @@ fn check(app: &AppHandle, mem: &mut Memory) {
         path_env: &path_env,
         transcript_tail: &transcript_tail,
     };
+    let refresh = || Fresh { now: limits::now_ms(), agents: state.cached(), listed_at: state.listed_at() };
     let report = tick(
         &Deps {
             app_dir: &app_dir,
@@ -632,6 +697,7 @@ fn check(app: &AppHandle, mem: &mut Memory) {
             now: limits::now_ms(),
             agents: &state.cached(),
             listed_at: state.listed_at(),
+            refresh: Some(&refresh),
         },
         mem,
         Some(&env),
@@ -684,7 +750,7 @@ pub async fn watcher_status(
     super::pty::blocking(move || {
         let demo = crate::host::is_demo(&app);
         let now = limits::now_ms();
-        let d = Deps { app_dir: &app_dir, limits_dir: &limits_dir, demo, now, agents: &agents, listed_at };
+        let d = Deps { app_dir: &app_dir, limits_dir: &limits_dir, demo, now, agents: &agents, listed_at, refresh: None };
         // What the thread last found: no process is spawned here.
         let repos: HashMap<String, bool> = REPOS.lock().map(|r| r.iter().cloned().collect()).unwrap_or_default();
         let known = Known {
@@ -812,7 +878,7 @@ mod tests {
     }
 
     pub(super) fn deps<'a>(dir: &'a Path, agents: &'a [Agent]) -> Deps<'a> {
-        Deps { app_dir: dir, limits_dir: dir, demo: false, now: T0, agents, listed_at: Some(T0), }
+        Deps { app_dir: dir, limits_dir: dir, demo: false, now: T0, agents, listed_at: Some(T0), refresh: None }
     }
 
     #[test]
@@ -897,6 +963,19 @@ mod tests {
         let r = tick(&deps(&dir, &[]), &mut mem, None);
         assert_eq!(r.outlook.paused, Some(Paused::Mode));
         assert!(mem.lock.is_none());
+    }
+
+    #[test]
+    fn an_unreadable_organisation_pauses_the_pass_with_a_reason() {
+        let dir = app("unreadable", &["a", "b"]);
+        add_ready(&db_of(&dir, "a"), "Poster tool", "low");
+        let mut mem = Memory::default();
+        assert!(tick(&deps(&dir, &[]), &mut mem, None).outlook.would_start.is_some());
+        std::fs::write(db_of(&dir, "b"), "this is not a database, only text that is long enough to be read").unwrap();
+        let r = tick(&deps(&dir, &[]), &mut mem, None);
+        assert_eq!(r.outlook.paused, Some(Paused::LinksUnreadable));
+        assert_eq!(r.outlook.would_start, None);
+        assert_eq!(status_of(&r.outlook, T0).paused.as_deref(), Some("links_unreadable"));
     }
 
     #[test]

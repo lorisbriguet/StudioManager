@@ -204,9 +204,17 @@ fn resume(env: &Env, d: &Deps, mem: &mut Memory, budget: &Budget, db: &Path, lin
     let sent = if agent.pid.is_some() {
         (env.send)(agent, CONTINUE)
     } else {
-        // Not running: start the session again on Opus, then type into the copy.
+        // Not running: start the session again on Opus with the worker's own arguments (the hook,
+        // edits without a prompt, the dev server), the link follows the copy, then type into it.
         (env.cli)().and_then(|cli| {
-            let new_id = actions::switch_model(&*cli, &actions::home_dir(), agent, "opus", d.app_dir)?;
+            let hook = super::start::hook_settings(d.app_dir, env.mcp_path, env.dev)?;
+            let extra = super::start::worker_args(env.dev, d.app_dir, env.mcp_path, &hook)?;
+            let new_id = actions::resume_with(&*cli, &actions::home_dir(), agent, "opus", &extra)?;
+            // Recorded before anything is typed: the old agent's "done" must not close the link.
+            {
+                let _shared = crate::org_shared();
+                store::follow_copy(db, link.id, &new_id)?;
+            }
             (env.send)(&Agent { short_id: Some(new_id), pid: None, ..agent.clone() }, CONTINUE)
         })
     };
@@ -361,6 +369,11 @@ mod tests {
         send_result: Mutex<Result<(), String>>,
         tail: Mutex<Option<String>>,
         week_percent: Mutex<u32>,
+        /// Runs when the pass reads the world again after the check step (the world changing).
+        on_refresh: Mutex<Option<Box<dyn Fn() + Send>>>,
+        /// The list the second reading gives (the first list when None).
+        refreshed_list: Mutex<Option<String>>,
+        dev: Mutex<bool>,
     }
 
     /// One task "Poster tool" running, with one link (id 1): a watcher's, or a hand-started one.
@@ -371,9 +384,9 @@ mod tests {
         c.execute("INSERT INTO tasks (project_id, title, stage, result) VALUES (1, 'Poster tool', 'running', 'Made the poster tool.')", [])
             .unwrap();
         c.execute(
-            "INSERT INTO task_agents (task_id, short_id, session_id, name, started_at, started_by)
-             VALUES (1, 'abc12345', ?1, 'sm-w-task-1', ?2, ?3)",
-            params![SID, started, by],
+            "INSERT INTO task_agents (task_id, short_id, name, started_at, started_by)
+             VALUES (1, 'abc12345', 'sm-w-task-1', ?1, ?2)",
+            params![started, by],
         )
         .unwrap();
         Fx {
@@ -384,6 +397,9 @@ mod tests {
             send_result: Mutex::new(Ok(())),
             tail: Mutex::new(None),
             week_percent: Mutex::new(10),
+            on_refresh: Mutex::new(None),
+            refreshed_list: Mutex::new(None),
+            dev: Mutex::new(false),
         }
     }
 
@@ -421,9 +437,17 @@ mod tests {
         )
         .unwrap();
         let agents = parse_agents(agent).unwrap();
+        let refresh = || {
+            if let Some(h) = f.on_refresh.lock().unwrap().as_ref() {
+                h();
+            }
+            let again = f.refreshed_list.lock().unwrap().clone().map(|j| parse_agents(&j).unwrap());
+            super::super::Fresh { now, agents: again.unwrap_or_else(|| agents.clone()), listed_at: Some(now - MIN) }
+        };
         let mut d = deps(&f.dir, &agents);
         d.now = now;
         d.listed_at = Some(now - MIN);
+        d.refresh = Some(&refresh);
         mem.loaded = true;
         if mem.started == 0 {
             mem.started = T0;
@@ -445,7 +469,7 @@ mod tests {
             git: &git,
             cli: &get_cli,
             trusted: &trusted,
-            dev: false,
+            dev: *f.dev.lock().unwrap(),
             mcp_path: "/x",
             send: &send,
             path_env: &path,
@@ -540,27 +564,108 @@ mod tests {
         assert!(alone(&f).is_empty(), "nothing says it was restarted");
     }
 
-    #[test]
-    fn a_process_that_is_not_listed_is_started_again_on_opus() {
+    const NEW_SID: &str = "99999999-1111-2222-3333-444444444444";
+
+    fn after_resume() -> String {
+        // The old agent (stopped: done) and the copy, which has its own session and short id.
+        format!(
+            r#"[{{"sessionId":"{SID}","id":"abc12345","name":"sm-w-task-1","cwd":"/x","kind":"bg","status":"idle","state":"done"}},
+                {{"sessionId":"{NEW_SID}","id":"99999999","name":"sm-w-task-1","cwd":"/x","kind":"bg","status":"busy","pid":777}}]"#
+        )
+    }
+
+    fn resumed_fx(name: &str) -> (Fx, Memory) {
         let f = fx(
-            "switch",
+            name,
             NOW,
             Some("watcher"),
             vec![reply("stopped abc12345\n"), reply("note: old\nbackgrounded · 99999999\n")],
         );
         *f.tail.lock().unwrap() = Some(ERROR_TAIL.to_string());
-        let no_process = agent_json("idle", None, false, None);
         let mut mem = Memory::default();
+        let no_process = agent_json("idle", None, false, None);
         go(&f, &no_process, &mut mem, 0);
         go(&f, &no_process, &mut mem, 3);
+        (f, mem)
+    }
+
+    #[test]
+    fn a_process_that_is_not_listed_is_resumed_with_the_workers_own_arguments() {
+        let (f, _) = resumed_fx("switch");
         let calls = calls(&f);
         assert_eq!(calls[0], vec!["stop", "abc12345"]);
-        assert_eq!(calls[1], vec!["--resume", SID, "--bg", "--model", "opus", "--name", "sm-w-task-1"]);
+        let hook = f.dir.join("watcher/hook-settings.json");
+        assert!(hook.exists(), "the hook file is made");
+        assert_eq!(
+            calls[1],
+            vec![
+                "--resume",
+                SID,
+                "--bg",
+                "--model",
+                "opus",
+                "--name",
+                "sm-w-task-1",
+                "--settings",
+                hook.to_string_lossy().as_ref(),
+                "--permission-mode",
+                "acceptEdits",
+            ],
+            "the same arguments as the start: the hook, edits without a prompt"
+        );
         assert_eq!(calls.len(), 2);
         let sent = f.sent.lock().unwrap().clone();
         assert_eq!((sent[0].0.as_deref(), sent[0].1.as_str()), (Some("99999999"), CONTINUE));
         assert!(calls.iter().all(|c| c.first().map(String::as_str) != Some("rm")), "never deleted");
         assert_eq!(alone(&f), vec!["Restarted after a connection error (1 of 3)"]);
+        assert_eq!(one::<i64>(&f, "SELECT resumes FROM task_agents"), 1);
+    }
+
+    #[test]
+    fn the_dev_build_resumes_with_its_own_server_too() {
+        let f = fx("switchdev", NOW, Some("watcher"), vec![reply("stopped abc12345\n"), reply("backgrounded · 99999999\n")]);
+        *f.dev.lock().unwrap() = true;
+        *f.tail.lock().unwrap() = Some(ERROR_TAIL.to_string());
+        let mut mem = Memory::default();
+        let no_process = agent_json("idle", None, false, None);
+        go(&f, &no_process, &mut mem, 0);
+        go(&f, &no_process, &mut mem, 3);
+        let argv = calls(&f)[1].clone();
+        let at = argv.iter().position(|a| a == "--mcp-config").expect("the dev server config");
+        assert_eq!(argv[at + 1], f.dir.join("task-agent-mcp.json").to_string_lossy());
+        assert!(argv.contains(&"--settings".to_string()) && argv.contains(&"acceptEdits".to_string()));
+        assert!(f.dir.join("task-agent-mcp.json").exists());
+    }
+
+    #[test]
+    fn the_link_follows_the_copy_and_the_old_agent_being_done_does_not_close_it() {
+        let (f, mut mem) = resumed_fx("follow");
+        assert_eq!(one::<String>(&f, "SELECT short_id FROM task_agents"), "99999999", "the copy is recorded on the link");
+        // The next passes: the old agent lists as done, the copy works.
+        for m in [4, 5, 9] {
+            go(&f, &after_resume(), &mut mem, m);
+        }
+        assert_eq!(one::<i64>(&f, "SELECT ended_at IS NULL FROM task_agents"), 1, "the link is still open");
+        assert!(check_entries(&f).is_empty(), "no \"Ended without a result\"");
+        assert_eq!(one::<Option<String>>(&f, "SELECT outcome FROM task_agents"), None);
+        // It is tracked and counted: the link carries the copy's session, the cap counts it.
+        assert_eq!(one::<String>(&f, "SELECT session_id FROM task_agents"), NEW_SID);
+        let r = go(&f, &after_resume(), &mut mem, 10);
+        assert_eq!(r.outlook.running, 1);
+        assert_eq!(f.sent.lock().unwrap().len(), 1, "nothing more is typed while the copy works");
+    }
+
+    #[test]
+    fn a_resume_over_the_budget_counts_nothing_and_runs_nothing() {
+        let f = fx("switchbudget", NOW, Some("watcher"), vec![]);
+        *f.tail.lock().unwrap() = Some(ERROR_TAIL.to_string());
+        *f.week_percent.lock().unwrap() = 70;
+        let mut mem = Memory::default();
+        let no_process = agent_json("idle", None, false, None);
+        go(&f, &no_process, &mut mem, 0);
+        go(&f, &no_process, &mut mem, 3);
+        assert!(calls(&f).is_empty());
+        assert_eq!(one::<i64>(&f, "SELECT resumes FROM task_agents"), 0);
     }
 
     #[test]
@@ -871,6 +976,39 @@ mod tests {
     }
 
     #[test]
+    fn open_stuck_and_wrap_failed_entries_are_closed_by_the_app_when_the_work_finishes() {
+        let f = watcher("stuckfinish");
+        for title in [STUCK_ENTRY, WRAP_FAILED] {
+            Connection::open(&f.db)
+                .unwrap()
+                .execute("INSERT INTO needs_you (kind, task_id, link_id, title, lead_state) VALUES ('decide', 1, 1, ?1, NULL)", [title])
+                .unwrap();
+        }
+        // A question of the worker is not one of the app's entries: it stays.
+        Connection::open(&f.db)
+            .unwrap()
+            .execute("INSERT INTO needs_you (kind, task_id, link_id, title, lead_state) VALUES ('decide', 1, 1, 'Which size?', 'waiting')", [])
+            .unwrap();
+        Connection::open(&f.db).unwrap().execute("UPDATE task_agents SET reported_at = datetime('now')", []).unwrap();
+        let mut mem = Memory::default();
+        go(&f, &idle(), &mut mem, 0);
+        go(&f, &agent_json("idle", Some("done"), true, None), &mut mem, 3);
+        assert_eq!(check_entries(&f).len(), 1);
+        let closed: Vec<(String, String, Option<String>, Option<String>)> = {
+            let c = Connection::open(&f.db).unwrap();
+            let mut st = c
+                .prepare("SELECT title, status, decided_by, reason FROM needs_you WHERE kind = 'decide' AND title <> 'Which size?' ORDER BY id")
+                .unwrap();
+            st.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))).unwrap().map(Result::unwrap).collect()
+        };
+        assert_eq!(closed.len(), 2);
+        for (title, status, by, why) in closed {
+            assert_eq!((status.as_str(), by.as_deref(), why.as_deref()), ("dismissed", Some("app"), Some("The worker finished")), "{title}");
+        }
+        assert_eq!(one::<String>(&f, "SELECT status FROM needs_you WHERE title = 'Which size?'"), "open");
+    }
+
+    #[test]
     fn a_stuck_entry_stays_open_and_old_may_still_wrap_the_worker_up() {
         let f = fx("stuckold", DAY_AGO, Some("watcher"), vec![]);
         Connection::open(&f.db)
@@ -888,6 +1026,38 @@ mod tests {
         assert_eq!(texts(&f), vec![WRAP_UP], "wrapped up, not resumed");
         assert_eq!(one::<i64>(&f, "SELECT resumes FROM task_agents"), 3);
         assert_eq!(one::<String>(&f, "SELECT status FROM needs_you WHERE title = 'Stuck after three restarts'"), "open");
+    }
+
+    // ------------------------------------------------------------ the gate after the check step
+
+    #[test]
+    fn a_gate_that_closes_after_the_check_step_stops_the_pass_before_anything_is_typed() {
+        let f = watcher("gateclose");
+        *f.tail.lock().unwrap() = Some(ERROR_TAIL.to_string());
+        let mut mem = Memory::default();
+        go(&f, &idle(), &mut mem, 0);
+        // The owner puts the app in test mode while the check step runs.
+        let mode = f.db.with_file_name("studiomanager_test.db");
+        *f.on_refresh.lock().unwrap() = Some(Box::new(move || std::fs::write(&mode, "").unwrap()));
+        let r = go(&f, &idle(), &mut mem, 3);
+        assert_eq!(r.outlook.paused, Some(super::super::Paused::Mode));
+        assert!(texts(&f).is_empty() && calls(&f).is_empty(), "nothing typed, stopped or started");
+        assert_eq!(one::<i64>(&f, "SELECT resumes FROM task_agents"), 0, "nothing counted");
+        assert_eq!(wrap_asked(&f), None);
+        assert_eq!(decide_count(&f), 0);
+    }
+
+    #[test]
+    fn what_follows_the_check_step_acts_on_the_list_read_again() {
+        let f = watcher("freshlist");
+        *f.tail.lock().unwrap() = Some(ERROR_TAIL.to_string());
+        let mut mem = Memory::default();
+        go(&f, &idle(), &mut mem, 0);
+        // By then the worker is working again: it is not stuck, so nothing is typed into it.
+        *f.refreshed_list.lock().unwrap() = Some(agent_json("busy", None, true, None));
+        go(&f, &idle(), &mut mem, 3);
+        assert!(texts(&f).is_empty(), "the stale list said idle; the fresh one says busy");
+        assert_eq!(one::<i64>(&f, "SELECT resumes FROM task_agents"), 0);
     }
 
     // ------------------------------------------------------------ the rules

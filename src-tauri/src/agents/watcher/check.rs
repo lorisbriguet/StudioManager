@@ -204,11 +204,76 @@ fn write_diff(app_dir: &Path, org: &str, entry: i64, text: &str) -> Result<(), S
     write_atomic(&path, first_bytes(text, DIFF_CAP))
 }
 
+/// Package and lock files: a change to one is a change of dependencies.
+fn is_dependency_file(name: &str) -> bool {
+    const FILES: [&str; 28] = [
+        "package.json",
+        "package-lock.json",
+        "npm-shrinkwrap.json",
+        "yarn.lock",
+        "pnpm-lock.yaml",
+        "bun.lock",
+        "bun.lockb",
+        "Cargo.toml",
+        "Cargo.lock",
+        "pyproject.toml",
+        "poetry.lock",
+        "Pipfile",
+        "Pipfile.lock",
+        "uv.lock",
+        "setup.py",
+        "Gemfile",
+        "Gemfile.lock",
+        "go.mod",
+        "go.sum",
+        "composer.json",
+        "composer.lock",
+        "Podfile",
+        "Podfile.lock",
+        "Package.swift",
+        "Package.resolved",
+        "pubspec.yaml",
+        "pubspec.lock",
+        "mix.exs",
+    ];
+    FILES.contains(&name) || (name.starts_with("requirements") && name.ends_with(".txt"))
+}
+
+/// The always-asks rules a change touches, from the paths of the diff and the files it deletes:
+/// `migrations` (a path under a `migrations` folder), `dependencies` (a package or lock file),
+/// `deletions` (a deleted file). In that order, each once. Money is not in a diff's paths: the lead
+/// reads the diff for it.
+pub fn touches_of(paths: &[String], deleted: &[String]) -> Vec<&'static str> {
+    let mut out = Vec::new();
+    let parts = |p: &String| -> Vec<String> { p.split('/').map(str::to_string).collect() };
+    if paths.iter().any(|p| {
+        let parts = parts(p);
+        parts.len() > 1 && parts[..parts.len() - 1].iter().any(|d| d == "migrations")
+    }) {
+        out.push("migrations");
+    }
+    if paths.iter().any(|p| parts(p).last().is_some_and(|n| is_dependency_file(n))) {
+        out.push("dependencies");
+    }
+    if !deleted.is_empty() {
+        out.push("deletions");
+    }
+    out
+}
+
+/// The `touches` column: the rules as a JSON array, or None (unknown) when the facts are
+/// incomplete: a cut git output says nothing about what the change touches, never "nothing".
+fn touches_json(f: &DiffFacts) -> Option<String> {
+    f.complete.then(|| serde_json::to_string(&touches_of(&f.paths, &f.deleted)).unwrap_or_else(|_| "[]".to_string()))
+}
+
+/// The listed agent of a link: the one with the link's short id (a resumed copy has its own, and
+/// the link follows it), else the one with its session id.
 pub(super) fn find_agent<'a>(agents: &'a [Agent], link: &WatcherLink) -> Option<&'a Agent> {
-    agents.iter().find(|a| match &link.session_id {
-        Some(s) => &a.session_id == s,
-        None => a.short_id.as_deref() == Some(link.short_id.as_str()),
-    })
+    agents
+        .iter()
+        .find(|a| a.short_id.as_deref() == Some(link.short_id.as_str()))
+        .or_else(|| link.session_id.as_deref().and_then(|s| agents.iter().find(|a| a.session_id == s)))
 }
 
 fn same_link(key: &(String, i64), l: &WatcherLink) -> bool {
@@ -388,8 +453,8 @@ fn handle(
     let finish = |passed: Option<bool>, output: Option<String>, state: &'static str| -> bool {
         let diff = link.base_ref.as_deref().map(|b| diff_facts(env.git, worktree, b));
         let (lines, touches, text) = match &diff {
-            // Incomplete facts (a cut git output) say nothing about what the change touches.
-            Some(Ok(f)) => (f.lines, f.complete.then(|| "[]".to_string()), Some(f.head.clone())),
+            // Incomplete facts (a cut git output) leave `touches` unknown (None), never empty.
+            Some(Ok(f)) => (f.lines, touches_json(f), Some(f.head.clone())),
             Some(Err(e)) => {
                 log::warn!("[watcher] could not measure the change of link {}: {e}", link.id);
                 (None, None, None)
@@ -433,9 +498,10 @@ fn handle(
                 match (env.send)(agent, &message) {
                     Ok(()) => {
                         let _shared = crate::org_shared();
-                        // A failure here only leaves the old report: the worker's own report
-                        // still writes `reported_at` again, and a second send back is never made.
-                                                let reason = "The check command failed, so the worker was asked once to fix it and report again.";
+                        // `decide_send_back` already forgot the report (before the message was
+                        // typed), so the worker's next `report_result` is never erased. A failure
+                        // here only loses the line the owner reads.
+                        let reason = "The check command failed, so the worker was asked once to fix it and report again.";
                         if let Err(e) = store::record_alone(db, link.kind, link.item_id, Some(link.id), SENT_BACK, reason) {
                             log::warn!("[watcher] link {}: {e}", link.id);
                         }
@@ -594,7 +660,7 @@ mod tests {
                 |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?)),
             )
             .unwrap();
-        assert_eq!(row, ("Poster tool".into(), "Made the poster tool.".into(), 1, Some(15), "[]".into(), "waiting".into(), "open".into()));
+        assert_eq!(row, ("Poster tool".into(), "Made the poster tool.".into(), 1, Some(15), r#"["deletions"]"#.into(), "waiting".into(), "open".into()));
         assert_eq!(one::<String>(db, "SELECT check_state FROM task_agents"), "passed");
         assert_eq!(one::<String>(db, "SELECT stage FROM tasks WHERE id = 1"), "to_check");
         assert_eq!(one::<i64>(db, "SELECT link_id FROM needs_you"), 1);
@@ -710,9 +776,72 @@ mod tests {
         f.git = numstat_git("-\t-\tlogo.png\n4\t1\ta.txt\n", "Binary files differ\n".into());
         go(&f, DONE, &mut Memory::default(), 10);
         assert_eq!(one::<Option<i64>>(&f.db, "SELECT change_lines FROM needs_you"), None);
-        assert_eq!(one::<String>(&f.db, "SELECT touches FROM needs_you"), "[]");
+        assert_eq!(one::<String>(&f.db, "SELECT touches FROM needs_you"), r#"["deletions"]"#, "b.txt was deleted");
         let facts = diff_facts(&f.git, &f.wt, "origin/main").unwrap();
         assert_eq!((facts.lines, facts.paths.len(), facts.deleted), (None, 2, vec!["b.txt".to_string()]));
+    }
+
+    fn strings(v: &[&str]) -> Vec<String> {
+        v.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn touches_follow_the_paths_and_the_deletions_of_the_diff() {
+        let t = |paths: &[&str], deleted: &[&str]| touches_of(&strings(paths), &strings(deleted));
+        assert_eq!(t(&[], &[]), Vec::<&str>::new());
+        assert_eq!(t(&["src/app.ts", "docs/requirements.md", "src/migrationsHelper.ts"], &[]), Vec::<&str>::new(), "look-alikes are not it");
+        for p in ["src-tauri/migrations/019_x.sql", "db/migrations/001.sql", "migrations/2.sql"] {
+            assert_eq!(t(&[p], &[]), vec!["migrations"], "{p}");
+        }
+        for p in [
+            "package.json",
+            "web/package-lock.json",
+            "yarn.lock",
+            "pnpm-lock.yaml",
+            "Cargo.toml",
+            "src-tauri/Cargo.lock",
+            "requirements.txt",
+            "api/requirements-dev.txt",
+            "pyproject.toml",
+            "poetry.lock",
+            "Gemfile",
+            "Gemfile.lock",
+            "go.mod",
+            "go.sum",
+            "composer.json",
+        ] {
+            assert_eq!(t(&[p], &[]), vec!["dependencies"], "{p}");
+        }
+        assert_eq!(t(&["a.txt"], &["a.txt"]), vec!["deletions"]);
+        assert_eq!(
+            t(&["db/migrations/1.sql", "package.json", "old.txt"], &["old.txt"]),
+            vec!["migrations", "dependencies", "deletions"],
+            "in this order, each once"
+        );
+    }
+
+    #[test]
+    fn the_entry_stores_what_the_diff_touches() {
+        let mut f = fx("touchesmig", Some("true"));
+        f.git = FakeGit::new(move |c| match c {
+            "merge-base origin/main HEAD" => out(0, "abc123\n"),
+            "diff --numstat --no-renames abc123 --" => out(0, "5\t0\tdb/migrations/019_x.sql\n1\t1\tCargo.lock\n0\t4\tb.txt\n"),
+            "diff --name-status --no-renames abc123 --" => out(0, "A\tdb/migrations/019_x.sql\nM\tCargo.lock\nD\tb.txt\n"),
+            _ => out(0, "diff\n"),
+        });
+        go(&f, DONE, &mut Memory::default(), 10);
+        assert_eq!(one::<String>(&f.db, "SELECT touches FROM needs_you"), r#"["migrations","dependencies","deletions"]"#);
+        // Nothing sensitive: an empty list, which the lead is told never proves anything.
+        let g = fx("touchesnone", Some("true"));
+        let mut g = g;
+        g.git = FakeGit::new(move |c| match c {
+            "merge-base origin/main HEAD" => out(0, "abc123\n"),
+            "diff --numstat --no-renames abc123 --" => out(0, "1\t0\ta.txt\n"),
+            "diff --name-status --no-renames abc123 --" => out(0, "M\ta.txt\n"),
+            _ => out(0, "diff\n"),
+        });
+        go(&g, DONE, &mut Memory::default(), 10);
+        assert_eq!(one::<String>(&g.db, "SELECT touches FROM needs_you"), "[]");
     }
 
     #[test]

@@ -71,6 +71,12 @@ describe("the watcher line on the Needs you tab", () => {
     expect(await screen.findByText("Waiting: agent access is off for every organisation")).toBeTruthy();
   });
 
+  it("says the links could not be read, and starts nothing", async () => {
+    status = { ...base, paused: "links_unreadable" };
+    show();
+    expect(await screen.findByText("Paused: a database could not be read, so nothing starts")).toBeTruthy();
+  });
+
   it("says why the first Ready item cannot start", async () => {
     status = { ...base, paused: "not_startable", reason: "not_git", blockedItem: "Poster tool" };
     show();

@@ -178,15 +178,16 @@ export function AgentsCard() {
   /** The watcher switch, or another cap (1 to 5; Rust clamps it too). */
   const saveWatcher = async (on: boolean, value: string) => {
     const n = Math.min(5, Math.max(1, Math.round(Number(value)) || (info?.workerCap ?? 3)));
-    if (on && !(info?.watcher ?? false)) {
-      // Switching on: the lead's folder must be trusted too (a decline leaves the switch off).
+    if (on) {
+      // The lead's folder must be trusted too, switching on or saving another cap while on. A
+      // decline leaves a switch off; with the watcher already on the cap is still saved.
       setError(null);
       try {
         const folder = await leadFolder();
         const folders = await startFolders();
         if (!folders.some((f) => f.trusted && isInside(folder, f.path))) {
-          if (!(await confirmTrust(folder, false))) return;
-          await trustFolder(folder);
+          if (await confirmTrust(folder, false)) await trustFolder(folder);
+          else if (!(info?.watcher ?? false)) return;
         }
       } catch (e) {
         setError(msg(e));

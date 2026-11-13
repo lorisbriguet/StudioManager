@@ -303,6 +303,31 @@ pub fn switch_model(
     model: &str,
     state_dir: &Path,
 ) -> Result<String, String> {
+    let new_id = resume_with(cli, home, agent, model, &[])?;
+    // Best effort: the copy already runs, so a bookkeeping failure is not a failed switch.
+    let _ = update_state(state_dir, |st| {
+        st.links.insert(agent.session_id.clone(), new_id.clone());
+        st.copies.insert(
+            new_id.clone(),
+            CopyOf { session_id: agent.session_id.clone(), model: model.to_string() },
+        );
+    });
+    Ok(new_id)
+}
+
+/// Stops a background agent and starts its session again (`--resume`) in the background on
+/// `model`, with `extra` `claude` arguments after `--name`. Returns the copy's short id. The
+/// copy's own link and state are the caller's.
+pub fn resume_with(
+    cli: &dyn Cli,
+    home: &Path,
+    agent: &Agent,
+    model: &str,
+    extra: &[String],
+) -> Result<String, String> {
+    if extra.iter().any(|a| a == "--") {
+        return Err("Invalid extra argument".into());
+    }
     if !valid_model(model) {
         return Err("Unknown model".into());
     }
@@ -323,23 +348,13 @@ pub fn switch_model(
     let name = if valid_name(&agent.name) { agent.name.as_str() } else { short };
     stop(cli, home, short)?;
     let since = now_ms();
-    let out = cli.run_start(
-        &args(&["--resume", &agent.session_id, "--bg", "--model", model, "--name", name]),
-        Path::new(&agent.cwd),
-    );
-    // On a timeout the copy is looked up by name, so it still gets its link and model below:
+    let mut argv = args(&["--resume", &agent.session_id, "--bg", "--model", model, "--name", name]);
+    argv.extend(extra.iter().cloned());
+    let out = cli.run_start(&argv, Path::new(&agent.cwd));
+    // On a timeout the copy is looked up by name, so it still gets its link and model:
     // otherwise it would show as blocked, and a retry would start a second copy.
-    let new_id = backgrounded(cli, &out, (name, &agent.cwd), since, Some(short), "unknown error")
-        .map_err(|e| format!("Stopped the old agent; starting the copy failed: {e}"))?;
-    // Best effort: the copy already runs, so a bookkeeping failure is not a failed switch.
-    let _ = update_state(state_dir, |st| {
-        st.links.insert(agent.session_id.clone(), new_id.clone());
-        st.copies.insert(
-            new_id.clone(),
-            CopyOf { session_id: agent.session_id.clone(), model: model.to_string() },
-        );
-    });
-    Ok(new_id)
+    backgrounded(cli, &out, (name, &agent.cwd), since, Some(short), "unknown error")
+        .map_err(|e| format!("Stopped the old agent; starting the copy failed: {e}"))
 }
 
 pub fn dismiss(state_dir: &Path, session_id: &str) -> Result<(), String> {

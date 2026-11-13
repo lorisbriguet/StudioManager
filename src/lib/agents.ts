@@ -410,7 +410,7 @@ function budgetText(
 
 export interface WatcherStatus {
   /**
-   * `demo`, `off`, `agents_off`, `mode`, `locked`, `starting`, `access_off`, `budget`, `cap`,
+   * `demo`, `off`, `agents_off`, `mode`, `locked`, `links_unreadable`, `starting`, `access_off`, `budget`, `cap`,
    * `not_startable`, `nothing`; null when it would start something.
    */
   paused: string | null;
@@ -442,6 +442,7 @@ export function watcherLine(
     Record<
       | "watcher_paused_mode"
       | "watcher_paused_locked"
+      | "watcher_links_unreadable"
       | "watcher_paused_cap"
       | "watcher_nothing"
       | "watcher_access_off"
@@ -458,6 +459,8 @@ export function watcherLine(
       return t.watcher_paused_mode;
     case "locked":
       return t.watcher_paused_locked;
+    case "links_unreadable":
+      return t.watcher_links_unreadable;
     case "budget":
       return budgetText(status.budget, status, t);
     case "cap":

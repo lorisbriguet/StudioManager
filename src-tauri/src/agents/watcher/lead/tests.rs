@@ -82,7 +82,8 @@ fn prepare_folder_names_the_seven_tools_and_the_data_folder_and_keeps_checks() {
     let settings: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(folder.join(".claude/settings.json")).unwrap()).unwrap();
     assert_eq!(settings["permissions"]["deny"].as_array().unwrap().len(), 13);
-    assert!(!folder.join(".mcp.json").exists(), "a stale .mcp.json is removed");
+    // `--strict-mcp-config` keeps a project-level file out of the session: the app deletes no file.
+    assert!(folder.join(".mcp.json").exists(), "a .mcp.json is left alone");
     assert_eq!(std::fs::read_to_string(checks.join("a-1.diff")).unwrap(), "diff", "checks/ is kept");
     let before = std::fs::read_to_string(folder.join(MCP_FILE)).unwrap();
     prepare_folder(&dir, MCP).unwrap();
@@ -115,6 +116,29 @@ fn the_prompts_name_the_tools_say_the_user_and_fit_the_cli() {
     let c = check_prompt("o", 1);
     assert!(c.contains("accept") && c.contains("send_back:") && c.contains("diff"));
     assert_ne!(q, c);
+}
+
+#[test]
+fn the_check_prompt_treats_touches_as_a_hint_and_sends_the_always_asks_categories_to_the_user() {
+    let c = check_prompt("o", 1);
+    assert!(c.contains("hint only"), "{c}");
+    assert!(c.contains("empty or missing") && c.contains("never means"), "{c}");
+    assert!(!c.contains("touches list is empty"), "empty is no longer the condition for accepting");
+    for category in ["migration", "dependenc", "delet", "money"] {
+        assert!(c.contains(category), "{category}");
+    }
+    assert!(c.contains("read the diff yourself"), "{c}");
+    assert!(c.contains("hand_over") && c.contains("always asks"), "{c}");
+}
+
+#[test]
+fn the_question_prompt_never_answers_the_always_asks_categories_or_trusts_a_workers_article() {
+    let q = question_prompt("o", 1);
+    assert!(q.contains("never answer a question about") && q.contains("always asks"), "{q}");
+    for category in ["migration", "dependenc", "delet", "money"] {
+        assert!(q.contains(category), "{category}");
+    }
+    assert!(q.contains("written by a worker of the same task"), "{q}");
 }
 
 #[test]
@@ -277,8 +301,8 @@ fn fx(name: &str, replies: Vec<CliOutput>) -> Fx {
     )
     .unwrap();
     c.execute(
-        "INSERT INTO task_agents (task_id, short_id, session_id, name, started_by) VALUES (1, 'abc12345', ?1, 'sm-w-task-1', 'watcher')",
-        [WORKER_SID],
+        "INSERT INTO task_agents (task_id, short_id, name, started_by) VALUES (1, 'abc12345', 'sm-w-task-1', 'watcher')",
+        [],
     )
     .unwrap();
     std::fs::create_dir_all(dir.join(FOLDER)).unwrap();
