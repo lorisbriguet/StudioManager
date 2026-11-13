@@ -55,6 +55,8 @@ pub fn step(env: &Env, d: &Deps, mem: &mut Memory, links: &[(PathBuf, WatcherLin
             store::end_link(db, link.id, OUTCOME)
         };
         match ended {
+            // False when a Send back cleared the check meanwhile: the link stays open, and the
+            // worker stopped above is resumed by the next passes like any worker with no process.
             Ok(was_open) => changed |= was_open,
             Err(e) => log::warn!("[watcher] link {} of organisation {}: could not end the link: {e}", link.id, link.org),
         }
