@@ -981,7 +981,10 @@ mod tests {
         let took = start.elapsed();
         done_tx.send(()).unwrap();
         holder.join().unwrap();
-        assert!(took >= Duration::from_secs(4) && took < Duration::from_secs(9), "took {took:?}");
+        // About five seconds for the busy timeout. The upper bound leaves room for one more wait:
+        // when another test holds the organisation lock shared through its own busy timeout while
+        // a third asks for it exclusively, the second organisation here queues behind them.
+        assert!(took >= Duration::from_secs(4) && took < Duration::from_secs(20), "took {took:?}");
         let a = report.iter().find(|(o, _)| o == "a").unwrap();
         assert!(a.1.is_err());
         let b = report.iter().find(|(o, _)| o == "b").unwrap();
