@@ -6,8 +6,7 @@ import { useT } from "../i18n/useT";
 import { Button, EmptyState, ICONS, PageHeader, TabItem } from "../components/ui";
 import { TabList, tabIds } from "../components/ui/TabItem";
 import { useCaptures } from "../db/hooks/useCaptures";
-import { useNeedsYouCount } from "../db/hooks/useNeedsYou";
-import { useOpenLinks } from "../db/hooks/useTaskAgents";
+import { useNeedsYouCount, useOpenEntries } from "../db/hooks/useNeedsYou";
 import { useAgents } from "../components/agents/useAgents";
 import { AgentList } from "../components/agents/AgentList";
 import { AgentDetail } from "../components/agents/AgentDetail";
@@ -41,9 +40,9 @@ export function AgentsPage() {
   const panel = tabIds(idBase, tab);
   const { data: newCaptures = [] } = useCaptures("new");
   const needsYouCount = useNeedsYouCount();
-  // An agent a watcher worker runs for an item is listed in Needs you, not in its group here.
-  const { data: openLinks = [] } = useOpenLinks();
-  const watcherAgents = new Set(openLinks.filter((l) => l.started_by === "watcher").map((l) => l.short_id));
+  // An agent with an open Needs you entry is listed there: not a second time in its group here.
+  const { data: openEntries = [] } = useOpenEntries();
+  const listedInNeedsYou = new Set(openEntries.flatMap((e) => (e.short_id ? [e.short_id] : [])));
   const counts: Record<Tab, number> = { "needs-you": needsYouCount, inbox: newCaptures.length, all: 0 };
   const tabLabels: Record<Tab, string> = {
     "needs-you": t.agents_tab_needs_you,
@@ -140,7 +139,7 @@ export function AgentsPage() {
                 {agents.length === 0 ? (
                   <EmptyState icon={ICONS.agents} message={t.agents_empty} />
                 ) : (
-                  <AgentList byGroup={byGroup} selectedId={selectedId} onSelect={select} leaveOut={watcherAgents} />
+                  <AgentList byGroup={byGroup} selectedId={selectedId} onSelect={select} leaveOut={listedInNeedsYou} />
                 )}
               </section>
               <div className="flex-1 min-w-0 min-h-0 flex flex-col border-l border-[var(--color-border-divider)] pl-8">

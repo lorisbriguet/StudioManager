@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useT } from "../../i18n/useT";
-import { useAddDecision, useAnswerEntry } from "../../db/hooks/useNeedsYou";
+import { useAddDecision, useAnswerEntry, useDismissEntry } from "../../db/hooks/useNeedsYou";
 import type { NeedsYouEntry } from "../../db/queries/needsYou";
 import { sendMessage } from "../../lib/agents";
 import { logError } from "../../lib/log";
@@ -31,6 +31,7 @@ export function DecideEntry({ entry: e }: { entry: NeedsYouEntry }) {
   const t = useT();
   const answerEntry = useAnswerEntry();
   const addDecision = useAddDecision();
+  const dismiss = useDismissEntry();
   const [words, setWords] = useState(false);
   const [draft, setDraft] = useState("");
   const [error, setError] = useState(false);
@@ -43,8 +44,11 @@ export function DecideEntry({ entry: e }: { entry: NeedsYouEntry }) {
     setSending(true);
     setError(false);
     try {
-      // An entry with no agent session (asked outside a linked worker) is only recorded.
-      if (e.session_id) await sendMessage(e.session_id, ANSWER_PREFIX + answer);
+      // An entry with no link (asked outside a worker) is only recorded; a link needs its session.
+      if (e.link_id != null) {
+        if (!e.session_id) throw new Error("the agent has no session");
+        await sendMessage(e.session_id, ANSWER_PREFIX + answer);
+      }
     } catch (err) {
       setError(true);
       void logError(`Needs you ${e.id}: send failed:`, err);
@@ -79,7 +83,7 @@ export function DecideEntry({ entry: e }: { entry: NeedsYouEntry }) {
         </p>
       )}
       {!e.recommendation && e.reason && <p className="mt-1 text-sm text-muted">{e.reason}</p>}
-      {e.lead_state && <p className="text-xs text-muted">{t.decide_from_lead}</p>}
+      {e.lead_state === "done" && <p className="text-xs text-muted">{t.decide_from_lead}</p>}
       <div className="mt-2 flex flex-wrap items-center gap-2">
         {options.map((o) => (
           <Button
@@ -116,6 +120,9 @@ export function DecideEntry({ entry: e }: { entry: NeedsYouEntry }) {
       {error && (
         <div className="mt-2">
           <Callout tone="danger">{t.agents_send_failed}</Callout>
+          <Button variant="secondary" className="mt-2" onClick={() => dismiss.mutate(e.id)}>
+            {t.decide_dismiss}
+          </Button>
         </div>
       )}
     </li>

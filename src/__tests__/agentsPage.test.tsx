@@ -188,14 +188,20 @@ describe("AgentsPage", () => {
     expect(screen.getByText("Select an agent to see its conversation.")).toBeInTheDocument();
   });
 
-  it("leaves an agent with an open watcher link out of the All agents Needs you group", async () => {
-    linksMock.links = [{ kind: "task", item_id: 1, short_id: "feed0001", session_id: "sess-needs-you", started_by: "watcher" }];
+  it("leaves an agent with an open Needs you entry out of the All agents Needs you group", async () => {
+    needsMock.open = [{ id: 1, short_id: "feed0001" }];
     tabsSetup("/agents?tab=all", [
       agent("needs-you", { shortId: "feed0001" }),
       agent("needs-you", { sessionId: "sess-hand", shortId: "feed0002", name: "agent-hand" }),
     ]);
     await screen.findByText("agent-hand");
     expect(screen.queryByText("agent-needs-you")).not.toBeInTheDocument();
+  });
+
+  it("keeps a watcher-linked agent with no open entry in the All agents Needs you group", async () => {
+    linksMock.links = [{ kind: "task", item_id: 1, short_id: "feed0001", session_id: "sess-needs-you", started_by: "watcher" }];
+    tabsSetup("/agents?tab=all", [agent("needs-you", { shortId: "feed0001" })]);
+    expect(await screen.findByText("agent-needs-you")).toBeInTheDocument();
   });
 
   it("shows the Inbox for ?tab=inbox", async () => {

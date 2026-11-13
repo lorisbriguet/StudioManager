@@ -15,6 +15,7 @@ const hooks = vi.hoisted(() => ({
   alone: [] as unknown[],
   answer: vi.fn(),
   reopen: vi.fn(),
+  dismiss: vi.fn(),
   addDecision: vi.fn(),
   sendBack: vi.fn(),
   accept: vi.fn(),
@@ -26,6 +27,7 @@ vi.mock("../db/hooks/useNeedsYou", () => ({
   useAloneEntries: () => ({ data: hooks.alone }),
   useAnswerEntry: () => ({ mutate: hooks.answer }),
   useReopenEntry: () => ({ mutate: hooks.reopen }),
+  useDismissEntry: () => ({ mutate: hooks.dismiss }),
   useAddDecision: () => ({ mutate: hooks.addDecision }),
   useSendBack: () => ({ mutate: hooks.sendBack }),
 }));
@@ -206,10 +208,28 @@ describe("Needs you: Decide", () => {
     expect(screen.queryByText("From the lead")).not.toBeInTheDocument();
   });
 
-  it("says when the lead wrote the recommendation", () => {
-    hooks.open = [row({ lead_state: "waiting" })];
-    setup([]);
+  it("says From the lead only once the lead has answered", () => {
+    hooks.open = [row({ lead_state: "done" })];
+    const { unmount } = setup([]);
     expect(screen.getByText("From the lead")).toBeInTheDocument();
+    unmount();
+    for (const state of ["waiting", "running", null]) {
+      hooks.open = [row({ lead_state: state })];
+      const r = setup([]);
+      expect(screen.queryByText("From the lead")).not.toBeInTheDocument();
+      r.unmount();
+    }
+  });
+
+  it("a link with no session keeps the entry open and shows the error; Dismiss lets it go", async () => {
+    hooks.open = [row({ session_id: null })];
+    setup([]);
+    fireEvent.click(screen.getByRole("button", { name: "Outline" }));
+    expect(await screen.findByText("Couldn't send the message")).toBeInTheDocument();
+    expect(hooks.send).not.toHaveBeenCalled();
+    expect(hooks.answer).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+    expect(hooks.dismiss).toHaveBeenCalledWith(5);
   });
 
   it("an option sends the answer to the agent, then answers the entry", async () => {
@@ -343,6 +363,17 @@ describe("Needs you: Check", () => {
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "Again." } });
     fireEvent.click(screen.getByRole("button", { name: "Send the note" }));
     expect(await screen.findByText("Couldn't send the message")).toBeInTheDocument();
+    expect(hooks.sendBack).not.toHaveBeenCalled();
+  });
+
+  it("Send back with a link but no session sends nothing, changes nothing and shows the error", async () => {
+    hooks.open = [check({ session_id: null })];
+    setup([]);
+    fireEvent.click(screen.getByRole("button", { name: "Send back" }));
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Again." } });
+    fireEvent.click(screen.getByRole("button", { name: "Send the note" }));
+    expect(await screen.findByText("Couldn't send the message")).toBeInTheDocument();
+    expect(hooks.send).not.toHaveBeenCalled();
     expect(hooks.sendBack).not.toHaveBeenCalled();
   });
 

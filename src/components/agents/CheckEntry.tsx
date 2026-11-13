@@ -55,7 +55,10 @@ export function CheckEntry({ entry: e }: { entry: NeedsYouEntry }) {
     setSending(true);
     setError(false);
     try {
-      if (e.session_id) await sendMessage(e.session_id, text);
+      if (e.link_id != null) {
+        if (!e.session_id) throw new Error("the agent has no session");
+        await sendMessage(e.session_id, text);
+      }
     } catch (err) {
       setError(true);
       void logError(`Needs you ${e.id}: send back failed:`, err);
