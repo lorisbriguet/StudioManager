@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { Fragment, useState, useCallback } from "react";
 import { ChevronRight } from "lucide-react";
 import { deleteWithUndo } from "../../lib/undo";
 import {
@@ -34,6 +34,8 @@ import { AddRow, Checkbox, ICONS, IconButton, FilterChip, InlineRename, EmptySta
 import { useDraftKeys } from "../../stores/draft-store";
 import { ContextMenu, type ContextMenuState } from "../ui/ContextMenu";
 import { useStartAgentOn } from "../../hooks/useStartAgentOn";
+import { StageChip } from "./StageChip";
+import { TaskAgentPanel } from "./TaskAgentPanel";
 import { agentMenuItems, type AgentTarget } from "../../lib/agentStart";
 
 export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: {
@@ -64,6 +66,15 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
   const [editingTask, setEditingTask] = useState<number | null>(null);
   const [editingSubtask, setEditingSubtask] = useState<number | null>(null);
   const [hoveredSubtask, setHoveredSubtask] = useState<number | null>(null);
+  // Subtasks whose stage chip opened their agent panel.
+  const [openSubPanels, setOpenSubPanels] = useState<Set<number>>(new Set());
+  const toggleSubPanel = (id: number) =>
+    setOpenSubPanels((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   const { enabled: agentsOn, start: startAgentOn } = useStartAgentOn();
   // Rows have no menu of their own; the agent item is the only entry, so no handler while agents are off.
   const [agentMenu, setAgentMenu] = useState<ContextMenuState<AgentTarget> | null>(null);
@@ -164,6 +175,7 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
                     {tk.title}
                   </span>
                 )}
+                <StageChip kind="task" id={tk.id} stage={tk.stage} status={tk.status} />
                 {subtasks.length > 0 && <span className="text-xs text-muted">{doneSubtasks}/{subtasks.length}</span>}
                 <PriorityBadge
                   priority={effectivePriority(tk.priority, tk.due_date, tk.end_date)}
@@ -200,6 +212,7 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
               </div>
               {isExpanded && (
                 <div className="ml-9 border-l border-[var(--color-border-divider)] pl-3 pb-1">
+                  <TaskAgentPanel kind="task" item={tk} />
                   <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={() => setHoveredSubtask(null)} onDragEnd={(event: DragEndEvent) => {
                     // Rows move under a stationary cursor — clear the hover
                     // state so no handle sticks around (#335)
@@ -217,7 +230,8 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
                   }}>
                   <SortableContext items={filteredSubtasks.map((s) => s.id)} strategy={verticalListSortingStrategy}>
                   {filteredSubtasks.map((s) => (
-                    <SortableSubtaskRow key={s.id} id={s.id} hovered={hoveredSubtask === s.id} onHoverChange={setHoveredSubtask} onContextMenu={openAgentMenu({ kind: "subtask", id: s.id })}>
+                    <Fragment key={s.id}>
+                    <SortableSubtaskRow id={s.id} hovered={hoveredSubtask === s.id} onHoverChange={setHoveredSubtask} onContextMenu={openAgentMenu({ kind: "subtask", id: s.id })}>
                       <Checkbox
                         checked={s.status === "done"}
                         aria-label={`${t.mark_done}: ${s.title}`}
@@ -246,6 +260,7 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
                           {s.title}
                         </span>
                       )}
+                      <StageChip kind="subtask" id={s.id} stage={s.stage} status={s.status} onClick={() => toggleSubPanel(s.id)} />
                       <TaskDatePicker
                         dueDate={s.due_date} endDate={s.end_date} startTime={s.start_time}
                         endTime={s.end_time} reminder={s.reminder}
@@ -259,6 +274,8 @@ export function ProjectTasksSection({ projectId, project, tasks, allSubtasks }: 
                         reveal="sub" className="pointer-events-none group-hover/sub:pointer-events-auto"
                       />
                     </SortableSubtaskRow>
+                    {openSubPanels.has(s.id) && <TaskAgentPanel kind="subtask" item={s} />}
+                    </Fragment>
                   ))}
                   </SortableContext>
                   </DndContext>
