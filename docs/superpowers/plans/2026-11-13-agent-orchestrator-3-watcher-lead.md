@@ -421,3 +421,13 @@ Points where the design did not say enough for code, or where the code differs f
 18. **The design's "the watcher checks `crate::host::is_demo`"** holds, and the Agents switch already reads off in the demo (`cli::in_build`); the new switch joins it.
 19. **Workers' permissions are not in the design.** An unattended worker meets Claude Code's permission prompts; call 13 lists them for Loris. *Not verified:* how often (spike).
 20. **"Questions and checks are still handled" over budget** is read as: listed for Loris, not answered by a lead (call 5).
+
+## Changed while building PR A (Tasks 1 to 7)
+
+- **`ask` refuses an item with no open agent link**, and a second open question on the same link (Task 2 said a missing link gives `link_id` null). An answer that cannot be typed into an agent must not be promised. The hand check of Task 4 therefore needs a task with an agent started from the app.
+- **Task 5 leaves out the trust question for the lead folder**; Task 12 adds it with the folder.
+- **All agents' "Needs you" group** leaves out an agent only when the watcher started it and an open entry exists for it (call 22 said: any agent with an open watcher link). A Decide entry has "Open the agent" and, after a failed send, "Dismiss".
+- **The count reaches the menu bar through a new command**, `menubar_set_needs_count`: the front end had no path to `set_attention`.
+- **The budget reads `limits::load_dated`**: a usage file with no save time is `NoData`.
+- **Entries decided alone** are stored with status `answered` and `decided_by` `lead` or `app`; `store::record_alone` (Task 10) must write them so.
+- **Left for PR B:** the permission-prompt entry ("Open the agent" only); `Gone` needs part 2's two-miss rule before anything acts on it; the at-prompt and idle timers are in memory; "Would start" ignores a project with no folder and can show up to 30 seconds before the lock is taken; matching an `ask` caller to its own link; one listing per pass instead of several reads.
