@@ -84,6 +84,40 @@ pub fn show(app: &AppHandle, label: &str) -> bool {
     true
 }
 
+/// The process id of the app in front, unless it is this one. Main thread.
+pub fn frontmost_other_app() -> Option<i32> {
+    use tauri_nspanel::objc2::{class, msg_send, runtime::AnyObject};
+    // SAFETY: plain AppKit getters on shared objects; nil is checked before use.
+    unsafe {
+        let ws: *mut AnyObject = msg_send![class!(NSWorkspace), sharedWorkspace];
+        if ws.is_null() {
+            return None;
+        }
+        let front: *mut AnyObject = msg_send![ws, frontmostApplication];
+        if front.is_null() {
+            return None;
+        }
+        let pid: i32 = msg_send![front, processIdentifier];
+        (pid > 0 && pid as u32 != std::process::id()).then_some(pid)
+    }
+}
+
+/// Hands the keyboard back to the app that was in front (`frontmost_other_app`): when a key
+/// panel closes, AppKit may bring this app's main window forward instead. Main thread.
+pub fn reactivate(pid: i32) {
+    use tauri_nspanel::objc2::{class, msg_send, runtime::AnyObject};
+    // SAFETY: the running application is looked up by pid and nil-checked; it has quit
+    // when nil, and there is nothing to give the keyboard back to.
+    unsafe {
+        let app: *mut AnyObject =
+            msg_send![class!(NSRunningApplication), runningApplicationWithProcessIdentifier: pid];
+        if app.is_null() {
+            return;
+        }
+        let _: bool = msg_send![app, activateWithOptions: 0usize];
+    }
+}
+
 /// Gives the window back to Tauri as a plain window before it is destroyed.
 pub fn release(app: &AppHandle, label: &str) {
     if let Ok(panel) = app.get_webview_panel(label) {
