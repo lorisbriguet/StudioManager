@@ -431,3 +431,37 @@ Points where the design did not say enough for code, or where the code differs f
 - **The budget reads `limits::load_dated`**: a usage file with no save time is `NoData`.
 - **Entries decided alone** are stored with status `answered` and `decided_by` `lead` or `app`; `store::record_alone` (Task 10) must write them so.
 - **Left for PR B:** the permission-prompt entry ("Open the agent" only); `Gone` needs part 2's two-miss rule before anything acts on it; the at-prompt and idle timers are in memory; "Would start" ignores a project with no folder and can show up to 30 seconds before the lock is taken; matching an `ask` caller to its own link; one listing per pass instead of several reads.
+
+## Changed while building PR B (Tasks 8 to 12)
+
+What the spikes of Task 8 and Task 11 answered (two short Opus sessions in a throwaway folder, no project, no app data):
+
+- **`claude --bg --settings <file>` loads a Stop hook from that file.** The hook reads JSON with `session_id`, `transcript_path`, `cwd`, `permission_mode`, `stop_hook_active` and `last_assistant_message`. `{"decision":"block","reason":…}` makes a background session go on; the next stop has `stop_hook_active` true, so the hook never blocks twice in one chain.
+- **`--permission-mode acceptEdits`** let a worker write files and run `npm test` and `gh auth status` with no lasting prompt. The agent list showed "permission prompt" for a moment and went on by itself, so a prompt is listed only after 2 minutes, and an entry whose wait ended by itself is closed by the app.
+- **Trust:** `claude --bg` refuses an untrusted folder at once, before anything is spent. A separate git repository inside a trusted folder is not trusted; a plain folder inside one is. A linked worktree of a trusted repository was not tried: it is a hand check. A refused start ends as one "Could not start" entry.
+- **The usage file** moved within seconds of a session's activity, but other sessions were open: not proven for a worker alone.
+- **`gh`** is signed in inside a worker; `gh pr create` was not run.
+- **A stuck worker** is one whose last transcript entry is an assistant entry with `isApiErrorMessage` true and `error` `server_error`. `rate_limit` and `authentication_failed` are never resumed: they end as an idle entry for Loris.
+
+What differs from the task text:
+
+- **Task 9 is in the MCP crate only**; Task 8 writes the hook settings file (`start.rs`).
+- **No new migration.** A permission-prompt entry is a Decide row with `lead_state` `prompt` ("Open the agent" and "Dismiss"); an entry with no agent link ("Could not start") has "Dismiss" only.
+- **One list of Ready tasks across the allowed organisations**, in the order of `store::order`, then organisation order; the first that can start is started. A task with no folder or a folder that is not a git repository is skipped with a reason.
+- **A worker that started but could not be linked** still counts toward the cap, and is adopted only when its name, kind and folder match.
+- **A change too large to measure** (git output over 64 KB) is never given a size: it goes to Loris.
+- **A stuck worker is resumed only while the budget is Ok**: a resume spends usage like a start.
+- **A worker that handed in a result and stays idle for 2 minutes is checked**, with or without a wrap-up request. Only a worker's own question (`ask`) counts as an open question; the app's own idle, prompt and stuck entries are closed by the app when the worker is wrapped up or finishes.
+- **A wrap-up request that could not be typed** is listed, not followed by a stop.
+- **Accept does nothing yet.** When the lead accepts, the entry comes back open as "The lead would accept: …"; merging is Task 13.
+- **A lead session is stopped and kept, never removed.** Task 12 said "stopped and removed, as the brief session"; the Global Constraints say the watcher never deletes an agent, and they win. Finished `sm-lead-…` sessions stay in the agent list (at most 5 per task) until Loris removes them. Loris can overrule this.
+- **The lead acts only on its own session**: a listed background agent with the lead's name, in the lead folder. Anything else with the same id is left alone and the entry is marked skipped.
+- **Over budget when the lead's answer arrives**, the answer is not typed into the worker: the entry is reopened as "From the lead: …".
+- **The trust question for the lead folder** is asked on the Agents card when the watcher is switched on (`agents_lead_folder`).
+- **The app's own "Send back"** on a Check entry also resets the link's check state, so the next result is checked again.
+
+To know before switching it on:
+
+- Workers get a worktree under `<project>/.claude/worktrees/`; a project that does not ignore that folder sees it as untracked.
+- A project folder that is a subfolder of a larger repository gets a worktree of the whole repository.
+- **Left for later:** the at-prompt, idle and awaiting timers are in memory (a restart delays an entry by its threshold); a dismissed idle entry can come back after a restart; a crash between the lead's decision and its message leaves the worker waiting until the idle rule lists it.
