@@ -171,7 +171,7 @@ pub(crate) fn try_wait_tracked(
 
 /// Whether a command with this process group is running now.
 #[cfg(test)]
-fn is_tracked(group: libc::pid_t) -> bool {
+pub(crate) fn is_tracked(group: libc::pid_t) -> bool {
     GROUPS.lock().unwrap_or_else(|e| e.into_inner()).as_ref().is_some_and(|s| s.contains(&group))
 }
 

@@ -43,7 +43,7 @@ pub enum Target {
 /// Control and invisible formatting characters (zero-width, bidirectional overrides, BOM).
 fn is_invisible(c: char) -> bool {
     c.is_control()
-        || matches!(c, '\u{200B}'..='\u{200F}' | '\u{202A}'..='\u{202E}' | '\u{2060}'..='\u{2069}' | '\u{FEFF}')
+        || matches!(c, '\u{200B}'..='\u{200F}' | '\u{202A}'..='\u{202E}' | '\u{2060}'..='\u{2069}' | '\u{FEFF}' | '\u{061C}' | '\u{00AD}' | '\u{E0000}'..='\u{E007F}')
 }
 
 /// Control characters removed, runs of white space made one space, trimmed, cut at a character
@@ -268,6 +268,8 @@ mod tests {
     fn control_characters_removed() {
         assert_eq!(clean_text("a\u{1b}[31mb", 50), "a[31mb");
         assert_eq!(clean_text("a\u{202e}b\u{0}c\u{200b}d\u{feff}e", 50), "abcde");
+        // Arabic letter mark, soft hyphen, tag characters (U+E0000 to U+E007F).
+        assert_eq!(clean_text("a\u{61c}b\u{ad}c\u{e0000}d\u{e0041}e\u{e007f}f", 50), "abcdef");
         assert_eq!(clean_text("  a \t\n b\r\n\r\n  c  ", 50), "a b c");
         assert_eq!(clean_text("\u{0}\u{1b}", 50), "");
         // Cut at a character boundary, and no trailing space after the cut.

@@ -5,7 +5,7 @@
 use super::contract::{clean_text, ERROR_CHARS};
 use super::retry::ErrorKind;
 use super::settings::Hub;
-use crate::agents::routines::run::{kill_group, track_group, try_wait_tracked, untrack_group};
+use crate::agents::routines::run::{track_group, untrack_group};
 use std::io::{Read, Write};
 use std::os::unix::process::CommandExt;
 use std::path::Path;
@@ -106,7 +106,9 @@ fn not_started(message: String) -> RunError {
 /// closed, or `stdin` is written and then closed (a capture). Stdout and stderr are read apart:
 /// stdout up to `STDOUT_CAP` (over it the group is killed: `TooLarge`), stderr its first
 /// `STDERR_CAP` bytes. After `timeout` the whole process group is stopped: at once for a read,
-/// with a TERM signal and `TERM_GRACE` before the kill for a capture (the run that has stdin).
+/// with a TERM signal and up to `TERM_GRACE` before the kill for a capture (the run that has
+/// stdin). However the run ends (exit, timeout, too large), the whole group is then killed:
+/// nothing a connector started outlives it.
 /// Returns stdout when the connector exits with code 0.
 pub fn run_connector(
     program: &str,
@@ -166,28 +168,27 @@ pub fn run_connector(
     let started = Instant::now();
     let status = loop {
         if over.load(Ordering::Relaxed) {
-            untrack_group(group);
-            kill_group(&mut child);
+            end_group(&mut child, group);
             return Err(RunError::TooLarge);
         }
-        match try_wait_tracked(&mut child, group) {
-            Ok(Some(status)) => break status,
-            Ok(None) if started.elapsed() >= timeout => {
+        match has_exited(group) {
+            Ok(true) => break end_group(&mut child, group),
+            Ok(false) if started.elapsed() >= timeout => {
                 if stdin.is_some() {
-                    stop_politely(&mut child, group);
-                } else {
-                    untrack_group(group);
-                    kill_group(&mut child);
+                    stop_politely(group);
                 }
+                end_group(&mut child, group);
                 return Err(RunError::TimedOut);
             }
-            Ok(None) => std::thread::sleep(Duration::from_millis(10)),
+            Ok(false) => std::thread::sleep(Duration::from_millis(10)),
             Err(e) => {
-                untrack_group(group);
-                kill_group(&mut child);
+                end_group(&mut child, group);
                 return Err(RunError::Exit { code: None, line: clean_text(&e.to_string(), ERROR_CHARS) });
             }
         }
+    };
+    let Some(status) = status else {
+        return Err(RunError::Exit { code: None, line: String::new() });
     };
 
     let deadline = Instant::now() + READER_GRACE;
@@ -213,23 +214,37 @@ fn first_line(stderr: &[u8]) -> String {
         .unwrap_or_default()
 }
 
-/// TERM to the group, then up to `TERM_GRACE` for the connector to finish what it was writing,
-/// then the kill. Once the connector has exited it is reaped, so nothing more is signalled
-/// (the group id could be reused).
-fn stop_politely(child: &mut std::process::Child, group: libc::pid_t) {
+/// Whether the connector (the group's leader) has exited, without reaping it: until `end_group`
+/// reaps it, its process group id cannot be reused by a stranger.
+fn has_exited(group: libc::pid_t) -> std::io::Result<bool> {
+    // SAFETY: waitid(2) with WNOWAIT on our own unreaped child; `info` is zeroed plain data.
+    unsafe {
+        let mut info: libc::siginfo_t = std::mem::zeroed();
+        let r = libc::waitid(libc::P_PID, group as libc::id_t, &mut info, libc::WEXITED | libc::WNOHANG | libc::WNOWAIT);
+        if r != 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        Ok(info.si_pid != 0)
+    }
+}
+
+/// However a connector ended, nothing it started stays: the whole group is killed (the leader is
+/// not reaped yet, so the group id is still ours), then the leader is reaped. Returns its status.
+fn end_group(child: &mut std::process::Child, group: libc::pid_t) -> Option<std::process::ExitStatus> {
+    untrack_group(group);
+    // SAFETY: kill(2) on the process group of a child that is not reaped yet.
+    unsafe { libc::kill(-group, libc::SIGKILL) };
+    child.wait().ok()
+}
+
+/// TERM to the group, then up to `TERM_GRACE` for the connector (its leader) to exit, so it can
+/// finish what it was writing. The caller then kills the group.
+fn stop_politely(group: libc::pid_t) {
     // SAFETY: kill(2) on the process group of a child that is not reaped yet.
     unsafe { libc::kill(-group, libc::SIGTERM) };
     let until = Instant::now() + TERM_GRACE;
-    loop {
-        match try_wait_tracked(child, group) {
-            Ok(Some(_)) => return,
-            Ok(None) if Instant::now() < until => std::thread::sleep(Duration::from_millis(10)),
-            _ => {
-                untrack_group(group);
-                kill_group(child);
-                return;
-            }
-        }
+    while matches!(has_exited(group), Ok(false)) && Instant::now() < until {
+        std::thread::sleep(Duration::from_millis(10));
     }
 }
 
@@ -293,7 +308,7 @@ impl Connector for RealConnector {
 
 #[cfg(test)]
 mod tests {
-    use super::super::contract::{parse_counts, parse_open, Answer, Counts, Target};
+    use super::super::contract::{parse_capture, parse_counts, parse_open, Answer, Counts, Target};
     use super::*;
     use std::path::PathBuf;
 
@@ -367,7 +382,6 @@ mod tests {
         ];
         let names: Vec<&str> = all.iter().map(|r| r.name()).collect();
         assert_eq!(names, ["counts", "open", "events", "questions", "capture"]);
-        assert!(names.iter().all(|n| *n != "answer" && !n.contains("delete")));
         assert_eq!(Request::Open { id: Some("a:1".into()) }.tail_args(), ["open", "a:1"]);
         assert_eq!(Request::Open { id: None }.tail_args(), ["open"]);
         assert_eq!(Request::Counts.tail_args(), ["counts"]);
@@ -435,6 +449,35 @@ mod tests {
         assert!(started.elapsed() < Duration::from_secs(3), "{:?}", started.elapsed());
         assert_gone(pid_from(&child));
         assert_gone(pid_from(&grand));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_read_that_exits_leaves_nothing_running() {
+        let dir = tmp("exit-leaves-nothing");
+        let pid_file = dir.join("child");
+        let body = format!("sleep 30 &\necho $! > '{}'\necho '{{}}'\nexit 0", pid_file.display());
+        let out = sh(&dir, &body, &[], None, Duration::from_secs(5)).unwrap();
+        assert_eq!(out, b"{}\n");
+        assert_gone(pid_from(&pid_file));
+        // A failing exit too.
+        let body = format!("sleep 30 &\necho $! > '{}'\nexit 4", pid_file.display());
+        assert!(sh(&dir, &body, &[], None, Duration::from_secs(5)).is_err());
+        assert_gone(pid_from(&pid_file));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_capture_that_exits_inside_the_grace_leaves_no_grandchild() {
+        let dir = tmp("capture-grandchild");
+        let pid_file = dir.join("child");
+        // Ends on TERM but leaves its `sleep` running.
+        let body = format!("sleep 30 &\necho $! > '{}'\ntrap 'exit 0' TERM\nwhile :; do sleep 1; done", pid_file.display());
+        let started = Instant::now();
+        let res = sh(&dir, &body, &[], Some(b"{}"), Duration::from_millis(700));
+        assert_eq!(res, Err(RunError::TimedOut));
+        assert!(started.elapsed() < TERM_GRACE, "{:?}", started.elapsed());
+        assert_gone(pid_from(&pid_file));
         std::fs::remove_dir_all(&dir).ok();
     }
 
@@ -529,8 +572,11 @@ mod tests {
             std::thread::spawn(move || sh(&dir, &body, &[], None, READ_TIMEOUT))
         };
         let group: libc::pid_t = loop {
+            // Tracked, not just started: the script can write its pid before the run tracks it.
             if let Some(g) = std::fs::read_to_string(&pid_file).ok().and_then(|s| s.trim().parse().ok()) {
-                break g;
+                if crate::agents::routines::run::is_tracked(g) {
+                    break g;
+                }
             }
             assert!(started.elapsed() < Duration::from_secs(5), "connector never started");
             std::thread::sleep(Duration::from_millis(10));
@@ -546,13 +592,17 @@ mod tests {
     /// Runs the fixture in `mode` with its own TMPDIR, so a mode file in the real one never
     /// changes the result.
     fn fixture(name: &str, mode: Option<&str>, args: &[&str]) -> Result<Vec<u8>, RunError> {
+        fixture_with(name, mode, args, None)
+    }
+
+    fn fixture_with(name: &str, mode: Option<&str>, args: &[&str], stdin: Option<&[u8]>) -> Result<Vec<u8>, RunError> {
         let dir = tmp(name);
         if let Some(m) = mode {
             std::fs::write(dir.join("sm-demo-hub-mode"), m).unwrap();
         }
         let mut argv = vec![format!("TMPDIR={}", dir.display()), "sh".to_string(), FIXTURE.to_string()];
         argv.extend(args.iter().map(|s| s.to_string()));
-        let res = run_connector("/usr/bin/env", &argv, &dir.display().to_string(), PATH, None, Duration::from_secs(10));
+        let res = run_connector("/usr/bin/env", &argv, &dir.display().to_string(), PATH, stdin, Duration::from_secs(10));
         std::fs::remove_dir_all(&dir).ok();
         res
     }
@@ -570,8 +620,12 @@ mod tests {
         }
         let out = fixture("fixture-open-id", None, &["open", "q-1"]).unwrap();
         assert_eq!(parse_open(&out), Ok(Answer::Ok(Target::Url("https://example.com/demo-hub/q-1".into()))));
-        let out = fixture("fixture-capture", None, &["nope"]).unwrap();
+        let out = fixture("fixture-unknown-request", None, &["nope"]).unwrap();
         assert_eq!(parse_counts(&out), Ok(Answer::Unsupported));
+        // A capture in ok mode: the text goes in on stdin, `saved` comes back.
+        let json = Request::Capture { text: "A note for the demo hub".into() }.stdin().unwrap();
+        let out = fixture_with("fixture-capture", None, &["capture"], Some(json.as_bytes())).unwrap();
+        assert_eq!(parse_capture(&out), Ok(Answer::Ok(())));
     }
 
     #[test]

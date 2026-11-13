@@ -36,6 +36,7 @@ A failure is `{"version":1,"error":"<one line>"}`, or a non-zero exit (the first
 - Answer within 10 seconds (30 for `capture`: write and commit first, and push afterwards, detached).
 - Write nothing for `counts`, `open`, `events` and `questions`.
 - Never delete anything.
+- Expect anything still running in the connector's process group to be stopped when the connector ends. A push started after a `capture` must therefore run in its own new session (a `setsid`-like detachment), not only with `nohup` or `&`.
 - Start no model session and no agent.
 - Print nothing else on stdout (logs go to stderr).
 - Treat the capture text as plain data.
@@ -43,11 +44,11 @@ A failure is `{"version":1,"error":"<one line>"}`, or a non-zero exit (the first
 ## What the app does with it
 
 - It runs the connector with a cleared environment (the login `PATH`, `HOME`, `LANG`, `USER`, `TMPDIR`), in its own process group, stdin closed except for `capture`.
-- Past the time limit it stops the connector and everything the connector started; past the output limit it does the same and refuses the answer.
+- When the connector ends, for any reason (it exits, it is too slow, its output is too large), the app stops everything still running in its process group. A slow `capture` first gets a TERM signal and up to 5 seconds. Past the output limit the answer is refused.
 - An answer that is not valid against this page is refused whole, and never partly used.
 - Text from a connector is shown as plain text only: it is never shown as HTML or Markdown, never stored, never logged and never typed into an agent.
 - Control characters are removed from the text and white space is made one space.
-- A `url` is opened only if it is `http` or `https`; a `path` only if it is inside the hub's own folder.
+- A `url` is opened only if it is `https://` with a host and no user name or password, or `http://` on `127.0.0.1`, `localhost` or `[::1]` only. A `path` must be absolute and resolve inside the hub's own folder; it is shown in Finder, never launched.
 - It never deletes anything in a hub.
 
 A made-up connector for tests and hand checks lives at `src-tauri/src/agents/hubs/fixtures/demo-hub/connector.sh`.
