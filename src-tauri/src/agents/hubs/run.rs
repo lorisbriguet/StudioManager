@@ -4,6 +4,7 @@
 
 use super::contract::{clean_text, ERROR_CHARS};
 use super::retry::ErrorKind;
+use super::settings::Hub;
 use crate::agents::routines::run::{kill_group, track_group, try_wait_tracked, untrack_group};
 use std::io::{Read, Write};
 use std::os::unix::process::CommandExt;
@@ -272,6 +273,24 @@ fn read_stderr<R: Read + Send + 'static>(mut r: R, err: Arc<Mutex<Vec<u8>>>, don
     });
 }
 
+/// Runs a hub's connector for one request; a trait so the commands' tests can answer without a
+/// process.
+pub trait Connector: Send + Sync {
+    fn run(&self, hub: &Hub, req: &Request, path_env: &str) -> Result<Vec<u8>, RunError>;
+}
+
+/// The real connector: the hub's program with its arguments, then the request's.
+pub struct RealConnector;
+
+impl Connector for RealConnector {
+    fn run(&self, hub: &Hub, req: &Request, path_env: &str) -> Result<Vec<u8>, RunError> {
+        let mut args = hub.args.clone();
+        args.extend(req.tail_args());
+        let stdin = req.stdin();
+        run_connector(&hub.program, &args, &hub.folder, path_env, stdin.as_deref().map(str::as_bytes), req.timeout())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::contract::{parse_counts, parse_open, Answer, Counts, Target};
@@ -316,6 +335,25 @@ mod tests {
             assert!(Instant::now() < by, "process {pid} outlived the stop");
             std::thread::sleep(Duration::from_millis(10));
         }
+    }
+
+    #[test]
+    fn the_real_connector_passes_the_request_name_last() {
+        let dir = tmp("real-connector");
+        let script = dir.join("echo-args.sh");
+        std::fs::write(&script, "#!/bin/sh\nprintf '%s|' \"$@\"\n").unwrap();
+        let hub = Hub {
+            id: "h00000001".into(),
+            name: "Demo hub".into(),
+            colour: "purple".into(),
+            folder: dir.display().to_string(),
+            program: "/bin/sh".into(),
+            args: vec![script.display().to_string(), "--flag".into()],
+        };
+        let out = RealConnector.run(&hub, &Request::Open { id: Some("n1".into()) }, PATH).unwrap();
+        assert_eq!(String::from_utf8(out).unwrap(), "--flag|open|n1|");
+        let out = RealConnector.run(&hub, &Request::Counts, PATH).unwrap();
+        assert_eq!(String::from_utf8(out).unwrap(), "--flag|counts|");
     }
 
     #[test]

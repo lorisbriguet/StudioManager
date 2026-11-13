@@ -7,6 +7,8 @@
 
 pub mod contract;
 pub mod retry;
+pub mod settings;
+pub mod tie;
 pub mod run;
 
 #[cfg(test)]

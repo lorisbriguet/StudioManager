@@ -489,10 +489,20 @@ struct Acted {
     ran_check: bool,
 }
 
-/// The entry's merge facts, read fresh and under the shared lock.
-fn read_facts(db: &Path, e: &LeadEntry) -> Result<Option<MergeFacts>, String> {
+/// The entry's merge facts, read fresh and under the shared lock. A project whose folder is
+/// inside a hub's is a hub project even when its mark is not set (it was made after the hub, or
+/// the mark was cleared); an unreadable `hubs.json` counts as a hub. This only ever adds a
+/// refusal.
+fn read_facts(d: &Deps, db: &Path, e: &LeadEntry) -> Result<Option<MergeFacts>, String> {
     let _shared = crate::org_shared();
-    store::merge_facts(db, e.id, e.item_kind)
+    let mut facts = store::merge_facts(db, e.id, e.item_kind)?;
+    if let Some(f) = facts.as_mut().filter(|f| !f.hub_project) {
+        f.hub_project = crate::agents::hubs::tie::in_any_hub(d.app_dir, f.folder_path.as_deref(), d.demo).unwrap_or_else(|err| {
+            warn("hubs.json is unreadable, the project is treated as a hub project", &err);
+            true
+        });
+    }
+    Ok(facts)
 }
 
 /// The lead accepted a Check entry: the app decides alone whether to merge, and merges only when
@@ -543,7 +553,7 @@ fn accept_steps(
     ran: &mut bool,
 ) -> bool {
     let no = |why: &str| not_merged(db, e.id, why, reason);
-    let facts = match read_facts(db, e) {
+    let facts = match read_facts(d, db, e) {
         Ok(Some(f)) => f,
         Ok(None) => return no("the entry or its item is gone"),
         Err(err) => return no(&one_line(&err)),
@@ -616,7 +626,7 @@ fn accept_steps(
     }
     let lines = again.lines.unwrap_or_default();
     // The check can take ten minutes: what the cheap refusals read is read again.
-    let now = match read_facts(db, e) {
+    let now = match read_facts(d, db, e) {
         Ok(Some(f)) => f,
         Ok(None) => return no("the entry or its item is gone"),
         Err(err) => return no(&one_line(&err)),
