@@ -6,6 +6,12 @@ export interface AgentsInfo {
   limitAlerts: boolean;
   /** The brief session switch (Settings › Agents). */
   briefing: boolean;
+  /** Start work on Ready tasks by itself (Settings › Agents). */
+  watcher: boolean;
+  /** Workers at once, 1 to 5. */
+  workerCap: number;
+  /** The dev build: its workers use the real Claude plan. */
+  dev: boolean;
   /** Capture from an Apple Reminders list (Settings › Agents). */
   reminders: boolean;
   /** The list of the default Reminders account that is read. */
@@ -35,6 +41,11 @@ export function setAgentsMenuBar(on: boolean): Promise<AgentsInfo> {
 /** Turns the brief session on or off; the folder must be trusted before it is turned on. */
 export function setAgentsBriefing(on: boolean): Promise<AgentsInfo> {
   return invoke<AgentsInfo>("agents_set_briefing", { on });
+}
+
+/** The watcher switch and the worker cap (Rust keeps the cap between 1 and 5). */
+export function setAgentsWatcher(on: boolean, cap: number): Promise<AgentsInfo> {
+  return invoke<AgentsInfo>("agents_set_watcher", { on, cap });
 }
 
 /** What went wrong on the import that switching Reminders on ran at once. */
@@ -209,6 +220,11 @@ export function saveImage(mime: string, data: string): Promise<string> {
   return invoke<string>("agents_save_image", { mime, data });
 }
 
+/** The number beside the menu bar icon: what waits in Needs you. 0 clears it. */
+export function setNeedsCount(n: number): Promise<void> {
+  return invoke<void>("menubar_set_needs_count", { n });
+}
+
 export function sendMessage(sessionId: string, text: string): Promise<void> {
   return invoke<void>("agents_send", { sessionId, text });
 }
@@ -341,7 +357,14 @@ export function trustFolder(folder: string): Promise<string> {
 export interface BriefingStatus {
   /** `demo`, `off`, `agents_off`, `access_off`, `budget`, `too_soon`, `running`, `nothing`; null when a session may start at the next check. */
   paused: string | null;
+  /** With `budget`: the percent the reason is about (the week's, or the 5-hour window's). */
   percent: number | null;
+  /** With `budget`: why. */
+  reason?: "ahead_of_week" | "five_hour" | "no_data" | "stale" | null;
+  /** With `budget` and `ahead_of_week`: where the week's pace line stands, in percent. */
+  line?: number | null;
+  /** With `budget` and `stale`: the age of the last usage reading, in whole minutes. */
+  minutesOld?: number | null;
   /** When the next slot opens (epoch ms), with `too_soon`. */
   nextAt: number | null;
   running: boolean;
@@ -359,10 +382,83 @@ export interface BriefingLine {
   warn: boolean;
 }
 
+type BudgetLabels = Record<
+  "briefing_paused_week" | "briefing_paused_five_hour" | "briefing_paused_no_data" | "briefing_paused_stale",
+  string
+>;
+
+/** The budget pause in words (the brief session's and the watcher's share it). */
+function budgetText(
+  reason: string | null | undefined,
+  n: { percent?: number | null; line?: number | null; minutesOld?: number | null },
+  t: BudgetLabels,
+): string {
+  const whole = (v: number | null | undefined) => String(Math.round(v ?? 0));
+  return reason === "ahead_of_week"
+    ? t.briefing_paused_week.replace("{percent}", whole(n.percent)).replace("{line}", whole(n.line))
+    : reason === "five_hour"
+      ? t.briefing_paused_five_hour.replace("{percent}", whole(n.percent))
+      : reason === "stale"
+        ? t.briefing_paused_stale.replace("{min}", whole(n.minutesOld))
+        : t.briefing_paused_no_data;
+}
+
+export interface WatcherStatus {
+  /** `demo`, `off`, `agents_off`, `mode`, `locked`, `budget`, `cap`, `nothing`; null when it would start something. */
+  paused: string | null;
+  /** With `budget`: `ahead_of_week`, `five_hour`, `no_data` or `stale`. */
+  budget: string | null;
+  percent: number | null;
+  line: number | null;
+  minutesOld: number | null;
+  running: number;
+  cap: number;
+  /** The title of the item it would start. */
+  wouldStart: string | null;
+  lead: string | null;
+}
+
+/** Why the watcher waits, or what it would start. In this version it starts nothing. */
+export function watcherStatus(): Promise<WatcherStatus> {
+  return invoke<WatcherStatus>("watcher_status");
+}
+
+/** The watcher's one muted line for the Needs you tab; null while the watcher is off (or in the demo build). */
+export function watcherLine(
+  status: WatcherStatus | null,
+  t: BudgetLabels &
+    Record<"watcher_paused_mode" | "watcher_paused_locked" | "watcher_paused_cap" | "watcher_nothing" | "watcher_would_start", string>,
+): string | null {
+  if (!status || ["demo", "off", "agents_off"].includes(status.paused ?? "")) return null;
+  switch (status.paused) {
+    case "mode":
+      return t.watcher_paused_mode;
+    case "locked":
+      return t.watcher_paused_locked;
+    case "budget":
+      return budgetText(status.budget, status, t);
+    case "cap":
+      return t.watcher_paused_cap.replace("{n}", String(status.running)).replace("{cap}", String(status.cap));
+    case "nothing":
+      return t.watcher_nothing;
+    default:
+      return status.wouldStart ? t.watcher_would_start.replace("{title}", status.wouldStart) : null;
+  }
+}
+
 /** The muted lines under the brief session switch and in the Inbox: the next slot or why it waits, and the last failure. */
 export function briefingLines(
   status: BriefingStatus | null,
-  t: Record<"briefing_next" | "briefing_paused_budget" | "briefing_last_failed" | "briefing_access_off", string>,
+  t: Record<
+    | "briefing_next"
+    | "briefing_paused_week"
+    | "briefing_paused_five_hour"
+    | "briefing_paused_no_data"
+    | "briefing_paused_stale"
+    | "briefing_last_failed"
+    | "briefing_access_off",
+    string
+  >,
   now: number,
 ): BriefingLine[] {
   if (!status || ["demo", "off", "agents_off"].includes(status.paused ?? "")) return [];
@@ -370,8 +466,8 @@ export function briefingLines(
   if (status.paused === "too_soon" && status.nextAt != null) {
     const min = Math.max(1, Math.ceil((status.nextAt - now) / 60_000));
     lines.push({ text: t.briefing_next.replace("{min}", String(min)), warn: false });
-  } else if (status.paused === "budget" && status.percent != null) {
-    lines.push({ text: t.briefing_paused_budget.replace("{percent}", String(Math.round(status.percent))), warn: true });
+  } else if (status.paused === "budget") {
+    lines.push({ text: budgetText(status.reason, status, t), warn: true });
   } else if (status.paused === "access_off") {
     lines.push({ text: t.briefing_access_off, warn: true });
   }

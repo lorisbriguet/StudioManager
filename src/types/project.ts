@@ -31,6 +31,10 @@ export interface Project {
   notes: string;
   layout_config: string | null;
   folder_path: string | null;
+  /** Agent settings (migration 018). Optional so hand-built projects still compile. */
+  check_command?: string | null;
+  merge_alone?: number;
+  hub_project?: number;
   created_at: string;
   updated_at: string;
 }

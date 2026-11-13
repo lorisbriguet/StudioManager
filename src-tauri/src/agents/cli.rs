@@ -39,6 +39,10 @@ pub struct AgentsSettings {
     /// The brief session: every 15 minutes at most, one Opus agent files new captures (see
     /// briefing.rs). Needs `enabled`; off by default.
     pub briefing: bool,
+    /// Start work on Ready tasks by itself (the watcher). Needs `enabled`; off by default.
+    pub watcher: bool,
+    /// Workers running at once, 1 to 5.
+    pub worker_cap: u32,
     /// Capture from an Apple Reminders list (see reminders.rs). Needs `enabled`; off by default.
     pub reminders: bool,
     /// The list of the default Reminders account that is read.
@@ -48,11 +52,15 @@ pub struct AgentsSettings {
     pub previous_status_line: Option<serde_json::Value>,
 }
 
+pub const DEFAULT_WORKER_CAP: u32 = 3;
+pub const MAX_WORKER_CAP: u32 = 5;
+
 pub const DEFAULT_REMINDERS_LIST: &str = "Inbox";
 
 impl Default for AgentsSettings {
     fn default() -> Self {
         Self { enabled: false, menu_bar: false, limit_alerts: true, briefing: false,
+            watcher: false, worker_cap: DEFAULT_WORKER_CAP,
             reminders: false,
             reminders_list: DEFAULT_REMINDERS_LIST.into(),
             previous_status_line: None,
@@ -109,8 +117,12 @@ pub fn in_build(mut s: AgentsSettings, demo: bool) -> AgentsSettings {
         s.enabled = false;
         s.menu_bar = false;
         s.briefing = false;
+        s.watcher = false;
         s.reminders = false;
     }
+    // The watcher is part of Agents: it reads off whenever the Agents switch is off.
+    s.watcher = s.watcher && s.enabled;
+    s.worker_cap = s.worker_cap.clamp(1, MAX_WORKER_CAP);
     s
 }
 
@@ -118,6 +130,7 @@ pub fn in_build(mut s: AgentsSettings, demo: bool) -> AgentsSettings {
 /// bar (start at login goes with it, in the command).
 pub fn switch_off(s: &mut AgentsSettings) {
     s.briefing = false;
+    s.watcher = false;
     s.reminders = false;
     s.menu_bar = false;
 }
@@ -129,6 +142,19 @@ pub fn set_briefing(dir: &Path, on: bool) -> Result<(), String> {
             return Err("Turn the Agents page on first".into());
         }
         s.briefing = on;
+        Ok(())
+    })
+}
+
+/// The watcher switch and the worker cap (clamped 1 to 5). Turning it on needs Agents on;
+/// turning it off never does.
+pub fn set_watcher(dir: &Path, on: bool, cap: u32) -> Result<(), String> {
+    update_settings(dir, |s| {
+        if on && !s.enabled {
+            return Err("Turn the Agents page on first".into());
+        }
+        s.watcher = on;
+        s.worker_cap = cap.clamp(1, MAX_WORKER_CAP);
         Ok(())
     })
 }
@@ -412,6 +438,10 @@ pub struct AgentsInfo {
     pub menu_bar: bool,
     pub limit_alerts: bool,
     pub briefing: bool,
+    pub watcher: bool,
+    pub worker_cap: u32,
+    /// The dev build (Settings > Agents says its workers use the real plan).
+    pub dev: bool,
     pub reminders: bool,
     pub reminders_list: String,
     pub claude_path: Option<String>,
@@ -434,6 +464,9 @@ fn info(app_dir: &Path, login: &super::pty::LoginCache) -> AgentsInfo {
         menu_bar: s.menu_bar,
         limit_alerts: s.limit_alerts,
         briefing: s.briefing,
+        watcher: s.watcher,
+        worker_cap: s.worker_cap,
+        dev: crate::host::running_dev(),
         reminders: s.reminders,
         reminders_list: s.reminders_list,
         // The demo doesn't look for this Mac's `claude`: the switch stays off and disabled.
@@ -566,6 +599,22 @@ pub async fn agents_set_briefing(
     .await
 }
 
+/// The watcher switch and the worker cap (Settings > Agents).
+#[tauri::command]
+pub async fn agents_set_watcher(
+    state: tauri::State<'_, super::AgentsState>,
+    on: bool,
+    cap: u32,
+) -> Result<AgentsInfo, String> {
+    super::actions::switched_on(&state)?;
+    let (app_dir, login) = (state.app_dir.clone(), state.login_cache());
+    super::pty::blocking(move || {
+        set_watcher(&app_dir, on, cap)?;
+        Ok(info(&app_dir, &login))
+    })
+    .await
+}
+
 /// What the Reminders switch answers: the settings, and what went wrong on the import it ran
 /// at once, if anything (the card words it: the list, the account, the permission).
 #[derive(Serialize, Clone, Debug)]
@@ -631,6 +680,43 @@ mod tests {
         let on = AgentsSettings { enabled: true, briefing: true, ..Default::default() };
         assert!(!in_build(on.clone(), true).briefing);
         assert!(in_build(on, false).briefing);
+    }
+
+    #[test]
+    fn watcher_off_by_default_and_in_the_demo() {
+        let none: AgentsSettings = serde_json::from_str("{\"enabled\":true}").unwrap();
+        assert!(!none.watcher);
+        assert_eq!(none.worker_cap, 3);
+        let on = AgentsSettings { enabled: true, watcher: true, ..Default::default() };
+        assert!(!in_build(on.clone(), true).watcher);
+        assert!(in_build(on, false).watcher);
+    }
+
+    #[test]
+    fn the_watcher_reads_off_when_agents_is_off() {
+        let s: AgentsSettings = serde_json::from_str(r#"{"enabled":false,"watcher":true}"#).unwrap();
+        assert!(!in_build(s, false).watcher);
+        let s: AgentsSettings = serde_json::from_str(r#"{"enabled":true,"watcher":true}"#).unwrap();
+        assert!(in_build(s, false).watcher);
+    }
+
+    #[test]
+    fn set_watcher_needs_agents_and_clamps_the_cap() {
+        let d = tmp("watcher");
+        assert!(set_watcher(&d, true, 3).is_err());
+        assert!(!read_settings(&d).watcher);
+        write_settings(&d, &AgentsSettings { enabled: true, ..Default::default() }).unwrap();
+        set_watcher(&d, true, 0).unwrap();
+        assert!(read_settings(&d).watcher);
+        assert_eq!(read_settings(&d).worker_cap, 1);
+        set_watcher(&d, true, 9).unwrap();
+        assert_eq!(read_settings(&d).worker_cap, 5);
+        set_watcher(&d, false, 2).unwrap();
+        assert!(!read_settings(&d).watcher);
+        assert_eq!(read_settings(&d).worker_cap, 2);
+        let mut s = AgentsSettings { enabled: true, watcher: true, ..Default::default() };
+        switch_off(&mut s);
+        assert!(!s.watcher);
     }
 
     #[test]

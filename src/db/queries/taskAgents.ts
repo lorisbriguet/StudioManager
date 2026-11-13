@@ -44,6 +44,8 @@ export interface OpenLink {
   item_id: number;
   short_id: string;
   session_id: string | null;
+  /** 'watcher' for a worker the watcher started; null for one started by hand. */
+  started_by?: string | null;
 }
 
 /** Links not yet closed, for the "waiting on you" chip. */
@@ -51,7 +53,7 @@ export async function getOpenLinks(): Promise<OpenLink[]> {
   const db = await getDb();
   return db.select<OpenLink[]>(
     `SELECT CASE WHEN subtask_id IS NOT NULL THEN 'subtask' ELSE 'task' END AS kind,
-            COALESCE(subtask_id, task_id) AS item_id, short_id, session_id
+            COALESCE(subtask_id, task_id) AS item_id, short_id, session_id, started_by
      FROM task_agents WHERE ended_at IS NULL ORDER BY id`,
   );
 }

@@ -57,6 +57,9 @@ pub const UPKEEP_WRITES: [&str; 10] = [
     "update_subscription",
 ];
 
+/// Tools only the lead session uses: absent and refused unless `STUDIOMANAGER_TOOLS` names them.
+pub const LEAD_ONLY: [&str; 3] = ["get_needs_you", "resolve", "hand_over"];
+
 #[derive(Clone)]
 pub struct Server {
     /// The data dir, or why it could not be found (every tool returns it).
@@ -610,6 +613,71 @@ pub struct ReportResultInput {
     pub pr_url: Option<String>,
 }
 
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct AskInput {
+    /// Organisation id or name. Default: the active organisation.
+    pub org: Option<String>,
+    /// Exactly one of task_id and subtask_id.
+    pub task_id: Option<i64>,
+    pub subtask_id: Option<i64>,
+    /// The question, in a few sentences (at most 2000 characters).
+    pub question: String,
+    /// What you would do and why (required, at most 2000 characters).
+    pub recommendation: String,
+    /// Up to 6 short answers to pick from, each at most 80 characters.
+    pub options: Option<Vec<String>>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ListNeedsYouInput {
+    /// Organisation id or name. Default: the active organisation.
+    pub org: Option<String>,
+    /// open, answered or dismissed.
+    pub status: Option<String>,
+    /// user, lead or app.
+    pub decided_by: Option<String>,
+    /// YYYY-MM-DD: entries answered, or created if still open, on or after that day.
+    pub since: Option<String>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct GetNeedsYouInput {
+    /// Organisation id or name. Default: the active organisation.
+    pub org: Option<String>,
+    pub id: i64,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ResolveInput {
+    /// Organisation id or name. Default: the active organisation.
+    pub org: Option<String>,
+    pub needs_you_id: i64,
+    /// The answer (at most 4000 characters). For a check: accept, or "send_back: <notes>".
+    pub answer: String,
+    /// Why you decided this.
+    pub reason: String,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct HandOverInput {
+    /// Organisation id or name. Default: the active organisation.
+    pub org: Option<String>,
+    pub needs_you_id: i64,
+    /// What you would do, for the user (at most 2000 characters).
+    pub recommendation: String,
+    /// Why this is for the user and not for you.
+    pub reason: String,
+    /// Up to 6 short answers to pick from, each at most 80 characters.
+    pub options: Option<Vec<String>>,
+    /// True when it is a decision, not a check.
+    pub is_decision: Option<bool>,
+}
+
 // ── Plumbing ─────────────────────────────────────────────────
 
 fn ok(v: Value) -> CallToolResult {
@@ -828,6 +896,12 @@ impl Server {
                 tool_router.remove_route(name);
             }
         }
+        for name in LEAD_ONLY {
+            let named = session_tools.as_ref().is_some_and(|l| l.iter().any(|n| n == name));
+            if !named {
+                tool_router.remove_route(name);
+            }
+        }
         if let Some(list) = &session_tools {
             let hidden: Vec<String> = tool_router
                 .list_all()
@@ -845,6 +919,10 @@ impl Server {
     /// Refuses a tool the session's list leaves out.
     fn allows(&self, name: &str) -> Result<(), rmcp::ErrorData> {
         match &self.session_tools {
+            None if LEAD_ONLY.contains(&name) => Err(rmcp::ErrorData::invalid_params(
+                "This tool is not available in this session",
+                None,
+            )),
             Some(list) if !list.iter().any(|n| n == name) => Err(rmcp::ErrorData::invalid_params(
                 "This tool is not available in this session",
                 None,
@@ -1110,6 +1188,82 @@ impl Server {
                     &p.result,
                     p.branch.as_deref(),
                     p.pr_url.as_deref(),
+                )
+            })
+        })
+        .await
+    }
+
+    #[tool(
+        description = "For an agent started on this task or subtask from StudioManager: ask a question you cannot answer from the brief, the wiki or the decisions, with your recommendation. Then stop and wait: the answer is typed into this conversation. Refused when no such agent is linked to the item: any other session asks the user directly in the conversation."
+    )]
+    async fn ask(&self, Parameters(p): Parameters<AskInput>) -> CallToolResult {
+        self.run(move |d| {
+            write_in(d, p.org.as_deref(), |d, o| {
+                write::ask(
+                    d,
+                    o,
+                    p.task_id,
+                    p.subtask_id,
+                    &p.question,
+                    &p.recommendation,
+                    p.options.as_deref(),
+                )
+            })
+        })
+        .await
+    }
+
+    #[tool(
+        description = "List what waits on the user or was decided: at most 100 entries, newest first. Filter by status, by who decided (user, lead, app) and by a since date."
+    )]
+    async fn list_needs_you(&self, Parameters(p): Parameters<ListNeedsYouInput>) -> CallToolResult {
+        self.run(move |d| {
+            read_in(d, p.org.as_deref(), |c| {
+                read::list_needs_you(c, p.status.as_deref(), p.decided_by.as_deref(), p.since.as_deref())
+            })
+        })
+        .await
+    }
+
+    #[tool(
+        description = "Lead only. Get one entry with its task or subtask (title, brief, result), its project and, for a check, the stored diff."
+    )]
+    async fn get_needs_you(&self, Parameters(p): Parameters<GetNeedsYouInput>) -> CallToolResult {
+        self.run(move |d| {
+            let org = guard::resolve_org(d, p.org.as_deref())?;
+            let conn = guard::open_read(&org)?;
+            Ok(with_org(&org, to_json(read::get_needs_you(&conn, d, &org, p.id)?)?))
+        })
+        .await
+    }
+
+    #[tool(
+        description = "Lead only. Answer an entry that is yours to settle, with the reason. For a check, the answer is accept or \"send_back: <notes>\"."
+    )]
+    async fn resolve(&self, Parameters(p): Parameters<ResolveInput>) -> CallToolResult {
+        self.run(move |d| {
+            write_in(d, p.org.as_deref(), |d, o| {
+                write::resolve(d, o, p.needs_you_id, &p.answer, &p.reason)
+            })
+        })
+        .await
+    }
+
+    #[tool(
+        description = "Lead only. Hand an entry over to the user with your recommendation and the reason it is not yours to settle. It stays open."
+    )]
+    async fn hand_over(&self, Parameters(p): Parameters<HandOverInput>) -> CallToolResult {
+        self.run(move |d| {
+            write_in(d, p.org.as_deref(), |d, o| {
+                write::hand_over(
+                    d,
+                    o,
+                    p.needs_you_id,
+                    &p.recommendation,
+                    &p.reason,
+                    p.options.as_deref(),
+                    p.is_decision,
                 )
             })
         })
@@ -1575,13 +1729,13 @@ mod tests {
         let dir = crate::test_support::ready_dir("org-a", "Studio A");
         assert_eq!(
             Server::new(Ok(dir.clone())).tool_router.list_all().len(),
-            40
+            42
         );
         crate::test_support::allow_listed(&dir, true, &[]);
-        assert_eq!(Server::new(Ok(dir)).tool_router.list_all().len(), 45);
+        assert_eq!(Server::new(Ok(dir)).tool_router.list_all().len(), 47);
         assert_eq!(
             Server::new(Err("x".into())).tool_router.list_all().len(),
-            40
+            42
         );
     }
 
@@ -1611,8 +1765,62 @@ mod tests {
     #[test]
     fn without_a_session_tool_list_nothing_changes() {
         let s = Server::with_tools(Err("x".into()), None);
-        assert_eq!(names(&s).len(), 40);
+        assert_eq!(names(&s).len(), 42);
         assert!(s.allows("create_client").is_ok());
+    }
+
+    #[test]
+    fn lead_tools_need_the_session_list_to_name_them() {
+        let lead = ["get_needs_you", "resolve", "hand_over"];
+        let s = Server::with_tools(Err("x".into()), None);
+        for t in lead {
+            assert!(!names(&s).contains(&t.to_string()), "{t} listed");
+            assert!(s.allows(t).is_err(), "{t} allowed");
+        }
+        for t in ["ask", "list_needs_you"] {
+            assert!(names(&s).contains(&t.to_string()), "{t} missing");
+            assert!(s.allows(t).is_ok());
+        }
+        let list = Some(lead.iter().map(|t| t.to_string()).collect());
+        let s = Server::with_tools(Err("x".into()), list);
+        let mut got = names(&s);
+        got.sort();
+        assert_eq!(got, vec!["get_needs_you", "hand_over", "resolve"]);
+        for t in lead {
+            assert!(s.allows(t).is_ok());
+        }
+        // A session list that leaves them out keeps them out.
+        let s = Server::with_tools(Err("x".into()), Some(vec!["ask".to_string()]));
+        assert_eq!(names(&s), vec!["ask"]);
+        assert!(s.allows("resolve").is_err());
+    }
+
+    #[test]
+    fn update_project_cannot_set_check_command() {
+        let r: Result<UpdateProjectInput, _> = serde_json::from_value(
+            json!({"project": "Poster tool", "check_command": "npm test"}),
+        );
+        assert!(r.is_err());
+        let msg = r.err().unwrap().to_string();
+        assert!(msg.contains("check_command"), "{msg}");
+        let (dir, org, conn) = {
+            let dir = crate::test_support::ready_dir("org-c", "Studio C");
+            let org = guard::resolve_org(&dir, None).unwrap();
+            let conn = Connection::open(&org.db).unwrap();
+            conn.execute_batch(
+                "INSERT INTO clients (id, name, email, language) VALUES ('C-001', 'Studio A', 'a@b.test', 'EN');
+                 INSERT INTO projects (id, client_id, name, status, check_command) VALUES (1, 'C-001', 'Poster tool', 'active', 'npm test');",
+            )
+            .unwrap();
+            (dir, org, conn)
+        };
+        // The tool only takes the four fields it has: the column is unchanged.
+        write::update_project(&dir, &org, "1", &write::ProjectChanges { notes: Some("n".into()), ..Default::default() })
+            .unwrap();
+        let c: Option<String> = conn
+            .query_row("SELECT check_command FROM projects WHERE id = 1", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(c.as_deref(), Some("npm test"));
     }
 
     #[test]

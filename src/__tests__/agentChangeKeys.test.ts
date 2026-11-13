@@ -52,6 +52,13 @@ describe("agent change keys", () => {
     expect(keysForTools(["task_links"])).toEqual(expected);
   });
 
+  it("maps the Needs you tools and the watcher to needsYou and tasks", () => {
+    const expected = ["needsYou", "tasks", "subtasks", "workload-rows", "projects", "taskAgents"];
+    for (const tool of ["ask", "resolve", "hand_over", "watcher"]) {
+      expect(keysForTools([tool])).toEqual(expected);
+    }
+  });
+
   it("syncs the calendar only after upkeep or subscription writes, or when unsure", () => {
     expect(touchesCalendar(["create_task", "put_wiki_article"])).toBe(false);
     expect(touchesCalendar(["create_task", "update_subscription"])).toBe(true);

@@ -316,6 +316,7 @@ fn all_projects(conn: &Connection) -> R<Vec<ProjectRef>> {
 mod captures;
 mod clients;
 mod due;
+mod needs_you;
 mod projects;
 mod tasks;
 mod wiki;
@@ -323,6 +324,7 @@ mod wiki;
 pub use captures::list_captures;
 pub use clients::{get_client, list_clients};
 pub use due::{list_machines, whats_due};
+pub use needs_you::{get_needs_you, list_needs_you};
 pub use projects::{find_project_for_folder, get_project, list_projects};
 pub(crate) use projects::project_ref;
 pub use tasks::list_tasks;

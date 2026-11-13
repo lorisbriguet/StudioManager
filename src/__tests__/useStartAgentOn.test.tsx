@@ -31,6 +31,8 @@ vi.mock("../db/hooks/useCaptures", () => ({
   useBriefEntries: () => ({ data: [] }),
 }));
 
+vi.mock("../db/hooks/useNeedsYou", () => ({ useNeedsYouCount: () => 0, useOpenEntries: () => ({ data: [] }) }));
+
 const linkAgent = vi.hoisted(() => vi.fn(async (_: unknown) => 1));
 vi.mock("../db/queries/taskAgents", async (orig) => ({
   ...(await orig<typeof import("../db/queries/taskAgents")>()),

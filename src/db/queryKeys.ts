@@ -40,6 +40,13 @@ export const qk = {
     open: ["taskAgents", "open"] as const,
     captured: (kind: string, id: number) => ["taskAgents", "captured", kind, id] as const,
   },
+  needsYou: {
+    all: ["needsYou"] as const,
+    open: ["needsYou", "open"] as const,
+    alone: ["needsYou", "alone"] as const,
+    aloneSince: (days: number) => ["needsYou", "alone", days] as const,
+    count: ["needsYou", "open", "count"] as const,
+  },
   invoices: {
     ...documentKeys("invoices"),
     byClient: (clientId: string) => ["invoices", "client", clientId] as const,

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { invokedCommands, clearInvokedCommands } from "../__mocks__/tauri-api";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Sidebar } from "../components/layout/Sidebar";
@@ -13,6 +14,11 @@ vi.mock("../db/hooks/useNotifications", () => ({
 let overdueCount = 0;
 vi.mock("../db/hooks/useUpkeep", () => ({
   useUpkeepOverview: () => ({ overdueCount }),
+}));
+
+let needsYouCount = 0;
+vi.mock("../db/hooks/useNeedsYou", () => ({
+  useNeedsYouCount: () => needsYouCount,
 }));
 
 let inboxStates: ("new" | "dismissed")[] = [];
@@ -104,6 +110,37 @@ describe("Sidebar", () => {
     overdueCount = 0;
     renderSidebar();
     expect(screen.getByRole("link", { name: /Upkeep/ })).not.toHaveTextContent(/\d/);
+  });
+
+  it("shows the Needs you count on the Agents link and hides it at 0", () => {
+    useAppStore.setState({ agentsEnabled: true });
+    needsYouCount = 4;
+    const { unmount } = renderSidebar();
+    expect(screen.getByRole("link", { name: /Agents/ })).toHaveTextContent("4");
+    unmount();
+    needsYouCount = 0;
+    renderSidebar();
+    expect(screen.getByRole("link", { name: /Agents/ })).not.toHaveTextContent(/\d/);
+    useAppStore.setState({ agentsEnabled: false });
+  });
+
+  it("sends the Needs you count to the menu bar", async () => {
+    useAppStore.setState({ agentsEnabled: true });
+    needsYouCount = 4;
+    clearInvokedCommands();
+    renderSidebar();
+    await waitFor(() => expect(invokedCommands).toContainEqual({ cmd: "menubar_set_needs_count", args: { n: 4 } }));
+    useAppStore.setState({ agentsEnabled: false });
+    needsYouCount = 0;
+  });
+
+  it("sends 0 to the menu bar while Agents are off", async () => {
+    useAppStore.setState({ agentsEnabled: false });
+    needsYouCount = 4;
+    clearInvokedCommands();
+    renderSidebar();
+    await waitFor(() => expect(invokedCommands).toContainEqual({ cmd: "menubar_set_needs_count", args: { n: 0 } }));
+    needsYouCount = 0;
   });
 
   it("counts the Paperless documents waiting to be checked on the Expenses link", () => {

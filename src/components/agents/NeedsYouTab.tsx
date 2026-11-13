@@ -2,35 +2,122 @@ import { useState } from "react";
 import { ChevronRight } from "lucide-react";
 import { useT } from "../../i18n/useT";
 import { useBriefEntries, useKeepAsTask, useMarkStarted, useSetBrief } from "../../db/hooks/useCaptures";
+import { useAloneEntries, useOpenEntries, useReopenEntry } from "../../db/hooks/useNeedsYou";
 import type { BriefEntry } from "../../db/queries/captures";
+import type { NeedsYouEntry } from "../../db/queries/needsYou";
 import { useStartAgentOn } from "../../hooks/useStartAgentOn";
+import { useWatcherStatus } from "../../hooks/useWatcherStatus";
+import { watcherLine } from "../../lib/agents";
 import { formatDisplayDateTime } from "../../utils/formatDate";
 import { Button, EmptyState, ICONS, ICON_SIZE, SECTION_LABEL, Textarea } from "../ui";
+import { CheckEntry } from "./CheckEntry";
+import { DecideEntry } from "./DecideEntry";
 
 /**
- * The Needs you tab. Part 1 has one group, Briefs: captures the brief session filed as a task
- * or subtask, waiting for a word from you. Start an agent on it, keep it as a plain task, or
- * open the brief to read and edit it.
+ * The Needs you tab: everything waiting on you, in four groups. Decide (questions agents asked),
+ * Check (finished work, and an entry you reopened), Briefs (captures the brief session filed as
+ * a task or subtask) and Decided alone (what the lead and the app settled without you, to reopen).
  */
 export function NeedsYouTab() {
   const t = useT();
-  const { data: entries = [] } = useBriefEntries();
+  const { data: briefs = [] } = useBriefEntries();
+  const { data: open = [] } = useOpenEntries();
+  const { data: alone = [] } = useAloneEntries();
+  const decide = open.filter((e) => e.kind === "decide");
+  const check = open.filter((e) => e.kind !== "decide");
 
-  if (entries.length === 0) return <EmptyState icon={ICONS.agents} message={t.needs_you_empty} />;
+  if (open.length === 0 && briefs.length === 0 && alone.length === 0) {
+    return (
+      <>
+        <WatcherLine />
+        <EmptyState icon={ICONS.agents} message={t.needs_you_empty} />
+      </>
+    );
+  }
 
-  // The group row as on the All agents list: SectionLabel and a muted count over a hairline.
   return (
     <section aria-label={t.agents_tab_needs_you} className="flex-1 min-w-0 min-h-0 overflow-y-auto">
-      <h2 className="h-8 flex items-center gap-2 px-2 border-b border-[var(--color-border)]">
-        <span className={`truncate ${SECTION_LABEL}`}>{t.briefs_group}</span>
-        <span className="text-xs text-muted tabular-nums">{entries.length}</span>
-      </h2>
-      <ul>
-        {entries.map((e) => (
-          <BriefItem key={e.capture_id} entry={e} />
-        ))}
-      </ul>
+      <WatcherLine />
+      {decide.length > 0 && (
+        <Group label={t.needs_decide_group} count={decide.length}>
+          {decide.map((e) => (
+            <DecideEntry key={e.id} entry={e} />
+          ))}
+        </Group>
+      )}
+      {check.length > 0 && (
+        <Group label={t.needs_check_group} count={check.length}>
+          {check.map((e) => (
+            <CheckEntry key={e.id} entry={e} />
+          ))}
+        </Group>
+      )}
+      {briefs.length > 0 && (
+        <Group label={t.briefs_group} count={briefs.length}>
+          {briefs.map((e) => (
+            <BriefItem key={e.capture_id} entry={e} />
+          ))}
+        </Group>
+      )}
+      {alone.length > 0 && (
+        <Group label={t.needs_alone_group} count={alone.length}>
+          {alone.map((e) => (
+            <AloneItem key={e.id} entry={e} />
+          ))}
+        </Group>
+      )}
     </section>
+  );
+}
+
+/** One muted line while the watcher switch is on: why it waits, or the item it would start. */
+function WatcherLine() {
+  const t = useT();
+  const text = watcherLine(useWatcherStatus(), t);
+  if (!text) return null;
+  return <p className="text-xs text-muted mb-2">{text}</p>;
+}
+
+/** The group row as on the All agents list: SectionLabel and a muted count over a hairline. */
+function Group({ label, count, children }: { label: string; count: number; children: React.ReactNode }) {
+  return (
+    <>
+      <h2 className="h-8 flex items-center gap-2 px-2 border-b border-[var(--color-border)]">
+        <span className={`truncate ${SECTION_LABEL}`}>{label}</span>
+        <span className="text-xs text-muted tabular-nums">{count}</span>
+      </h2>
+      <ul>{children}</ul>
+    </>
+  );
+}
+
+/** Something the lead or the app settled: what was done, why, and a way to take it back. */
+function AloneItem({ entry: e }: { entry: NeedsYouEntry }) {
+  const t = useT();
+  const reopen = useReopenEntry();
+  return (
+    <li className="px-2 py-3 border-b border-[var(--color-border-divider)] hover:bg-[var(--color-hover-row)] transition-colors">
+      <div className="flex items-start gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
+            {e.project_name && (
+              <>
+                <span>{e.project_name}</span>
+                <span aria-hidden>·</span>
+              </>
+            )}
+            <span>{e.item_title ?? ""}</span>
+            <span aria-hidden>·</span>
+            <span>{formatDisplayDateTime(e.answered_at ?? e.created_at)}</span>
+          </div>
+          <p className="mt-1 text-sm font-medium">{e.title}</p>
+          {e.reason && <p className="text-xs text-muted whitespace-pre-wrap">{e.reason}</p>}
+        </div>
+        <Button variant="secondary" onClick={() => reopen.mutate(e.id)}>
+          {t.alone_reopen}
+        </Button>
+      </div>
+    </li>
   );
 }
 

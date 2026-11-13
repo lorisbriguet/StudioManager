@@ -26,6 +26,7 @@ import {
   setAgentsLimitAlerts,
   setAgentsMenuBar,
   setAgentsReminders,
+  setAgentsWatcher,
   remindersProblemText,
   type RemindersProblem,
   statusLinePreview,
@@ -43,6 +44,7 @@ export function AgentsCard() {
   const [error, setError] = useState<string | null>(null);
   // The list field, saved when it loses focus; the problem of the last import under the switch.
   const [remindersList, setRemindersList] = useState("Inbox");
+  const [cap, setCap] = useState("3");
   const [remindersProblem, setRemindersProblem] = useState<RemindersProblem | null>(null);
   // Plan-limits status line: the latest preview, which change is shown for confirmation.
   const [line, setLine] = useState<StatusLinePreview | null>(null);
@@ -53,7 +55,7 @@ export function AgentsCard() {
   useEffect(() => {
     let cancelled = false;
     getAgentsSettings()
-      .then((i) => { if (!cancelled) { setInfo(i); setRemindersList(i.remindersList); setStoreEnabled(i.enabled); } })
+      .then((i) => { if (!cancelled) { setInfo(i); setRemindersList(i.remindersList); setCap(String(i.workerCap ?? 3)); setStoreEnabled(i.enabled); } })
       .catch((e) => { if (!cancelled) setError(msg(e)); });
     return () => { cancelled = true; };
   }, [setStoreEnabled]);
@@ -172,6 +174,13 @@ export function AgentsCard() {
     }
   };
 
+  /** The watcher switch, or another cap (1 to 5; Rust clamps it too). */
+  const saveWatcher = async (on: boolean, value: string) => {
+    const n = Math.min(5, Math.max(1, Math.round(Number(value)) || (info?.workerCap ?? 3)));
+    setCap(String(n));
+    await run(() => setAgentsWatcher(on, n));
+  };
+
   /** Switch on or off, or save another list; switching on imports at once (the permission question). */
   const saveReminders = async (on: boolean, list: string) => {
     setError(null);
@@ -238,6 +247,29 @@ export function AgentsCard() {
       {briefingLines(briefing, t, now).map((l) => (
         <p key={l.text} className={`text-xs py-1 ${l.warn ? "text-warning-text" : "text-muted"}`}>{l.text}</p>
       ))}
+      <SettingRow label={t.watcher_switch} desc={t.watcher_desc}>
+        <Toggle
+          checked={!demo && (info?.watcher ?? false)}
+          disabled={!info || !info.enabled}
+          ariaLabel={t.watcher_switch}
+          onChange={(on) => void saveWatcher(on, cap)}
+        />
+      </SettingRow>
+      <SettingRow label={t.watcher_cap}>
+        <Input
+          type="number"
+          min={1}
+          max={5}
+          value={cap}
+          disabled={!info || !info.enabled}
+          aria-label={t.watcher_cap}
+          onChange={(e) => setCap(e.target.value)}
+          onBlur={() => {
+            if (info && String(info.workerCap) !== cap) void saveWatcher(info.watcher, cap);
+          }}
+        />
+      </SettingRow>
+      {info?.dev && <p className="text-xs text-warning-text py-1">{t.watcher_dev_warning}</p>}
       <SettingRow label={t.reminders_switch} desc={t.reminders_desc}>
         <Toggle
           checked={!demo && (info?.reminders ?? false)}

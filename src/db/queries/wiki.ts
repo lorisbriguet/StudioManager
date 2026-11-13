@@ -239,3 +239,106 @@ export async function getWikiArticlesByProject(projectId: number): Promise<WikiA
     tags: row.tags_csv ? row.tags_csv.split(",") : [],
   }));
 }
+
+// ── Decisions ────────────────────────────────────────────────
+
+const MAX_DECISION_BYTES = 1024 * 1024;
+const DECISIONS_TITLE = "Decisions";
+
+/** Lowercase and strip accents, as the MCP server's `fold` does for title matching. */
+const fold = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+/**
+ * Add a dated decision to the project's "Decisions" article, creating the article (in the
+ * project's wiki folder, tagged) when missing. Writes exactly what the MCP server's
+ * `add_decision` writes; a decision already recorded is not added twice.
+ */
+export async function addDecision(
+  projectId: number,
+  date: string,
+  text: string,
+): Promise<{ articleId: number; added: boolean }> {
+  const day = date.trim();
+  const valid = /^\d{4}-\d{2}-\d{2}$/.test(day) && new Date(`${day}T00:00:00Z`).toISOString().slice(0, 10) === day;
+  if (!valid) throw new Error("Dates use YYYY-MM-DD.");
+  if (new TextEncoder().encode(text).length > MAX_DECISION_BYTES) throw new Error("Text too long (over 1 MB).");
+  const body = text.trim();
+  if (!body) throw new Error("Text can't be empty.");
+
+  const head = `<strong>${day}</strong> ${escapeHtml(body)}`;
+  const heads = [head, head.replace(/"/g, "&quot;")];
+  const recorded = (content: string) => heads.some((h) => content.includes(`${h}</p>`) || content.includes(`${h}</li>`));
+
+  const db = await getDb();
+  const projects = await db.select<{ name: string }[]>("SELECT name FROM projects WHERE id = $1", [projectId]);
+  if (!projects[0]) throw new Error("Project not found.");
+  const project = projects[0].name;
+
+  const articles = await db.select<{ id: number; title: string; content: string }[]>(
+    "SELECT id, title, content FROM wiki_articles WHERE project_id = $1 ORDER BY id",
+    [projectId],
+  );
+  const hits = articles.filter((a) => fold(a.title.trim()) === fold(DECISIONS_TITLE));
+  if (hits.length > 1) {
+    const list = hits.map((a) => `${a.title} (id ${a.id})`).join(", ");
+    throw new Error(`Several articles match "${DECISIONS_TITLE}": ${list}. Rename one in StudioManager first.`);
+  }
+
+  const found = hits[0];
+  if (!found) {
+    const name = project.trim();
+    const folders = await db.select<{ id: number }[]>(
+      "SELECT id FROM wiki_folders WHERE TRIM(name) = $1 ORDER BY id LIMIT 1",
+      [name],
+    );
+    let folderId = folders[0]?.id;
+    if (folderId === undefined) {
+      const res = await db.execute(
+        "INSERT INTO wiki_folders (name, sort_order) VALUES ($1, (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM wiki_folders))",
+        [name],
+      );
+      folderId = res.lastInsertId ?? 0;
+    }
+    const batch = new TransactionBatch();
+    batch.add(
+      `INSERT INTO wiki_articles (folder_id, project_id, title, content, sort_order)
+       VALUES ($1, $2, $3, $4, (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM wiki_articles WHERE folder_id = $1))`,
+      [folderId, projectId, DECISIONS_TITLE, `<ul><li><p>${head}</p></li></ul>`],
+    );
+    // A tag row is itself an insert, so each tag finds the article by what it is, not by last id.
+    for (const tag of [name, DECISIONS_TITLE.toLowerCase()]) {
+      batch.add(
+        `INSERT OR IGNORE INTO wiki_article_tags (article_id, tag)
+         VALUES ((SELECT MAX(id) FROM wiki_articles WHERE project_id = $1 AND title = $2), $3)`,
+        [projectId, DECISIONS_TITLE, tag],
+      );
+    }
+    const { lastInsertId } = await batch.commit();
+    const created = await db.select<{ id: number }[]>(
+      "SELECT MAX(id) AS id FROM wiki_articles WHERE project_id = $1 AND title = $2",
+      [projectId, DECISIONS_TITLE],
+    );
+    return { articleId: created[0]?.id ?? lastInsertId, added: true };
+  }
+
+  if (recorded(found.content)) return { articleId: found.id, added: false };
+
+  const content = found.content;
+  const end = content.lastIndexOf("</ul>");
+  let next: string;
+  if (end === -1) {
+    next = `${content}<ul><li><p>${head}</p></li></ul>`;
+  } else {
+    const lastLi = content.lastIndexOf("<li", end);
+    // Same form as the list's last item.
+    const tight = lastLi !== -1 && !content.slice(lastLi).startsWith("<li><p>");
+    const li = tight ? `<li>${head}</li>\n` : `<li><p>${head}</p></li>`;
+    next = `${content.slice(0, end)}${li}${content.slice(end)}`;
+  }
+  await updateWikiArticle(found.id, { content: next });
+  return { articleId: found.id, added: true };
+}

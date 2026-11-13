@@ -6,7 +6,7 @@ import { useAppStore } from "../stores/app-store";
 import { setInvokeHandler, invokedCommands, clearInvokedCommands } from "../__mocks__/tauri-api";
 
 let hotkeyError: string | null = null;
-let info: { enabled: boolean; claudePath: string | null; menuBar: boolean; limitAlerts: boolean; briefing?: boolean };
+let info: { enabled: boolean; claudePath: string | null; menuBar: boolean; limitAlerts: boolean; briefing?: boolean; watcher?: boolean; workerCap?: number; dev?: boolean };
 let folderTrusted = false;
 const BRIEFING = "/data/briefing";
 let status: unknown = null;
@@ -30,6 +30,10 @@ beforeEach(() => {
     if (cmd === "agents_trust_folder") return args.folder;
     if (cmd === "agents_set_briefing") {
       info = { ...info, briefing: args.on as boolean };
+      return info;
+    }
+    if (cmd === "agents_set_watcher") {
+      info = { ...info, watcher: args.on as boolean, workerCap: args.cap as number };
       return info;
     }
     if (cmd === "agents_set_menu_bar") {
@@ -203,11 +207,16 @@ describe("AgentsCard", () => {
       expect(screen.getByText("Last brief session failed: 1 capture was not filed")).toBeInTheDocument();
     });
 
-    it("says the 5-hour limit pauses the briefs", async () => {
-      status = { paused: "budget", percent: 84.4, nextAt: null, running: false, last: null };
+    it.each([
+      [{ reason: "five_hour", percent: 84.4 }, "Paused: the 5-hour window is at 84%"],
+      [{ reason: "ahead_of_week", percent: 60.4, line: 42.5 }, "Paused: ahead of the week's pace (60% used, line at 43%)"],
+      [{ reason: "no_data" }, "Paused: no usage reading yet"],
+      [{ reason: "stale", minutesOld: 31 }, "Paused: the last usage reading is 31 minutes old"],
+    ])("words the budget pause %j", async (extra, text) => {
+      status = { paused: "budget", percent: null, line: null, minutesOld: null, nextAt: null, running: false, last: null, ...extra };
       info = { enabled: true, claudePath: "/bin/claude", menuBar: false, limitAlerts: true, briefing: true };
       renderCard();
-      await screen.findByText("Briefs paused: the 5-hour limit is at 84%");
+      await screen.findByText(text);
     });
 
     it("asks for no status while the switch is off", async () => {
@@ -226,6 +235,43 @@ describe("AgentsCard", () => {
       fireEvent.click(sw);
       await waitFor(() => expect(invokedCommands.find((c) => c.cmd === "agents_set_briefing")?.args).toEqual({ on: false }));
       expect(cmds()).not.toContain("agents_briefing_folder");
+    });
+  });
+
+  describe("watcher", () => {
+    it("is disabled while Agents is off", async () => {
+      info = { enabled: false, claudePath: "/bin/claude", menuBar: false, limitAlerts: true, watcher: false, workerCap: 3 };
+      render(<AgentsCard />);
+      expect(await screen.findByRole("switch", { name: "Start work on Ready tasks by itself" })).toBeDisabled();
+    });
+
+    it("switches on with the cap", async () => {
+      info = { enabled: true, claudePath: "/bin/claude", menuBar: false, limitAlerts: true, watcher: false, workerCap: 3 };
+      render(<AgentsCard />);
+      fireEvent.click(await screen.findByRole("switch", { name: "Start work on Ready tasks by itself" }));
+      await waitFor(() => expect(invokedCommands.find((c) => c.cmd === "agents_set_watcher")?.args).toEqual({ on: true, cap: 3 }));
+    });
+
+    it("saves another cap on blur, 1 to 5", async () => {
+      info = { enabled: true, claudePath: "/bin/claude", menuBar: false, limitAlerts: true, watcher: true, workerCap: 3 };
+      render(<AgentsCard />);
+      const cap = await screen.findByRole("spinbutton", { name: "Workers at once" });
+      fireEvent.change(cap, { target: { value: "9" } });
+      fireEvent.blur(cap);
+      await waitFor(() => expect(invokedCommands.find((c) => c.cmd === "agents_set_watcher")?.args).toEqual({ on: true, cap: 5 }));
+    });
+
+    it("the dev build warns that workers use the real plan", async () => {
+      info = { enabled: true, claudePath: "/bin/claude", menuBar: false, limitAlerts: true, watcher: false, workerCap: 3, dev: true };
+      render(<AgentsCard />);
+      await screen.findByText("Dev build: workers use your real Claude plan and the repositories of the projects here");
+    });
+
+    it("no warning outside the dev build", async () => {
+      info = { enabled: true, claudePath: "/bin/claude", menuBar: false, limitAlerts: true, watcher: false, workerCap: 3, dev: false };
+      render(<AgentsCard />);
+      await screen.findByRole("switch", { name: "Start work on Ready tasks by itself" });
+      expect(screen.queryByText(/Dev build/)).toBeNull();
     });
   });
 });

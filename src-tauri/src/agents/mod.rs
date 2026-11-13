@@ -17,6 +17,7 @@ pub mod transcript;
 pub mod uploads;
 pub mod usage;
 pub mod validate;
+pub mod watcher;
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -84,6 +85,7 @@ pub fn init(handle: &tauri::AppHandle) {
     routines::schedule::start(handle);
     briefing::start(handle);
     links::start(handle);
+    watcher::start(handle);
     reminders::start(handle);
     // The morning brief's comments (see brief.rs); started by the Agents switch otherwise.
     if cli::read_settings(&handle.state::<AgentsState>().app_dir).enabled {

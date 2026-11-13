@@ -169,7 +169,17 @@ const MONEY_TOOLS: [&str; 5] = [
     "pnl_summary",
 ];
 
-const CAPTURE_TOOLS: [&str; 5] = ["capture", "list_captures", "file_capture", "set_brief", "report_result"];
+const CAPTURE_TOOLS: [&str; 7] = [
+    "capture",
+    "list_captures",
+    "file_capture",
+    "set_brief",
+    "report_result",
+    "ask",
+    "list_needs_you",
+];
+
+const LEAD_TOOLS: [&str; 3] = ["get_needs_you", "resolve", "hand_over"];
 
 #[test]
 fn stdio_round_trip() {
@@ -184,7 +194,7 @@ fn stdio_round_trip() {
     assert!(instructions.lines().count() <= 8);
 
     let names = server.tool_names();
-    assert_eq!(names.len(), 45, "{names:?}");
+    assert_eq!(names.len(), 47, "{names:?}");
     for t in MONEY_TOOLS.iter().chain(UPKEEP_TOOLS.iter()).chain(CAPTURE_TOOLS.iter()) {
         assert!(names.iter().any(|n| n == t), "missing {t}");
     }
@@ -237,12 +247,35 @@ fn report_result_is_not_listed_in_the_brief_session() {
 }
 
 #[test]
+fn lead_tools_are_listed_and_called_only_when_named() {
+    let dir = seeded(true);
+    let mut server = Server::start(&dir);
+    server.initialize();
+    let names = server.tool_names();
+    for t in LEAD_TOOLS {
+        assert!(!names.iter().any(|n| n == t), "{t} listed");
+    }
+    let res = server.request("tools/call", json!({"name": "resolve", "arguments": {"needs_you_id": 1, "answer": "a", "reason": "r"}}));
+    assert!(res.get("error").is_some(), "{res}");
+    assert!(res.to_string().contains("not available in this session"), "{res}");
+
+    let mut lead = Server::start_with(&dir, Some("get_needs_you,resolve,hand_over"));
+    lead.initialize();
+    let mut names = lead.tool_names();
+    names.sort();
+    assert_eq!(names, vec!["get_needs_you", "hand_over", "resolve"]);
+    let missing = lead.call("get_needs_you", json!({"id": 999}));
+    assert_eq!(missing["isError"], json!(true), "{missing}");
+    assert!(text_of(&missing).contains("No entry with id 999"), "{missing}");
+}
+
+#[test]
 fn money_tools_hidden_when_off_at_startup() {
     let dir = seeded(false);
     let mut server = Server::start(&dir);
     server.initialize();
     let names = server.tool_names();
-    assert_eq!(names.len(), 40, "{names:?}");
+    assert_eq!(names.len(), 42, "{names:?}");
     for t in MONEY_TOOLS {
         assert!(!names.iter().any(|n| n == t), "{t} listed");
     }
