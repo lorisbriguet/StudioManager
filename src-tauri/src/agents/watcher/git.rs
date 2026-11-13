@@ -104,6 +104,9 @@ pub fn add_worktree(g: &dyn Git, folder: &str, kind: ItemKind, id: i64, base: &s
     if !ref_ok(base) {
         return Err("Invalid base branch".to_string());
     }
+    if !Path::new(folder).is_absolute() {
+        return Err("The project folder is not an absolute path".to_string());
+    }
     let word = kind_word(kind);
     let branch = format!("sm/{word}-{id}");
     let path = format!("{}/.claude/worktrees/sm-{word}-{id}", folder.trim_end_matches('/'));
@@ -117,7 +120,7 @@ pub fn add_worktree(g: &dyn Git, folder: &str, kind: ItemKind, id: i64, base: &s
     if exists.code == Some(0) {
         return Err(format!("The branch {branch} already exists"));
     }
-    let o = git(g, folder, &["worktree", "add", "-b", &branch, &path, base]);
+    let o = git(g, folder, &["worktree", "add", "-b", &branch, "--", &path, base]);
     if !succeeded(&o) {
         return Err(first_line(&o, "git worktree add failed"));
     }
@@ -228,11 +231,22 @@ mod tests {
         assert_eq!(w.path, "/nonexistent-folder/poster/.claude/worktrees/sm-subtask-7");
         assert!(g
             .commands()
-            .contains(&format!("worktree add -b sm/subtask-7 {} origin/main", w.path)));
+            .contains(&format!("worktree add -b sm/subtask-7 -- {} origin/main", w.path)));
         let taken = FakeGit::new(|_| out(0, ""));
         let e = add_worktree(&taken, "/nonexistent-folder/poster", ItemKind::Task, 1, "origin/main").unwrap_err();
         assert!(e.contains("already exists"), "{e}");
         assert!(!taken.commands().iter().any(|c| c.starts_with("worktree")), "nothing was made");
+    }
+
+    #[test]
+    fn add_worktree_refuses_a_relative_folder_and_ends_options_before_the_path() {
+        let g = FakeGit::repo();
+        let e = add_worktree(&g, "poster", ItemKind::Task, 1, "origin/main").unwrap_err();
+        assert!(e.contains("absolute"), "{e}");
+        assert!(g.commands().is_empty());
+        let w = add_worktree(&g, "/nonexistent-folder/poster", ItemKind::Task, 2, "origin/main").unwrap();
+        let add = g.commands().into_iter().find(|c| c.starts_with("worktree add")).unwrap();
+        assert_eq!(add, format!("worktree add -b sm/task-2 -- {} origin/main", w.path));
     }
 
     #[test]

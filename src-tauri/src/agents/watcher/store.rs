@@ -128,6 +128,8 @@ fn open_ask_in(conn: &Connection, link_id: i64) -> Result<Option<i64>, String> {
 
 /// The title prefix of the entry a failed start leaves.
 pub const COULD_NOT_START: &str = "Could not start: ";
+/// The entry of an agent that runs but whose link could not be written.
+pub const NOT_LINKED: &str = "The agent started but could not be linked: ";
 
 /// The items with an open "Could not start" entry (decide, open, no link): the watcher skips them.
 pub fn open_could_not_start(db: &Path) -> Result<Vec<(ItemKind, i64)>, String> {
@@ -142,7 +144,7 @@ pub fn open_could_not_start(db: &Path) -> Result<Vec<(ItemKind, i64)>, String> {
     let mut st = conn
         .prepare(
             "SELECT task_id, subtask_id FROM needs_you
-             WHERE kind = 'decide' AND status = 'open' AND link_id IS NULL AND title LIKE 'Could not start: %'",
+             WHERE kind = 'decide' AND status = 'open' AND link_id IS NULL AND (title LIKE 'Could not start: %' OR title LIKE 'The agent started but could not be linked: %')",
         )
         .map_err(e)?;
     let rows = st
@@ -495,5 +497,51 @@ mod tests {
         // A link that cannot be written leaves the stage alone (one transaction).
         let bad = NewLink { item_id: 99, ..link(1) };
         assert!(add_link(&db, &bad).is_err());
+    }
+
+    #[test]
+    fn add_link_is_one_transaction_a_failing_stage_update_undoes_the_link() {
+        let db = migrated("rollback");
+        let c = Connection::open(&db).unwrap();
+        c.execute("INSERT INTO tasks (project_id, title, stage) VALUES (1, 'Poster tool', 'ready')", []).unwrap();
+        c.execute_batch("CREATE TRIGGER nostage BEFORE UPDATE ON tasks BEGIN SELECT RAISE(ABORT, 'no'); END;").unwrap();
+        let link = NewLink {
+            kind: ItemKind::Task,
+            item_id: 1,
+            short_id: "0a1b2c3d".into(),
+            name: "sm-w-task-1".into(),
+            worktree: "/x".into(),
+            base_ref: "origin/main".into(),
+        };
+        assert!(add_link(&db, &link).is_err());
+        let n: i64 = c.query_row("SELECT COUNT(*) FROM task_agents", [], |r| r.get(0)).unwrap();
+        assert_eq!(n, 0, "the insert was rolled back");
+        let stage: String = c.query_row("SELECT stage FROM tasks WHERE id = 1", [], |r| r.get(0)).unwrap();
+        assert_eq!(stage, "ready");
+    }
+
+    #[test]
+    fn add_link_on_a_subtask_writes_the_link_and_the_subtask_stage() {
+        let db = migrated("addlink-sub");
+        let c = Connection::open(&db).unwrap();
+        c.execute("INSERT INTO tasks (project_id, title, stage) VALUES (1, 'Poster tool', 'ready')", []).unwrap();
+        c.execute("INSERT INTO subtasks (task_id, title, stage) VALUES (1, 'Contact sheet export', 'ready')", []).unwrap();
+        c.execute("INSERT INTO subtasks (task_id, title, stage, status) VALUES (1, 'Done sub', 'ready', 'done')", []).unwrap();
+        let link = |id| NewLink {
+            kind: ItemKind::Subtask,
+            item_id: id,
+            short_id: "0a1b2c3d".into(),
+            name: format!("sm-w-subtask-{id}"),
+            worktree: "/x".into(),
+            base_ref: "origin/main".into(),
+        };
+        add_link(&db, &link(1)).unwrap();
+        add_link(&db, &link(2)).unwrap();
+        let stage = |id: i64| -> String { c.query_row("SELECT stage FROM subtasks WHERE id = ?1", [id], |r| r.get(0)).unwrap() };
+        assert_eq!((stage(1).as_str(), stage(2).as_str()), ("running", "ready"), "a done subtask keeps its stage");
+        let task_stage: String = c.query_row("SELECT stage FROM tasks WHERE id = 1", [], |r| r.get(0)).unwrap();
+        assert_eq!(task_stage, "ready", "the parent task is not touched");
+        let links = open_watcher_links(&db, "o").unwrap();
+        assert_eq!(links.iter().map(|l| (l.kind, l.item_id)).collect::<Vec<_>>(), vec![(ItemKind::Subtask, 1), (ItemKind::Subtask, 2)]);
     }
 }

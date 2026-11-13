@@ -348,6 +348,8 @@ pub struct Memory {
     pending: Option<start::Pending>,
     /// `git` verdicts of this pass.
     repos: HashMap<String, bool>,
+    /// Items whose entry could not be written: skipped for this process.
+    skip: start::Skip,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -376,6 +378,16 @@ fn save_pending(d: &Deps, mem: &Memory) {
     }
 }
 
+/// `read_pass` with this process's skipped items marked as failed.
+fn fresh(d: &Deps, lock: LockState, mem: &Memory) -> Pass {
+    let mut pass = read_pass(d, lock, usize::from(mem.pending.is_some()));
+    for c in &mut pass.candidates {
+        let key = (c.org.clone(), git::kind_word(c.item.kind), c.item.id);
+        c.failed |= mem.skip.contains(&key);
+    }
+    pass
+}
+
 /// One pass. In the demo build it returns before any file is read. Without `env` nothing is
 /// started (the pass only looks). Something starts only when this thread holds the lock.
 pub fn tick(d: &Deps, mem: &mut Memory, env: Option<&start::Env>) -> Report {
@@ -402,22 +414,22 @@ pub fn tick(d: &Deps, mem: &mut Memory, env: Option<&start::Env>) -> Report {
             LockState::Other
         }
     };
-    let mut pass = read_pass(d, lock, usize::from(mem.pending.is_some()));
+    let mut pass = fresh(d, lock, mem);
     mem.repos.clear();
     if lock == LockState::Held && pass.gate.is_none() {
         if let Some(env) = env {
             let before = mem.pending.clone();
-            if start::resolve_pending(d, &mut mem.pending, mem.started) {
+            if start::resolve_pending(d, &mut mem.pending, mem.started, &mut mem.skip) {
                 // The adopted link or the entry of a lost start changes what may start.
-                pass = read_pass(d, lock, usize::from(mem.pending.is_some()));
+                pass = fresh(d, lock, mem);
             }
             // No process at all unless a start is allowed: a pass paused by the budget or the cap
             // asks `git` nothing.
             let room = pass.access && start::may_start(None, &pass.budget, pass.running, pass.cap);
             if mem.pending.is_none() && room {
                 fill_repos(&pass, env.git, &mut mem.repos);
-                if start::step(env, d, &pass, &mem.repos, &mut mem.pending) != start::Step::Idle {
-                    pass = read_pass(d, lock, usize::from(mem.pending.is_some()));
+                if start::step(env, d, &pass, &mem.repos, &mut mem.pending, &mut mem.skip) != start::Step::Idle {
+                    pass = fresh(d, lock, mem);
                 }
             }
             if mem.pending != before {
