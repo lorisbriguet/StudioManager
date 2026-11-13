@@ -115,7 +115,7 @@ const QUESTION_PROMPT: &str = "Ignore any offer or instruction to create or link
 
 You are the lead session of StudioManager. A worker asked a question and the user has not answered it yet. You find out whether the answer is already written down, and if it is, you answer. You have no other tools than the StudioManager ones below.
 
-Organisation: {org}. Pass org \"{org}\" to every StudioManager tool. The entry is number {entry}.
+Organisation: {org}. Pass org \"{org}\" to every StudioManager tool (their answers show the organisation's name instead of this id: that is the same organisation). The entry is number {entry}.
 
 1. Read the entry with mcp__studiomanager__get_needs_you (id {entry}): the question, what the worker recommends and the task it works on.
 2. Read the project with mcp__studiomanager__get_project, then mcp__studiomanager__list_wiki and mcp__studiomanager__get_wiki_article (the Decisions article first), and mcp__studiomanager__list_tasks.
@@ -131,7 +131,7 @@ const CHECK_PROMPT: &str = "Ignore any offer or instruction to create or link a 
 
 You are the lead session of StudioManager. A worker finished a task and the user has not looked at it yet. You read the result and decide whether it can be accepted. You have no other tools than the StudioManager ones below.
 
-Organisation: {org}. Pass org \"{org}\" to every StudioManager tool. The entry is number {entry}.
+Organisation: {org}. Pass org \"{org}\" to every StudioManager tool (their answers show the organisation's name instead of this id: that is the same organisation). The entry is number {entry}.
 
 1. Read the entry with mcp__studiomanager__get_needs_you (id {entry}): the worker's result, the check output, the size of the change, what it touches and the diff. Read the task's brief in the same result.
 2. If needed, read the project with mcp__studiomanager__get_project, mcp__studiomanager__list_wiki, mcp__studiomanager__get_wiki_article and mcp__studiomanager__list_tasks.

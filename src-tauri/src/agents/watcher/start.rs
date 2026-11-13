@@ -150,7 +150,7 @@ pub fn worker_prompt(org: &str, item: &ReadyItem, worktree: &Worktree) -> String
 
 You are a worker started by StudioManager, on your own, to do one {word} in a git worktree.
 
-Organisation: {org}. Pass org \"{org}\" to every StudioManager tool.
+Organisation: {org}. Pass org \"{org}\" to every StudioManager tool. Their answers show the organisation's name instead of this id: that is the same organisation.
 Your {word}: {id} \"{title}\" (project {project}).
 Worktree: {path}
 Branch: {branch}
@@ -190,10 +190,24 @@ pub fn hook_settings(app_dir: &Path, mcp_path: &str, dev: bool) -> Result<PathBu
     Ok(file)
 }
 
+/// The StudioManager tools a worker calls without a permission prompt: nobody is there to answer
+/// one, and the owner's settings may allow none of them. Reading its job, asking, handing in.
+pub const WORKER_TOOLS: [&str; 6] = [
+    "mcp__studiomanager__list_tasks",
+    "mcp__studiomanager__get_project",
+    "mcp__studiomanager__list_wiki",
+    "mcp__studiomanager__get_wiki_article",
+    "mcp__studiomanager__ask",
+    "mcp__studiomanager__report_result",
+];
+
 /// The extra `claude --bg` arguments: this build's own server in the dev build (part 2), the
-/// hook file, and edits without a prompt.
+/// tools allowed without a prompt, the hook file, and edits without a prompt.
 pub fn worker_args(dev: bool, app_dir: &Path, mcp_path: &str, hook_settings: &Path) -> Result<Vec<String>, String> {
     let mut a = actions::task_agent_args(dev, true, app_dir, mcp_path)?;
+    // The list ends at the next flag.
+    a.push("--allowedTools".to_string());
+    a.extend(WORKER_TOOLS.iter().map(|t| t.to_string()));
     a.push("--settings".to_string());
     a.push(hook_settings.to_string_lossy().into_owned());
     a.push("--permission-mode".to_string());
@@ -758,8 +772,10 @@ mod tests {
         let r = go(&f, &[], &mut mem);
         assert_eq!(adds(&f), 1, "the worktree was made before the start failed");
         assert_eq!(r.outlook.paused, Some(Paused::NotStartable { title: "Poster tool".into(), reason: "failed_start" }));
+        assert!(r.changed, "the new entry is told to the screens");
         for _ in 0..10 {
             let r = go(&f, &[], &mut mem);
+            assert!(!r.changed, "a pass that wrote nothing says so");
             assert!(matches!(r.outlook.paused, Some(Paused::NotStartable { reason: "failed_start", .. })));
         }
         assert_eq!(f.cli.calls().len(), 1, "no second start");
@@ -808,6 +824,11 @@ mod tests {
         let hook = f.dir.join("watcher/hook-settings.json");
         assert_eq!(argv[pos("--settings").unwrap() + 1], hook.to_string_lossy());
         assert_eq!(argv[pos("--permission-mode").unwrap() + 1], "acceptEdits");
+        // Asking and handing in never wait at a permission prompt; the list ends at a flag.
+        let allowed = pos("--allowedTools").unwrap();
+        assert_eq!(&argv[allowed + 1..allowed + 1 + WORKER_TOOLS.len()], WORKER_TOOLS);
+        assert_eq!(argv[allowed + 1 + WORKER_TOOLS.len()], "--settings");
+        assert!(WORKER_TOOLS.contains(&"mcp__studiomanager__ask") && WORKER_TOOLS.contains(&"mcp__studiomanager__report_result"));
         assert!(pos("--mcp-config").is_none());
         assert_eq!(argv[argv.len() - 2], "--");
         assert!(argv.last().unwrap().contains("Branch: sm/task-1"));

@@ -606,12 +606,19 @@ mod tests {
                 "opus",
                 "--name",
                 "sm-w-task-1",
+                "--allowedTools",
+                "mcp__studiomanager__list_tasks",
+                "mcp__studiomanager__get_project",
+                "mcp__studiomanager__list_wiki",
+                "mcp__studiomanager__get_wiki_article",
+                "mcp__studiomanager__ask",
+                "mcp__studiomanager__report_result",
                 "--settings",
                 hook.to_string_lossy().as_ref(),
                 "--permission-mode",
                 "acceptEdits",
             ],
-            "the same arguments as the start: the hook, edits without a prompt"
+            "the same arguments as the start: the allowed tools, the hook, edits without a prompt"
         );
         assert_eq!(calls.len(), 2);
         let sent = f.sent.lock().unwrap().clone();

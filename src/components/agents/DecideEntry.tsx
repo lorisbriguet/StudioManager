@@ -44,6 +44,8 @@ export function DecideEntry({ entry: e }: { entry: NeedsYouEntry }) {
   // An agent waiting at a prompt is answered in the agent itself; an entry with no agent and no
   // options (the app could not start a worker) only says what happened.
   const simple = e.lead_state === "prompt" || (e.link_id == null && options.length === 0);
+  // An entry the app wrote says what happened in its title (a worker's question has the item's).
+  const headline = e.item_title != null && e.title !== e.item_title ? e.title : null;
 
   const record = async (answer: string) => {
     try {
@@ -101,7 +103,8 @@ export function DecideEntry({ entry: e }: { entry: NeedsYouEntry }) {
         <span aria-hidden>·</span>
         <span>{formatDisplayDateTime(e.created_at)}</span>
       </div>
-      <p className="mt-1 text-sm font-medium whitespace-pre-wrap">{e.body}</p>
+      {headline && <p className="mt-1 text-sm font-medium whitespace-pre-wrap">{headline}</p>}
+      <p className={`whitespace-pre-wrap text-sm ${headline ? "text-muted" : "mt-1 font-medium"}`}>{e.body}</p>
       {e.recommendation && (
         <p className="mt-1 text-sm">
           <span className="font-medium">{t.decide_recommended.replace("{text}", e.recommendation)}</span>

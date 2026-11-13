@@ -365,6 +365,30 @@ describe("Needs you: Decide", () => {
     expect(hooks.dismiss).toHaveBeenCalledWith(5);
   });
 
+  it("an entry the app wrote shows its own title as the headline (why a worker could not start)", () => {
+    hooks.open = [
+      row({
+        link_id: null,
+        session_id: null,
+        short_id: null,
+        options: null,
+        recommendation: null,
+        reason: null,
+        title: "Could not start: Folder not trusted",
+        body: "The watcher could not start a worker.",
+      }),
+    ];
+    setup([]);
+    expect(screen.getByText("Could not start: Folder not trusted")).toBeInTheDocument();
+    expect(screen.getByText("The watcher could not start a worker.")).toBeInTheDocument();
+  });
+
+  it("a worker's question, titled like its item, shows no second headline", () => {
+    hooks.open = [row({ title: "Export presets", item_title: "Export presets" })];
+    setup([]);
+    expect(screen.getAllByText("Export presets")).toHaveLength(1);
+  });
+
   it("an entry with a link and no lead state still offers Answer in words (an idle worker is told what to do)", () => {
     hooks.open = [row({ options: null, recommendation: null, reason: null })];
     setup([]);

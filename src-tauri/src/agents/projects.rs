@@ -115,14 +115,36 @@ pub struct StartFolder {
     pub home: bool,
 }
 
-/// `folder` is trusted when it, or a folder above it, is: Claude Code's own rule
-/// (trust given to a folder covers everything inside it).
+fn covers(above: &str, folder: &str) -> bool {
+    let (above, folder) = (trim_slash(above), trim_slash(folder));
+    folder == above || (folder.starts_with(above) && (above.ends_with('/') || folder[above.len()..].starts_with('/')))
+}
+
+/// The root of the git repository `folder` is in, if any: the nearest folder at or above it
+/// that holds `.git`. For a linked worktree (`.git` is a file naming `<root>/.git/worktrees/…`)
+/// it is the root of the repository the worktree belongs to.
+fn repo_root(folder: &str) -> Option<String> {
+    let at = Path::new(folder).ancestors().find(|a| a.join(".git").exists())?;
+    let main = std::fs::read_to_string(at.join(".git")).ok().and_then(|text| {
+        let dir = text.lines().find_map(|l| l.strip_prefix("gitdir:"))?.trim().to_string();
+        let end = dir.find("/.git/worktrees/")?;
+        Some(dir[..end].to_string())
+    });
+    Some(main.unwrap_or_else(|| at.to_string_lossy().to_string()))
+}
+
+/// `folder` is trusted when it, or a folder above it, is: Claude Code's own rule (trust given
+/// to a folder covers everything inside it). Inside a git repository Claude looks no higher than
+/// the repository's root, so trust on a folder above a repository (the home folder) does not
+/// cover it; a linked worktree is covered by its repository.
 pub fn is_trusted(trusted: &[String], folder: &str) -> bool {
-    let folder = trim_slash(folder);
+    let root = repo_root(folder);
     trusted.iter().any(|t| {
-        let t = trim_slash(t);
-        folder == t
-            || (folder.starts_with(t) && (t.ends_with('/') || folder[t.len()..].starts_with('/')))
+        if !covers(t, folder) && !root.as_deref().is_some_and(|r| trim_slash(t) == trim_slash(r)) {
+            return false;
+        }
+        // In a repository: only trust given at its root or below counts.
+        root.as_deref().map_or(true, |r| covers(r, t))
     })
 }
 
@@ -414,6 +436,35 @@ mod tests {
         assert_eq!(paths, vec!["/la", "/lb/sub", "/a", "/z"]);
         assert!(out[2].label.is_none());
         assert!(out.iter().all(|f| f.trusted));
+    }
+
+    #[test]
+    fn trust_above_a_repository_does_not_cover_it() {
+        let home = std::fs::canonicalize(temp_dir("repo-trust")).unwrap();
+        let s = |p: &std::path::Path| p.to_string_lossy().to_string();
+        let repo = home.join("code/repo");
+        let sub = repo.join("docs");
+        let plain = home.join("notes/a");
+        let wt = repo.join(".claude/worktrees/w1");
+        for d in [&sub, &plain, &wt, &repo.join(".git/worktrees/w1")] {
+            std::fs::create_dir_all(d).unwrap();
+        }
+        std::fs::write(wt.join(".git"), format!("gitdir: {}\n", s(&repo.join(".git/worktrees/w1")))).unwrap();
+        // Trust on the folder above: a plain folder is covered, a repository inside it is not.
+        let above = vec![s(&home)];
+        assert!(is_trusted(&above, &s(&plain)));
+        assert!(!is_trusted(&above, &s(&repo)));
+        assert!(!is_trusted(&above, &s(&sub)));
+        assert!(!is_trusted(&above, &s(&wt)));
+        // Trust on the repository covers its folders and its linked worktrees.
+        let on_repo = vec![s(&home), s(&repo)];
+        assert!(is_trusted(&on_repo, &s(&repo)));
+        assert!(is_trusted(&on_repo, &s(&sub)));
+        assert!(is_trusted(&on_repo, &s(&wt)));
+        // Trust on a folder inside the repository covers that folder only.
+        let inside = vec![s(&sub)];
+        assert!(is_trusted(&inside, &s(&sub)));
+        assert!(!is_trusted(&inside, &s(&repo)));
     }
 
     #[test]

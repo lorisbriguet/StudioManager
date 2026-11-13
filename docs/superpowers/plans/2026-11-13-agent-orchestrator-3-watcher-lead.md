@@ -470,3 +470,23 @@ To know before switching it on:
 - Workers get a worktree under `<project>/.claude/worktrees/`; a project that does not ignore that folder sees it as untracked.
 - A project folder that is a subfolder of a larger repository gets a worktree of the whole repository.
 - **Left for later:** the at-prompt, idle and awaiting timers are in memory (a restart delays an entry by its threshold); a dismissed idle entry can come back after a restart; a crash between the lead's decision and its message leaves the worker waiting until the idle rule lists it.
+
+## Changed after the hand check (Task 12, step 5)
+
+The six steps were run in the dev build on a test repository with two workers and three lead sessions. All six pass after these changes:
+
+- **Trust is checked at the repository, not above it.** Claude accepts a trusted folder for its subfolders but not for a git repository inside it, so a trusted home folder let the watcher make a worktree and a branch before `claude --bg` refused. `is_trusted` now stops at the repository root; the entry says "Folder not trusted" before anything is made. A linked worktree of a trusted repository is accepted (tried on a real session).
+- **A "Could not start" entry shows its reason**: an entry the app wrote shows its own title as the headline.
+- **The watcher's writes refresh the screens**: a pass that changed something emits `db-changed`, so Needs you and the status line update without a restart.
+- **A worker's StudioManager tools are allowed in its arguments** (`--allowedTools`: reading its job, `ask`, `report_result`). Without it a worker waited at a permission prompt for `report_result` unless the owner's settings allowed it.
+- **The message sent back after a failed check names the command**, and says so when it printed nothing.
+- **The prompts say the tools answer with the organisation's name**, not the id they are given: the worker and the lead both reported it as a mismatch.
+
+Seen and left as they are:
+
+- A task typed by hand has no brief box and no stage menu until it has a brief (the agent panel is hidden): its brief can only come from an agent or the server.
+- Test mode can only be entered in the demo build, so step 6 was checked with the mode file beside another organisation's database.
+- The lead's recommendation is a sentence, so no option button is shown as the recommended one.
+- A worker waiting for an answer may call `report_result` to save where it stands (the Stop hook asks for a result). The open question keeps the check from running.
+- The worker prompt always asks for a push and a pull request; a repository with no remote relies on the brief to say otherwise.
+- The resume of a worker with no process was still not tried on a real session.

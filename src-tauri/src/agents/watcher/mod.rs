@@ -400,6 +400,8 @@ pub struct Memory {
 pub struct Report {
     pub outlook: Outlook,
     pub noticed: Vec<Noticed>,
+    /// The pass wrote to a database (an entry, a link, a stage): the screens read again.
+    pub changed: bool,
 }
 
 /// What the last pass found, for `watcher_status`, which spawns no process.
@@ -469,7 +471,7 @@ fn sync_link_ids(d: &Deps, links: &[(PathBuf, WatcherLink)]) -> bool {
 /// started (the pass only looks). Something starts only when this thread holds the lock.
 pub fn tick(d: &Deps, mem: &mut Memory, env: Option<&start::Env>) -> Report {
     if d.demo {
-        return Report { outlook: outlook(d, &Known { lock: LockState::Unknown, pending: 0, repos: &mem.repos }), noticed: vec![] };
+        return Report { outlook: outlook(d, &Known { lock: LockState::Unknown, pending: 0, repos: &mem.repos }), noticed: vec![], changed: false };
     }
     if !mem.loaded {
         mem.loaded = true;
@@ -496,12 +498,14 @@ pub fn tick(d: &Deps, mem: &mut Memory, env: Option<&start::Env>) -> Report {
     };
     let mut pass = fresh(d, lock, mem);
     let mut refreshed: Option<Fresh> = None;
+    let mut changed = false;
     mem.repos.clear();
     if lock == LockState::Held && pass.gate.is_none() {
         if let Some(env) = env {
             let before = mem.pending.clone();
             if start::resolve_pending(d, &mut mem.pending, mem.started, &mut mem.skip) {
                 // The adopted link or the entry of a lost start changes what may start.
+                changed = true;
                 pass = fresh(d, lock, mem);
             }
             // No process at all unless a start is allowed: a pass paused by the budget or the cap
@@ -510,6 +514,7 @@ pub fn tick(d: &Deps, mem: &mut Memory, env: Option<&start::Env>) -> Report {
             if mem.pending.is_none() && room {
                 fill_repos(&pass, env.git, &mut mem.repos);
                 if start::step(env, d, &pass, &mem.repos, &mut mem.pending, &mut mem.skip) != start::Step::Idle {
+                    changed = true;
                     pass = fresh(d, lock, mem);
                 }
             }
@@ -519,10 +524,11 @@ pub fn tick(d: &Deps, mem: &mut Memory, env: Option<&start::Env>) -> Report {
             // The listed agent's ids on the links: a worker's question needs its session id, and a
             // copy made by a resume has its own short id.
             if sync_link_ids(d, &pass.links) {
+                changed = true;
                 pass = fresh(d, lock, mem);
             }
             // A finished worker's check: not gated by the budget (no model is used).
-            check::step(env, d, mem, &pass.links);
+            changed |= check::step(env, d, mem, &pass.links);
             // A check can run for ten minutes: what follows uses the time and the list read again,
             // and stops at once when the settings or the mode closed the gate meanwhile.
             refreshed = d.refresh.map(|r| r());
@@ -531,14 +537,17 @@ pub fn tick(d: &Deps, mem: &mut Memory, env: Option<&start::Env>) -> Report {
             if pass.gate.is_none() {
                 // A checked and decided link is ended, so its place is free.
                 if close::step(env, &d, mem, &pass.links) {
+                    changed = true;
                     pass = fresh(&d, lock, mem);
                 }
                 // Stuck, at a prompt, idle or old: resume, an entry for the owner, or wrap up.
                 if act::step(env, &d, mem, &pass.budget, &pass.links) {
+                    changed = true;
                     pass = fresh(&d, lock, mem);
                 }
                 // A short lead session for one waiting entry, and what the lead wrote carried out.
                 if lead::step(env, &d, mem, &pass) {
+                    changed = true;
                     pass = fresh(&d, lock, mem);
                 }
             }
@@ -555,7 +564,7 @@ pub fn tick(d: &Deps, mem: &mut Memory, env: Option<&start::Env>) -> Report {
     if !watching {
         mem.seen.clear();
     }
-    Report { outlook, noticed }
+    Report { outlook, noticed, changed }
 }
 
 /// What each open watcher link needs attention for. Stuck is false here: it needs the transcript,
@@ -702,6 +711,13 @@ fn check(app: &AppHandle, mem: &mut Memory) {
         mem,
         Some(&env),
     );
+    // The screens read again: the Needs you list, the tasks' stages and the agent links.
+    if report.changed {
+        use tauri::Emitter;
+        if let Err(e) = app.emit(crate::agent_access::CHANGED_EVENT, ["watcher"]) {
+            log::warn!("[watcher] emit {}: {e}", crate::agent_access::CHANGED_EVENT);
+        }
+    }
     if let Ok(mut last) = LAST_NOTICED.lock() {
         if *last != report.noticed {
             for n in &report.noticed {

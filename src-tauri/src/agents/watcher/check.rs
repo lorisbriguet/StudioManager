@@ -494,7 +494,11 @@ fn handle(
                 return (false, true);
             }
             Ok(_) => {
-                let message = format!("The check command failed. Fix it, then call report_result again. Output:\n{output}");
+                // The worker never saw the command, and a failure may print nothing.
+                let shown = if output.trim().is_empty() { "(nothing printed)" } else { output.as_str() };
+                let message = format!(
+                    "The check command failed. Fix it, then call report_result again.\nCommand, run in your worktree: {command}\nOutput:\n{shown}"
+                );
                 match (env.send)(agent, &message) {
                     Ok(()) => {
                         let _shared = crate::org_shared();
@@ -862,7 +866,9 @@ mod tests {
         go(&f, DONE, &mut mem, 10);
         let sent = f.sent.lock().unwrap().clone();
         assert_eq!(sent.len(), 1);
-        assert!(sent[0].starts_with("The check command failed. Fix it, then call report_result again. Output:\n"));
+        assert!(sent[0].starts_with(
+            "The check command failed. Fix it, then call report_result again.\nCommand, run in your worktree: echo lint failed; false\nOutput:\n"
+        ));
         assert!(sent[0].contains("lint failed"));
         assert_eq!(entries(&f), 0, "no Check entry yet");
         assert_eq!(one::<i64>(&f.db, "SELECT check_fails FROM task_agents"), 1);
