@@ -90,6 +90,12 @@ pub fn touches(paths: &[String], deleted: &[String]) -> Vec<&'static str> {
     }) {
         out.push("money");
     }
+    // `git diff --name-status` writes a path with non-ASCII characters, quotes, backslashes or
+    // control characters C-quoted (`"migrations/\\303\\251.sql"`): no pattern can read it, so it is
+    // refused rather than unquoted.
+    if all().any(|p| p.starts_with('"') || p.chars().any(|c| c == '\\' || c.is_control())) {
+        out.push("unusual path");
+    }
     if !deleted.is_empty() {
         out.push("deleting");
     }
@@ -168,7 +174,8 @@ pub fn may_merge(r: &MergeRules, d: &DiffFacts, pr: &PrFacts, base_branch: &str,
         return Err(Refusal::LeadDoesNotAccept);
     }
     match d.lines {
-        Some(n) if d.complete => {
+        // An empty change, or a size with no path to go with it, is never merged alone.
+        Some(n) if d.complete && n >= 1 && !d.paths.is_empty() => {
             if n >= MERGE_LINES {
                 return Err(Refusal::TooBig(n));
             }
@@ -188,7 +195,7 @@ pub fn may_merge(r: &MergeRules, d: &DiffFacts, pr: &PrFacts, base_branch: &str,
     if pr.draft {
         return Err(Refusal::PrDraft);
     }
-    if pr.base != base_branch {
+    if base_branch.is_empty() || pr.base.is_empty() || pr.base != base_branch {
         return Err(Refusal::PrOtherBase);
     }
     if head.is_empty() || !pr.head.eq_ignore_ascii_case(head) {
@@ -279,7 +286,7 @@ fn check_url(g: &dyn Git, worktree: &str, url: &str) -> Result<(), String> {
 }
 
 /// `gh pr view <url> --json state,isDraft,headRefOid,baseRefName`, after the url checks. The
-/// output interleaves stdout and stderr, so the JSON is the last line that parses as an object.
+/// output interleaves stdout and stderr, so the JSON is the last line that is an object holding `state` and `headRefOid`.
 pub fn pr_facts(g: &dyn Git, worktree: &str, url: &str) -> Result<PrFacts, String> {
     check_url(g, worktree, url)?;
     let o = gh(g, worktree, &["pr", "view", url, "--json", "state,isDraft,headRefOid,baseRefName"]);
@@ -291,7 +298,7 @@ pub fn pr_facts(g: &dyn Git, worktree: &str, url: &str) -> Result<PrFacts, Strin
         .lines()
         .rev()
         .filter_map(|l| serde_json::from_str::<serde_json::Value>(l.trim()).ok())
-        .find(|v| v.is_object())
+        .find(|v| v.get("state").is_some() && v.get("headRefOid").is_some())
         .ok_or_else(|| "gh pr view gave no JSON".to_string())?;
     let text = |k: &str| v.get(k).and_then(|x| x.as_str()).map(str::to_string).ok_or_else(|| format!("gh pr view gave no {k}"));
     let draft = v.get("isDraft").and_then(|x| x.as_bool()).ok_or_else(|| "gh pr view gave no isDraft".to_string())?;
@@ -540,7 +547,7 @@ mod tests {
         assert_eq!(ask(&r, &d, &p), Err(Refusal::SizeUnknown));
         let d = DiffFacts { lines: Some(5), complete: true, ..d };
         assert!(matches!(ask(&r, &d, &p), Err(Refusal::Touches(_))));
-        let d = DiffFacts { paths: vec![], deleted: vec![], ..d };
+        let d = DiffFacts { paths: s(&["src/a.ts"]), deleted: vec![], ..d };
         assert_eq!(ask(&r, &d, &p), Err(Refusal::Dirty));
         let d = DiffFacts { clean: true, ..d };
         assert_eq!(ask(&r, &d, &p), Err(Refusal::PrState("CLOSED".into())));
@@ -625,6 +632,66 @@ mod tests {
         let g = fake("git@github.com:Studio-A/Poster-Tool.git\n", out(0, VIEW));
         assert_eq!(pr_facts(&g, "/w", URL).unwrap(), pr());
         assert_eq!(g.gh_calls(), vec![format!("pr view {URL} --json state,isDraft,headRefOid,baseRefName")]);
+    }
+
+    #[test]
+    fn pr_facts_takes_the_object_that_has_the_fields_not_a_later_json_warning() {
+        let tail = format!("{VIEW}{{\"warning\":\"a new release of gh is available\"}}\n[1,2]\n");
+        assert_eq!(pr_facts(&fake(ORIGIN, out(0, &tail)), "/w", URL).unwrap(), pr());
+    }
+
+    #[test]
+    fn merge_rule_an_unusual_path_is_never_merged_alone() {
+        // `git diff --name-status` writes such a path C-quoted, so no pattern can read it: it is refused.
+        for p in ["\"migrations/\\303\\251.sql\"", "src/a\\b.ts", "src/a\tb.ts", "\"x\""] {
+            let t = touches(&s(&[p]), &[]);
+            assert!(t.contains(&"unusual path"), "{p}: {t:?}");
+            assert!(touches(&[], &s(&[p])).contains(&"unusual path"), "{p} deleted");
+        }
+        let d = with_paths(&["\"migrations/\\303\\251.sql\""]);
+        assert_eq!(ask(&rules(), &d, &pr()).unwrap_err().text(), "it touches: unusual path");
+        // After `money`, before `deleting`.
+        assert_eq!(touches(&s(&["\"invoice\\303\\251\""]), &s(&["x"])), vec!["money", "unusual path", "deleting"]);
+        assert!(touches(&s(&["src/poster.ts"]), &[]).is_empty());
+    }
+
+    #[test]
+    fn merge_rule_an_empty_base_or_an_empty_pull_request_field_refuses() {
+        assert_eq!(may_merge(&rules(), &facts(), &pr(), "", SHA), Err(Refusal::PrOtherBase));
+        let no_base = PrFacts { base: String::new(), ..pr() };
+        assert_eq!(may_merge(&rules(), &facts(), &no_base, "", SHA), Err(Refusal::PrOtherBase));
+        assert_eq!(may_merge(&rules(), &facts(), &no_base, "main", SHA), Err(Refusal::PrOtherBase));
+        assert_eq!(ask(&rules(), &facts(), &PrFacts { state: String::new(), ..pr() }), Err(Refusal::PrState(String::new())));
+        assert_eq!(ask(&rules(), &facts(), &PrFacts { head: String::new(), ..pr() }), Err(Refusal::PrOtherHead));
+    }
+
+    #[test]
+    fn merge_rule_an_empty_change_is_never_merged_alone() {
+        let zero = DiffFacts { lines: Some(0), ..facts() };
+        assert_eq!(ask(&rules(), &zero, &pr()), Err(Refusal::SizeUnknown));
+        let no_paths = DiffFacts { lines: Some(5), paths: vec![], ..facts() };
+        assert_eq!(ask(&rules(), &no_paths, &pr()), Err(Refusal::SizeUnknown));
+        assert_eq!(ask(&rules(), &DiffFacts { lines: Some(1), ..facts() }, &pr()), Ok(()));
+    }
+
+    #[test]
+    fn merge_rule_more_matcher_cases() {
+        let cases: &[(&str, &str)] = &[
+            ("migrations", "db/schema.SQL"),
+            ("money", "docs/INVOICE.md"),
+            ("dependencies", "./package.json"),
+            ("release", "tools/scripts/release-notes.md"),
+            ("release", "sub/.github/x"),
+        ];
+        for (rule, path) in cases {
+            let t = touches(&s(&[path]), &[]);
+            assert!(t.contains(rule), "{path} should touch {rule}, got {t:?}");
+        }
+        // Intended: a FILE named like a folder rule is not a folder match (the rule is about what is
+        // inside the folder), so these are not refused by the pattern.
+        for path in ["src/migrations", ".claude", "docs/.claude"] {
+            assert!(touches(&s(&[path]), &[]).is_empty(), "{path}");
+        }
     }
 
     #[test]

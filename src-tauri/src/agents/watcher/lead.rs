@@ -491,7 +491,7 @@ fn one_line(e: &str) -> String {
 /// did not pass, no pull request url, no usage budget); then the facts from `git` and `gh pr
 /// view` through `merge::may_merge`; then the check command run again on this very commit (the
 /// entry does not say which commit the first check saw), with HEAD and the worktree unchanged
-/// after it; then the gate read again, because the check can take ten minutes; then the entry's
+/// after it and the pull request read again and asked the same rules; then the gate read again, because the check can take ten minutes; then the entry's
 /// delivery is claimed (so a crash never merges twice) and `gh pr merge` runs once. A failed merge
 /// is never retried: the entry is open again and is not carried out again.
 ///
@@ -544,16 +544,24 @@ fn accept(env: &Env, d: &Deps, budget: &Budget, link: Option<&WatcherLink>, db: 
     if let Err(refusal) = merge::may_merge(&rules, &diff, &pr, base_branch, &head) {
         return no(&refusal.text());
     }
-    let lines = diff.lines.unwrap_or_default();
     // The check again, on this head: the entry does not store the commit the first check ran on.
     if !run_check(command, worktree, &(env.path_env)()).passed {
         return no("the check did not pass when run again on the commit to merge");
     }
-    let unchanged = merge::head_of(env.git, worktree).is_ok_and(|h| h == head)
-        && diff_facts(env.git, worktree, base_ref).is_ok_and(|f| f.clean && f.complete);
-    if !unchanged {
+    let again = diff_facts(env.git, worktree, base_ref).ok().filter(|f| f.clean && f.complete);
+    let Some(again) = again.filter(|_| merge::head_of(env.git, worktree).is_ok_and(|h| h == head)) else {
         return no("the worktree changed during the check");
+    };
+    // The pull request may have been closed, made a draft or retargeted while the check ran: read
+    // it again and ask the same rules, with the facts of the second diff.
+    let pr = match merge::pr_facts(env.git, worktree, url) {
+        Ok(p) => p,
+        Err(err) => return no(&one_line(&err)),
+    };
+    if let Err(refusal) = merge::may_merge(&rules, &again, &pr, base_branch, &head) {
+        return no(&refusal.text());
     }
+    let lines = again.lines.unwrap_or_default();
     // The check can take ten minutes: with the gate closed meanwhile (demo, a switch, a mode) the
     // entry stays as it is and a later pass looks at it again.
     if d.demo || super::settings_and_gate(d, false).1.is_some() {
@@ -583,9 +591,12 @@ fn accept(env: &Env, d: &Deps, budget: &Budget, link: Option<&WatcherLink>, db: 
         let _shared = crate::org_shared();
         store::finish_merged(db, link.kind, link.item_id, link.id, &format!("Merged: check passed, {lines} lines"), &why)
     };
-    // The merge happened: a failed write is a warning, never a reason to merge again.
+    // The merge happened: a failed write is a warning, never a reason to merge again. The owner is
+    // told once (a reopened entry is `open`, so `carry_out` never takes it again); when that write
+    // fails too, only the warning stays.
     if let Err(err) = recorded {
         warn("merged, but could not record it", &err);
+        reopen(db, e.id, &format!("Merged pull request {url}, but the app could not record it: mark the task done by hand."));
     }
     // A worker still listed and not done is stopped, never deleted; a failed stop is a warning.
     let listed = d.listed_at.is_some_and(|t| d.now - t <= LIST_MAX_AGE_MS);

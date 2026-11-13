@@ -490,3 +490,29 @@ Seen and left as they are:
 - A worker waiting for an answer may call `report_result` to save where it stands (the Stop hook asks for a result). The open question keeps the check from running.
 - The worker prompt always asks for a push and a pull request; a repository with no remote relies on the brief to say otherwise.
 - The resume of a worker with no process was still not tried on a real session.
+
+## Changed while building PR C (Task 13)
+
+Before Task 13, five follow-ups to the hand check went in on their own: a linked worktree outside its repository is not covered by the repository's trust, symlinks are resolved before trust is judged, the message typed back after a failed check shows the command on one short line and says it is data, a checked link is ended only while its check state is still set, and a pass read again with a closed gate checks nothing.
+
+What differs from the task text:
+
+- **No new migration, and the check runs a second time.** An entry does not store which commit its check ran on, so "passed on the same head" is proven at merge time: the app reads the worktree's HEAD, measures the change again, runs the project's check command again on that commit, and reads HEAD and the worktree again after it. The merge is pinned to that commit with `--match-head-commit`. The cost is one more run of the check (up to ten minutes) for each change merged alone.
+- **Everything is read again when the lead accepts**, not taken from the entry: the project's two switches and its check command, the worker's link, the size and the paths of the change, the pull request. The entry's stored verdict is one more condition. The pull request is read a second time after the second check.
+- **`may_merge` takes the worktree's HEAD**, and refuses an empty change, a size with no paths, and an empty base.
+- **Money is a rule of its own**: a path with `invoice`, `quote`, `expense`, `payment`, `billing`, `money`, `price`, `pricing`, `vat`, `qr-bill`, `qrbill`, `tax`, `salary`, `bank` or `iban` anywhere in it (any case). It matches too much on purpose (`tax` in `syntax`, `vat` in `private`): such a change waits for the owner.
+- **A path git prints in quotes** (an accent, a quote, a backslash) is the rule `unusual path`: it is never matched against the patterns, it goes to the owner.
+- **The pull request url comes from the worker**, so only `https://github.com/<owner>/<repo>/pull/<n>` is accepted, and only for the repository the worktree's `origin` names. It is checked before every `gh` call.
+- **The base branch must be on `origin`** (`origin/main` gives `main`); a project with no remote is never merged alone.
+- **The budget must be Ok at that moment**, as for typing a lead's answer, though a merge spends no usage.
+- **The gate is read again after the second check**: with the demo build, a switch off, or any organisation in test or presentation mode, nothing is merged and the entry is left for a later pass.
+- **A refused or failed merge is never tried again.** The entry is open again with "The lead would accept; not merged: <why>. The lead's reason: <reason>". With merging alone off (the default) and no hub, nothing is run and the text stays "The lead would accept: <reason>".
+- **The entry is claimed before `gh pr merge`**, so a crash can never merge twice. A crash in that instant leaves the task in To check with the entry listed as accepted by the lead.
+- **After a merge**: the item is done as Accept does it (status, stage cleared, a due date moved to today), the link ends with the outcome `merged`, a "Merged: check passed, N lines" row is listed under Decided alone with the lead's reason, the commit and the pull request, and a worker still running is stopped, never removed. The branch and the worktree stay. The calendar event Accept removes in the app is not removed here.
+- **`check::touches_of` stays** as the short hint shown on the entry (migrations, dependencies, deletions); `merge::touches` is the rule and is wider.
+
+To know before switching merging alone on for a project:
+
+- The check command must leave the worktree clean: build output that is not git-ignored makes the worktree dirty, and the change then waits for the owner.
+- Reopen on a merged entry does not undo the merge.
+- The merge is a squash through `gh`; a repository whose rules refuse it (required reviews, checks) gives "the merge failed" and the entry waits for the owner.

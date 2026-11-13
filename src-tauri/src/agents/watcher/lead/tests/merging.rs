@@ -25,6 +25,8 @@ struct Scene {
     status_first: &'static str,
     status_later: &'static str,
     view: String,
+    /// What `gh pr view` says from the second read on (None: the same).
+    view_later: Option<String>,
     merge_code: i32,
     /// What `git rev-parse HEAD` says from the second read on.
     head_later: &'static str,
@@ -39,6 +41,7 @@ impl Default for Scene {
             status_first: "",
             status_later: "",
             view: view("OPEN", false, SHA, "main"),
+            view_later: None,
             merge_code: 0,
             head_later: SHA,
         }
@@ -48,6 +51,7 @@ impl Default for Scene {
 fn scene_git(s: &Scene) -> FakeGit {
     let heads = Arc::new(AtomicUsize::new(0));
     let statuses = Arc::new(AtomicUsize::new(0));
+    let views = Arc::new(AtomicUsize::new(0));
     let g = s.clone();
     let h = s.clone();
     FakeGit::new(move |c| match c {
@@ -67,7 +71,8 @@ fn scene_git(s: &Scene) -> FakeGit {
     })
     .with_gh(move |c| {
         if c.starts_with("pr view") {
-            out(0, &h.view)
+            let n = views.fetch_add(1, Ordering::SeqCst);
+            out(0, if n == 0 { &h.view } else { h.view_later.as_ref().unwrap_or(&h.view) })
         } else if c.starts_with("pr merge") {
             out(h.merge_code, if h.merge_code == 0 { "" } else { "GraphQL: Pull request is not mergeable" })
         } else {
@@ -319,6 +324,9 @@ fn every_refusal_leaves_the_entry_open_and_merges_nothing() {
         Case { tweak: |f| sql(f, "UPDATE task_agents SET worktree = NULL"), ..plain("nowt", "worktree") },
         Case { tweak: |f| *f.week.lock().unwrap() = 70, ..plain("budget", "usage") },
         Case { check: "false", ..plain("again", "did not pass when run again") },
+        Case { scene: Scene { view_later: Some(view("CLOSED", false, SHA, "main")), ..s() }, ..plain("closed-during", "the pull request is closed") },
+        Case { scene: Scene { view_later: Some(view("OPEN", true, SHA, "main")), ..s() }, ..plain("draft-during", "a draft") },
+        Case { scene: Scene { view_later: Some(view("OPEN", false, SHA, "develop")), ..s() }, ..plain("retargeted-during", "another branch") },
         Case { scene: Scene { head_later: OTHER_SHA, ..s() }, ..plain("headmoved", "changed during the check") },
         // The check itself leaves a file behind: the worktree is no longer clean.
         Case { scene: Scene { status_later: "?? target/\n", ..s() }, ..plain("dirty-after", "changed during the check") },
@@ -417,4 +425,24 @@ fn a_demo_build_or_a_mode_at_the_start_makes_no_call_for_an_accepted_check() {
     assert_eq!(f.git_calls(), before);
     assert_eq!(f.status_of(id), "answered");
     assert_eq!(f.merges(), 0);
+}
+
+#[test]
+fn a_merge_that_cannot_be_recorded_is_handed_to_the_owner_and_never_repeated() {
+    let (f, id, mut mem) = merging("unrecorded", &Scene::default(), "true");
+    // The write that records the merge fails (the merge is on GitHub by then).
+    f.conn()
+        .execute_batch("CREATE TRIGGER no_merged BEFORE UPDATE ON task_agents WHEN NEW.outcome = 'merged' BEGIN SELECT RAISE(ABORT, 'locked'); END;")
+        .unwrap();
+    pass(&f, &mut mem, 1);
+    assert_eq!(f.merges(), 1);
+    assert_eq!(f.status_of(id), "open");
+    assert_eq!(f.recommendation(id), format!("Merged pull request {PR_URL}, but the app could not record it: mark the task done by hand."));
+    let status: String = f.one("SELECT status FROM tasks WHERE id = 1");
+    assert_eq!(status, "todo", "the whole record was rolled back");
+    assert_eq!(f.one::<i64>("SELECT COUNT(*) FROM needs_you WHERE kind = 'alone'"), 0);
+    pass(&f, &mut mem, 2);
+    pass(&f, &mut mem, 3);
+    assert_eq!(f.merges(), 1, "never merged twice");
+    assert_safe(&f);
 }
