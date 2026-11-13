@@ -4,7 +4,8 @@ Date: 2026-11-12 · Status: **reviewed and approved by Loris on 2026-11-12** (se
 [Decisions](#open-questions)). No implementation plan yet.
 Implementation plans: [part 1, capture and briefing](../plans/2026-11-12-agent-orchestrator-1-capture.md);
 [part 2, a task carries its agent](../plans/2026-11-13-agent-orchestrator-2-task-agent.md);
-[part 3, the watcher, the lead and "Needs you"](../plans/2026-11-13-agent-orchestrator-3-watcher-lead.md).
+[part 3, the watcher, the lead and "Needs you"](../plans/2026-11-13-agent-orchestrator-3-watcher-lead.md);
+[part 4, hubs](../plans/2026-11-13-agent-orchestrator-4-hubs.md) (plan only, awaiting review).
 Mockups: [the four screens](../mockups/2026-11-12-agent-orchestrator.html) (open the file in a browser).
 
 Built on [DESIGN-SYSTEM.md](../../../DESIGN-SYSTEM.md). Extends the Agents page
