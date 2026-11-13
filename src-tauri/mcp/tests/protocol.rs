@@ -26,7 +26,16 @@ struct Server {
 
 impl Server {
     fn start(dir: &Path) -> Server {
-        let mut child = Command::new(env!("CARGO_BIN_EXE_studiomanager-mcp"))
+        Server::start_with(dir, None)
+    }
+
+    fn start_with(dir: &Path, tools: Option<&str>) -> Server {
+        let mut cmd = Command::new(env!("CARGO_BIN_EXE_studiomanager-mcp"));
+        cmd.env_remove("STUDIOMANAGER_TOOLS");
+        if let Some(t) = tools {
+            cmd.env("STUDIOMANAGER_TOOLS", t);
+        }
+        let mut child = cmd
             .env("STUDIOMANAGER_DATA_DIR", dir)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -160,7 +169,7 @@ const MONEY_TOOLS: [&str; 5] = [
     "pnl_summary",
 ];
 
-const CAPTURE_TOOLS: [&str; 4] = ["capture", "list_captures", "file_capture", "set_brief"];
+const CAPTURE_TOOLS: [&str; 5] = ["capture", "list_captures", "file_capture", "set_brief", "report_result"];
 
 #[test]
 fn stdio_round_trip() {
@@ -175,7 +184,7 @@ fn stdio_round_trip() {
     assert!(instructions.lines().count() <= 8);
 
     let names = server.tool_names();
-    assert_eq!(names.len(), 44, "{names:?}");
+    assert_eq!(names.len(), 45, "{names:?}");
     for t in MONEY_TOOLS.iter().chain(UPKEEP_TOOLS.iter()).chain(CAPTURE_TOOLS.iter()) {
         assert!(names.iter().any(|n| n == t), "missing {t}");
     }
@@ -217,12 +226,23 @@ fn stdio_round_trip() {
 }
 
 #[test]
+fn report_result_is_not_listed_in_the_brief_session() {
+    let dir = seeded(true);
+    let brief = "list_captures,file_capture,list_projects,get_project,list_tasks,list_wiki,get_wiki_article";
+    let mut server = Server::start_with(&dir, Some(brief));
+    server.initialize();
+    let names = server.tool_names();
+    assert_eq!(names.len(), 7, "{names:?}");
+    assert!(!names.iter().any(|n| n == "report_result"), "{names:?}");
+}
+
+#[test]
 fn money_tools_hidden_when_off_at_startup() {
     let dir = seeded(false);
     let mut server = Server::start(&dir);
     server.initialize();
     let names = server.tool_names();
-    assert_eq!(names.len(), 39, "{names:?}");
+    assert_eq!(names.len(), 40, "{names:?}");
     for t in MONEY_TOOLS {
         assert!(!names.iter().any(|n| n == t), "{t} listed");
     }

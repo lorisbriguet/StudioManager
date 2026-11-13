@@ -45,7 +45,7 @@ Upkeep, reading: `list_machines` (machines and equipment with their next upkeep)
 
 Upkeep, writing: `add_service_log` (a dated repair, upgrade or part on a machine, such as new RAM in a NAS), `add_machine_link` (a web page or remote-access link on a machine, which the Network page shows), `create_machine`, `update_machine`, `add_upkeep_item` (a repeating task such as "clean the filter every 6 months"), `mark_upkeep_done`, `create_consumable`, `update_consumable` (set the stock or add a restock), `create_subscription`, `update_subscription` (plan, vendor, link, cost, notes, or cancel; a subscription's name, renewal date and period change in the app). Each of these tells the agent to ask you first and say what it will save. An organisation that uses another organisation's machines and consumables (Settings > Studio upkeep) reads and writes them in that organisation, which agent access must allow too; subscriptions always stay with the organisation itself.
 
-Captures and briefs: `capture` (save a thought in the inbox, with an optional project hint), `list_captures` (the latest 50 new ones, a given status, or exactly the `ids` you pass, at most 50), `file_capture` (file a capture under a project as a task or subtask with a brief, or leave it in the inbox with a reason), `set_brief` (write the brief of a task or subtask). See [Capture and briefs](agents.md#inbox-and-briefs).
+Captures and briefs: `capture` (save a thought in the inbox, with an optional project hint), `list_captures` (the latest 50 new ones, a given status, or exactly the `ids` you pass, at most 50), `file_capture` (file a capture under a project as a task or subtask with a brief, or leave it in the inbox with a reason), `set_brief` (write the brief of a task or subtask), `report_result` (write the result of a task or subtask, with an optional branch and pull request link, when the work is done). See [Capture and briefs](agents.md#inbox-and-briefs).
 
 Wiki and tools: `list_wiki`, `get_wiki_article`, `put_wiki_article`, `add_decision`, `link_tool`.
 
@@ -55,7 +55,7 @@ A project's own Markdown files (README, design system, release notes, docs) show
 
 Money (hidden unless allowed in Settings): `list_invoices`, `get_invoice`, `list_quotes`, `list_expenses`, `pnl_summary`.
 
-That is 44 tools, 5 of them money tools. Names given to the tools (projects, clients, articles) match regardless of accents and case; if several match, the server returns the candidates instead of picking one. Agents are asked to check with you before creating projects or clients and before every upkeep write.
+That is 45 tools, 5 of them money tools. Names given to the tools (projects, clients, articles) match regardless of accents and case; if several match, the server returns the candidates instead of picking one. Agents are asked to check with you before creating projects or clients and before every upkeep write.
 
 ### Limiting a session to some tools
 
@@ -66,7 +66,7 @@ If the environment variable `STUDIOMANAGER_TOOLS` is set and not empty, the serv
 - **No deletes.** No tool removes or drops anything. Task and subtask status can only be set to `todo` or `done`.
 - **Backups.** Before the first write per organisation in a session, the server takes a full copy of the database to `<data folder>/backups/agent/`. The 20 most recent per organisation are kept.
 - **Change log.** Every write adds a line to `<data folder>/agent-log.jsonl` (time, organisation, tool, summary); once it passes 1,000 lines it is cut back to the newest 500. Settings > Agents (Agent access card) shows the recent entries. The app watches this file: when an agent writes, open pages refresh within a couple of seconds.
-- **Captures.** `file_capture` only creates a task or a subtask (or leaves the capture in the inbox) and never changes an existing one. `set_brief` writes only the brief of the task or subtask it names (the brief session does not use it: `file_capture` carries the brief).
+- **Captures.** `file_capture` only creates a task or a subtask (or leaves the capture in the inbox) and never changes an existing one. `set_brief` writes only the brief of the task or subtask it names (the brief session does not use it: `file_capture` carries the brief). `report_result` writes only the result of the task or subtask it names (text, at most 4,000 characters) and, on that item's newest open agent link, the branch and pull request link; it never writes a stage or a status.
 - **Project folders.** `link_folder` and `update_project` accept only an existing folder inside Documents, Desktop, Downloads or `~/Library/CloudStorage` (not one of those places itself), and never an app or other bundle (`.app`, `.bundle`, `.framework`…).
 - **Size.** A title, name, note, link or article over 1 MB is refused.
 - **Test and presentation mode.** While either mode is active, writes are refused. Reads still work on the real data.
