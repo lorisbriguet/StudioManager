@@ -459,6 +459,11 @@ What differs from the task text:
 - **Over budget when the lead's answer arrives**, the answer is not typed into the worker: the entry is reopened as "From the lead: …".
 - **The trust question for the lead folder** is asked on the Agents card when the watcher is switched on (`agents_lead_folder`).
 - **The app's own "Send back"** on a Check entry also resets the link's check state, so the next result is checked again.
+- **The watcher frees a slot once checked work is settled.** When a worker's result was checked and no entry is left open for it (accepted or dismissed), the watcher stops the worker if it is still running and ends its link. Without this, finished tasks filled the cap for good. A worker is stopped, never removed.
+- **A worker with no process is resumed with the start's own arguments** (Stop hook, permission mode, MCP config) plus `--resume`, and the link follows the new session. This was not tried on a real session: it is a hand check.
+- **The gate is read again after the check step**, which can take up to 10 minutes: nothing is typed, stopped or started when a mode changed meanwhile.
+- **The areas a change touches** (migrations, dependencies, deletions) are worked out from the diff. The lead is told the list is a hint: it reads the diff itself, and an empty list never means nothing sensitive was touched.
+- **An error reading an organisation's agent links pauses the whole pass**, so it can never open room in the cap.
 
 To know before switching it on:
 
