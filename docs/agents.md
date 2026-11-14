@@ -192,7 +192,7 @@ Everything that waits on you, in four groups. The tab, the sidebar's Agents entr
 - **Decide:** a question from a worker that the lead could not answer from what is written, or something the app could not settle: a worker that could not start, one waiting at a permission prompt, one that stopped without a result or a question, one still stuck after three restarts. A question shows the recommendation, a button per option and **Answer in words**. Your answer is typed into the waiting agent, and saved as a decision in the project's wiki when the lead marked the question as one. A permission prompt has **Open the agent** and **Dismiss**. A worker that could not start has **Dismiss**. A worker that stopped or is stuck has **Open the agent** and **Answer in words**, typed into it. A question from an agent you started yourself comes here without a lead's reading.
 - **Check:** finished work. Each entry shows the result, the number of changed lines, whether the check command passed, and what the change touches (migrations, dependencies, deletions). **Accept** marks the item done, as in [the panel](#the-panel); it does not merge: use **Open the pull request** and merge on GitHub. **Send back** types your note into the worker, and its next result is checked again.
 - **Briefs:** captures filed with the outcome "needs your word": the project, your original words and the brief. From there you can **Start an agent** on the task, **Keep as a task** (it leaves the list and stays a task), or open the brief.
-- **Decided alone:** what the lead or the app did without you in the last 7 days, each with its reason: a question answered from the wiki, work sent back, a worker restarted or wrapped up, a pull request merged. **Reopen** puts the entry back in its group. Reopening a merged entry does not undo the merge; the item goes back to To check.
+- **Decided alone:** what the lead or the app did without you in the last 7 days, each with its reason: a question answered from the wiki, work sent back (it carries a "Sent back" badge), a worker restarted or wrapped up, a pull request merged. **Reopen** puts the entry back in its group. Reopening a merged entry does not undo the merge; the item goes back to To check.
 
 An agent of the watcher that has an open entry here is left out of the Needs you group of **All agents**, so nothing is listed twice.
 
@@ -206,7 +206,7 @@ Design and reasons: [agent orchestrator design](superpowers/specs/2026-11-12-age
 
 ### Turning it on
 
-In Settings › Agents, switch on **Start work on Ready tasks by itself** and set **Workers at once** (3 by default, 1 to 5). It is off by default and needs the Agents switch; switching Agents off pauses it. Turning it on asks you to trust the lead's folder in Claude Code, once.
+In Settings › Agents, switch on **Start work on Ready tasks by itself** and set **Workers at once** (3 by default, 1 to 5; it limits the workers with work in progress, and workers waiting for you under Check do not count). It is off by default and needs the Agents switch; switching Agents off pauses it. Turning it on asks you to trust the lead's folder in Claude Code, once.
 
 The watcher makes a pass every 30 seconds, and right after the Mac wakes, only while StudioManager is open. A line on the Needs you tab says which task it would start next, or why it waits. It does nothing:
 
@@ -241,7 +241,7 @@ A worker:
 - may edit files without asking (`acceptEdits`) and use six StudioManager tools without a prompt: read its tasks, project and wiki, `ask` and `report_result`. Other permission prompts are Claude Code's own: pushing the branch and opening the pull request wait for your answer unless your own Claude Code settings allow those commands. The worker is told to run each of these commands on its own, so a prompt names one plain command;
 - is told to do the work of the brief, push the branch, open a pull request, and write its result with `report_result`.
 
-The item goes to Running. The cap counts the workers with work in progress. A worker that handed in its result and now waits for your decision under Check no longer counts, so the next task can start. If you send its work back while the cap is full, the count goes one over the cap until a worker finishes, and nothing new starts meanwhile. Agents you start yourself are never counted, and the watcher never types into, stops or resumes an agent it did not start.
+The item goes to Running. The cap counts the workers with work in progress. A worker that handed in its result and now waits for your decision under Check no longer counts, so the next task can start. A waiting worker counts until the app has seen it idle in a fresh agent list. A waiting worker that goes back to work (you or the lead send its work back, a question of its is answered, you type into it) counts again at once, so the number of working workers can exceed the cap by as many as were waiting; nothing new starts until it is back under the cap. Agents you start yourself are never counted, and the watcher never types into, stops or resumes an agent it did not start.
 
 ### The Stop hook
 
@@ -264,7 +264,7 @@ Each of these Check entries is read by a lead session when the budget allows, wh
 - **Waiting at a permission prompt** for more than 2 minutes: a Decide entry that opens the agent. The lead never answers a prompt.
 - **Idle for 30 minutes without a result or a question:** a Decide entry.
 - **Stopped without a result or a question** (you ran `claude stop`, or the session died): a Decide entry at the next pass, with no 30-minute wait. A server error at the end of its conversation is still resumed first. Typing an instruction into it restarts the same session.
-- **Started more than a day ago, idle, no result:** asked once to write its result, then stopped 30 minutes later if it still has none; the work comes to you under Check ("Wrapped up after a day"). If the request cannot be typed, it is listed under Decide and the worker is not stopped.
+- **Started more than a day ago, idle, no result:** asked once to write its result, then stopped 30 minutes later if it still has none; the work comes to you under Check ("Wrapped up after a day"). If the request cannot be typed, it is listed under Decide and the worker is not stopped. A worker whose session is already stopped is not asked to wrap up: it is listed under Decide ("Stopped without a result") and keeps its slot until you answer it or remove it.
 - **Its work was accepted or dismissed:** the worker is stopped if it still runs and its link is closed. It stopped counting in the cap as soon as it waited for you under Check.
 
 ### Lead sessions

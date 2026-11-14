@@ -123,6 +123,7 @@ fn the_check_prompt_counts_the_stored_pull_request_url_even_when_the_result_text
     let c = check_prompt("o", 1);
     assert!(c.contains("pr_url"), "{c}");
     assert!(c.contains("even when the result text does not contain it"), "{c}");
+    assert!(c.contains("there is no pull request: do not accept"), "{c}");
 }
 
 #[test]
