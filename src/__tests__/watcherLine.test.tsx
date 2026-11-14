@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { NeedsYouTab } from "../components/agents/NeedsYouTab";
 import { useAppStore } from "../stores/app-store";
 import { setInvokeHandler } from "../__mocks__/tauri-api";
@@ -31,9 +32,11 @@ let status: unknown = null;
 
 function show() {
   return render(
-    <MemoryRouter>
-      <NeedsYouTab />
-    </MemoryRouter>,
+    <QueryClientProvider client={new QueryClient()}>
+      <MemoryRouter>
+        <NeedsYouTab />
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 

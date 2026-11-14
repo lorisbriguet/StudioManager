@@ -40,6 +40,10 @@ export const qk = {
     open: ["taskAgents", "open"] as const,
     captured: (kind: string, id: number) => ["taskAgents", "captured", kind, id] as const,
   },
+  hubs: {
+    all: ["hubs"] as const,
+    list: ["hubs", "list"] as const,
+  },
   needsYou: {
     all: ["needsYou"] as const,
     open: ["needsYou", "open"] as const,

@@ -359,3 +359,47 @@ Points where the design did not say enough for code, or where the code differs f
 14. **A connector could start a model session** behind the app's back. The app starts none; the contract forbids it; the hub's connector is reviewed for it. The budget rule cannot see it.
 15. **The demo build and the modes.** `cli::in_build` turns Agents off in the demo, so hubs are off there twice over; the hub commands still check `crate::host::is_demo` first. The modes stop every connector call (call 14).
 16. **The dev build has its own data folder and Keychain service**, so a hub added there is separate from the installed app's; the hand checks use the fixture.
+
+## Changed while building PR A (Tasks 1 to 7)
+
+Built on branch `orchestrator-4a-hubs`, on 2026-11-14. Each point is a call the owner can overturn.
+
+**Order and scope**
+
+1. Task 7's Rust half (`tie.rs`, the change in `watcher/lead.rs`) was built with Task 3, before Task 4, because `hubs_save` and `hubs_remove` call it. Its screen half was built with Tasks 5 and 6.
+2. `retry::ErrorKind` was created with Task 2 and the `Connector` trait with Task 3: each needs a type of the other task.
+3. PR A holds no events and no questions: the cache keeps the count, the problem and the unsupported requests only. `hubs_open` with an item is always refused until PR B lists ids.
+4. The two spikes owed before PR A were not run as spikes. The native dialog follows `routines::confirm_commands` and is step 1 of the hand check (the dev app could not be touched while part 3's hand checks wait). Killing the whole group is proven by tests with a child and a grandchild.
+
+**Stricter than the plan**
+
+5. After a connector ends, for any reason, its process group is killed, so nothing it started lives on. A capture that pushes afterwards must start the push in its own session; [the contract](../../hub-connector.md) says so.
+6. A hub's folder may not contain the home folder. The dialog "Allow this connector?" also says how many projects are in the folder and will be marked as a hub's.
+7. Changing a hub's folder marks the projects of the old folder too.
+8. Before any project is marked, every organisation is checked: if one is not at the current schema, nothing is written and the message asks to open that organisation once. No migration is run from a hub save. The mode check is made inside the lock that guards the writes.
+9. The retry counters are kept in memory and copied to `hubs-state.json`, so a file that cannot be written does not loosen the caps.
+10. A hub whose last try failed stops counting on the sidebar and the menu bar at once, not after 15 minutes. Its last number stays on its line.
+11. A run's result is dropped when the hub was changed or removed while it ran.
+
+**Different from the plan**
+
+12. `open` is not held by the 30-second gap: it runs only on a click, one at a time per hub, and is never retried.
+13. Every hub command answers with the reason when the gate is closed (demo build, Agents off, a mode), not with an empty list. The page does not call them in the demo build or while Agents is off, and shows the reason once.
+14. `HubView` also carries the program, the arguments and the kind of the problem, so Edit prefills the form and the reasons are worded in English and French. A failed or unstarted connector keeps the text from Rust, which carries its first error line, in English.
+15. "Open in the hub" is a link-style button: the design system has no ghost variant.
+16. The tests of the app crate for this branch ran in their own cargo target folder, so the dev app of the hand checks was not rebuilt from another worktree.
+17. `routines::run` shares more than the three functions named in Task 2 with the connector runner (`stop_where`, `is_tracked`), and `routines::shown` is shared for the dialog text.
+
+**Known, not fixed**
+
+- The approval covers the connector's path, arguments and folder, not the content of the program: a script under Documents can be rewritten by the webview, as for command routines.
+- A connector can be started in the instant after the app has stopped the others at quit.
+- After a test or presentation mode ends, the Hubs card keeps the reason until the next refresh (5 minutes).
+- Messages from validation and from the gate come from Rust in English.
+- A connector answer with the same key twice is accepted (the last one wins).
+- Marking is not undone in the organisations already written if a later one fails after the check: it only makes merging stricter.
+- The dialog counts only the projects not yet marked: a folder whose projects are all marked already reads "none".
+- Removing a hub is refused, like saving one, while an organisation is in a mode or not at the current schema, because its projects are marked first.
+- `cargo fmt` was not run on the new Rust files: the crate is not formatted elsewhere.
+
+**Hand check, changed wording.** Step 4 of Task 7's hand check: the line reads "Not reached: the connector took too long to answer", and the count leaves the sidebar at once. One more step: an organisation that was not opened since part 3 makes Save answer "open it once".

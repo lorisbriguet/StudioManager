@@ -2,7 +2,7 @@
 
 The Agents page shows every Claude Code agent running on your Mac in one place, so you can see which ones need you without opening each terminal. It is off until you turn it on. The app talks to the `claude` command on your Mac; the only port it opens is the one for [morning brief comments](#morning-brief-comments) and [review reports](#start-from-a-review-report), on this Mac only.
 
-Design and reasons: [the design spec](superpowers/specs/2026-10-28-agents-window-design.md). For letting AI apps read your StudioManager data, see [Agent access](agent-access.md), which is a separate feature. To see and answer agents from the Mac menu bar, see [Menu bar](menu-bar.md).
+Design and reasons: [the design spec](superpowers/specs/2026-10-28-agents-window-design.md). For letting AI apps read your StudioManager data, see [Agent access](agent-access.md), which is a separate feature. To see and answer agents from the Mac menu bar, see [Menu bar](menu-bar.md). To connect another store of work (a hub) to the app, see [Writing a hub connector](hub-connector.md).
 
 ## Turning it on
 

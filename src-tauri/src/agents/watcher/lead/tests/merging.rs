@@ -277,6 +277,86 @@ fn a_hub_project_is_never_merged_alone() {
     assert_refused(&f, id, "the project belongs to a hub");
 }
 
+// ------------------------------------------------------------ the tie to a hub's folder
+
+fn demo_hub(folder: &str) -> crate::agents::hubs::settings::Hub {
+    crate::agents::hubs::settings::Hub {
+        id: "h00000001".into(),
+        name: "Demo hub".into(),
+        colour: "purple".into(),
+        folder: folder.into(),
+        program: "/bin/sh".into(),
+        args: vec![],
+    }
+}
+
+/// A hub folder inside the fixture's app folder, with the project's folder inside it.
+fn project_in_a_hub_folder(f: &Fx) -> String {
+    let hub = f.dir.join("hub");
+    std::fs::create_dir_all(hub.join("poster")).unwrap();
+    let hub = hub.to_string_lossy().into_owned();
+    let folder = format!("{hub}/poster");
+    f.conn().execute("UPDATE projects SET folder_path = ?1", [&folder]).unwrap();
+    hub
+}
+
+#[test]
+fn merge_refused_in_a_hub_folder() {
+    let (f, id, mut mem) = merging("hub-folder", &Scene::default(), "true");
+    let hub = project_in_a_hub_folder(&f);
+    crate::agents::hubs::settings::write_hubs(&f.dir, &[demo_hub(&hub)]).unwrap();
+    assert_eq!(f.one::<i64>("SELECT hub_project FROM projects"), 0);
+    assert_eq!(f.one::<i64>("SELECT merge_alone FROM projects"), 1);
+    let before = f.git_calls();
+    pass(&f, &mut mem, 1);
+    assert_refused(&f, id, "the project belongs to a hub");
+    assert_eq!(f.git_calls(), before, "no git and no gh call");
+}
+
+#[test]
+fn merge_refused_when_hubs_unreadable() {
+    let (f, id, mut mem) = merging("hubs-garbled", &Scene::default(), "true");
+    std::fs::write(f.dir.join(crate::agents::hubs::settings::HUBS_FILE), "garbled").unwrap();
+    let before = f.git_calls();
+    pass(&f, &mut mem, 1);
+    assert_refused(&f, id, "the project belongs to a hub");
+    assert_eq!(f.git_calls(), before, "no git and no gh call");
+}
+
+#[test]
+fn removing_a_hub_keeps_its_projects_out() {
+    let (f, id, mut mem) = merging("hub-removed", &Scene::default(), "true");
+    let hub = project_in_a_hub_folder(&f);
+    crate::agents::hubs::settings::write_hubs(&f.dir, &[demo_hub(&hub)]).unwrap();
+    assert_eq!(crate::agents::hubs::tie::mark_hub_projects(&f.dir, &hub), Ok(1));
+    // The hub is taken out of hubs.json: the project stays marked and does not merge alone.
+    crate::agents::hubs::settings::write_hubs(&f.dir, &[]).unwrap();
+    assert_eq!(f.one::<i64>("SELECT hub_project FROM projects"), 1);
+    assert_eq!(f.one::<i64>("SELECT merge_alone FROM projects"), 0);
+    pass(&f, &mut mem, 1);
+    assert_refused(&f, id, "the project belongs to a hub");
+}
+
+#[test]
+fn hub_ticked_during_the_check_stops_the_merge() {
+    let hub_dir = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
+    let seen = hub_dir.clone();
+    let (f, id, mut mem) = merging_hooked("hub-during", &|f| {
+        let dir = f.dir.clone();
+        let hub = project_in_a_hub_folder(f);
+        *seen.lock().unwrap() = hub.clone();
+        let hook: Hook = Arc::new(move || {
+            crate::agents::hubs::settings::write_hubs(&dir, &[demo_hub(&hub)]).unwrap();
+        });
+        (Some(hook), None)
+    });
+    // Before the check no hub holds the project (the second read sees the new hub file).
+    assert!(!seen.lock().unwrap().is_empty());
+    pass(&f, &mut mem, 1);
+    assert_refused(&f, id, "the project belongs to a hub");
+    assert!(f.git.gh_commands().iter().all(|c| !c.starts_with("pr merge")));
+}
+
 /// The item of link 1 is merged: done, link ended, entry still the lead's decision, one `alone` row.
 fn assert_merged(f: &Fx, id: i64, table: &str) {
     let (stage, status): (Option<String>, String) =

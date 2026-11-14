@@ -3,6 +3,7 @@ pub mod briefing;
 pub mod brief;
 pub mod capture;
 pub mod cli;
+pub mod hubs;
 pub mod links;
 pub mod login;
 pub mod model;
@@ -81,11 +82,13 @@ impl AgentsState {
 pub fn init(handle: &tauri::AppHandle) {
     let app_dir = crate::app_data_dir(handle).unwrap_or_default();
     handle.manage(AgentsState::new(app_dir));
+    handle.manage(hubs::HubsState::default());
     poller::start(handle);
     routines::schedule::start(handle);
     briefing::start(handle);
     links::start(handle);
     watcher::start(handle);
+    hubs::start(handle);
     reminders::start(handle);
     // The morning brief's comments (see brief.rs); started by the Agents switch otherwise.
     if cli::read_settings(&handle.state::<AgentsState>().app_dir).enabled {

@@ -133,7 +133,7 @@ pub fn run_command(
 }
 
 /// Kills the child and everything in its process group (set when it was started).
-fn kill_group(child: &mut std::process::Child) {
+pub(crate) fn kill_group(child: &mut std::process::Child) {
     // SAFETY: kill(2) on the child's process group (its pid, as set above).
     unsafe { libc::kill(-(child.id() as libc::pid_t), libc::SIGKILL) };
     let _ = child.kill();
@@ -143,11 +143,11 @@ fn kill_group(child: &mut std::process::Child) {
 /// Process groups of the commands running now, so quitting the app can stop them.
 static GROUPS: Mutex<Option<HashSet<libc::pid_t>>> = Mutex::new(None);
 
-fn track_group(group: libc::pid_t) {
+pub(crate) fn track_group(group: libc::pid_t) {
     GROUPS.lock().unwrap_or_else(|e| e.into_inner()).get_or_insert_with(HashSet::new).insert(group);
 }
 
-fn untrack_group(group: libc::pid_t) {
+pub(crate) fn untrack_group(group: libc::pid_t) {
     if let Some(set) = GROUPS.lock().unwrap_or_else(|e| e.into_inner()).as_mut() {
         set.remove(&group);
     }
@@ -155,7 +155,7 @@ fn untrack_group(group: libc::pid_t) {
 
 /// `try_wait` under the groups lock: once the child is reaped its pid can be reused, so it
 /// leaves the set before `stop_all` could signal a stranger's group.
-fn try_wait_tracked(
+pub(crate) fn try_wait_tracked(
     child: &mut std::process::Child,
     group: libc::pid_t,
 ) -> std::io::Result<Option<std::process::ExitStatus>> {
@@ -171,7 +171,7 @@ fn try_wait_tracked(
 
 /// Whether a command with this process group is running now.
 #[cfg(test)]
-fn is_tracked(group: libc::pid_t) -> bool {
+pub(crate) fn is_tracked(group: libc::pid_t) -> bool {
     GROUPS.lock().unwrap_or_else(|e| e.into_inner()).as_ref().is_some_and(|s| s.contains(&group))
 }
 
@@ -182,7 +182,7 @@ pub fn stop_all() -> usize {
     stop_where(|_| true)
 }
 
-fn stop_where(pick: impl Fn(libc::pid_t) -> bool) -> usize {
+pub(crate) fn stop_where(pick: impl Fn(libc::pid_t) -> bool) -> usize {
     let held = GROUPS.lock().unwrap_or_else(|e| e.into_inner());
     let groups: Vec<libc::pid_t> = held.iter().flatten().copied().filter(|g| pick(*g)).collect();
     for g in &groups {

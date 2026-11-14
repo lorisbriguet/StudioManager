@@ -4,6 +4,7 @@ import { setProjectAgentSettings } from "../queries/projects";
 import { addDecision } from "../queries/wiki";
 import type { ItemKind } from "../queries/taskAgents";
 import { qk, invalidateTasks } from "../queryKeys";
+import { useHubWaiting } from "../../hooks/useHubs";
 import { useBriefEntries } from "./useCaptures";
 import { useUpdateTask, useUpdateSubtask } from "./useTasks";
 
@@ -24,7 +25,8 @@ export function useOpenCount() {
 export function useNeedsYouCount(): number {
   const { data: open = [] } = useOpenEntries();
   const { data: briefs = [] } = useBriefEntries();
-  return open.length + briefs.length;
+  const hubWaiting = useHubWaiting();
+  return open.length + briefs.length + hubWaiting;
 }
 
 /** Record what Loris decided in the project's Decisions article. */
