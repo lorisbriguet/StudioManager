@@ -3,6 +3,7 @@ import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/re
 import { AgentsCard } from "../components/settings/AgentsCard";
 import { ConfirmHost } from "../components/ui/ConfirmDialog";
 import { useAppStore } from "../stores/app-store";
+import { uiLabels } from "../i18n/ui";
 import { setInvokeHandler, invokedCommands, clearInvokedCommands } from "../__mocks__/tauri-api";
 
 let hotkeyError: string | null = null;
@@ -329,6 +330,17 @@ describe("AgentsCard", () => {
       render(<AgentsCard />);
       await screen.findByRole("switch", { name: "Start work on Ready tasks by itself" });
       expect(screen.queryByText(/Dev build/)).toBeNull();
+    });
+
+    // Since merging alone (part 3, Task 13) "It never merges anything" was false for a project with that switch on.
+    it("says what is merged without the owner, in both languages", async () => {
+      info = { enabled: true, claudePath: "/bin/claude", menuBar: false, limitAlerts: true, watcher: false, workerCap: 3 };
+      render(<AgentsCard />);
+      await screen.findByRole("switch", { name: "Start work on Ready tasks by itself" });
+      expect(screen.queryByText(/never merges anything/)).toBeNull();
+      await screen.findByText(/Nothing is merged without you, except small changes in a project where you let the lead merge alone\./);
+      expect(uiLabels.FR.watcher_desc).not.toMatch(/ne fusionne jamais rien/);
+      expect(uiLabels.FR.watcher_desc).toMatch(/Rien n'est fusionné sans vous, sauf les petits changements d'un projet où vous laissez l'agent pilote fusionner seul\./);
     });
   });
 });
