@@ -48,7 +48,7 @@ add("Controls", "Input", "ui/Input.tsx", "variant default · bare · inline; num
 add("Controls", "Textarea", "ui/Input.tsx", "3 rows, grows with its content to maxRows (12), then scrolls; fill for a widget that owns its height.",
     '<span class="fld ta">Paid by bank transfer.<br>Reminder sent on 12.10.</span>', "inputs", "notes multiline")
 add("Controls", "SearchBar", "ui/SearchBar.tsx", "Input with the search icon and a clear button; value, onChange, placeholder.",
-    fld("art basel", "full", f'<span class="lead">{ic(I["search"],12)}</span>', f'<span class="trail">{ic(I["x"],12)}</span>'), "inputs", "filter find")
+    fld("alder finch", "full", f'<span class="lead">{ic(I["search"],12)}</span>', f'<span class="trail">{ic(I["x"],12)}</span>'), "inputs", "filter find")
 add("Controls", "DatePicker", "ui/DatePicker.tsx", "Type a date (dd.mm.yyyy) or open the calendar; value yyyy-MM-dd | null; variant; detected. Calendar, DateShortcuts.",
     fld("28.10.2026", "num-l w-md", "", f'<span class="trail">{ic(I["cal"],12)}</span>'), None, "date calendar")
 add("Controls", "Select · DropdownSelect", "ui/Select.tsx · ui/Dropdown.tsx", "Native-free select: options, value, onChange, searchable, groups; variant bare for status pills.",
@@ -76,7 +76,7 @@ add("Labels", "Kbd · Tooltip", "ui/Kbd.tsx · ui/Tooltip.tsx", "Key hints; styl
 
 # Type & headings
 add("Headings", "PageHeader", "ui/PageHeader.tsx", "Level-1 title; back (with unsaved-changes check); meta line; leading (calendar arrows); actions; compact bar for previews.",
-    f'<div class="ph"><div class="row nowrap">{ib("back")}<span class="h1">Key visual 2027</span><span class="grow"></span>{btn("Delete","danger")}</div><span class="phm">Art Basel · due 12.12.2026</span></div>', "headings", "title header back")
+    f'<div class="ph"><div class="row nowrap">{ib("back")}<span class="h1">Key visual 2027</span><span class="grow"></span>{btn("Delete","danger")}</div><span class="phm">Alder Finch · due 12.12.2026</span></div>', "headings", "title header back")
 add("Headings", "PanelTitle · PeekHeader · SidebarTitle", "ui/PanelTitle.tsx · ui/PeekHeader.tsx · ui/SidebarTitle.tsx", "Level-2 title (14px semibold) with count and action; peek panel bar (close left, open full page right); sidebar level-1 title.",
     f'<div class="col"><div class="row nowrap"><span class="h2">Revenue by client</span><span class="lcnt">12</span><span class="grow"></span><span class="btn link">View all</span></div><div class="peek">{ib("x","xs")}<span class="grow"></span><span class="btn link">Open full page</span></div></div>', "headings", "title heading")
 add("Headings", "Type scale", "ui/tokens.ts", "HEADING_1 20px semibold tight · HEADING_2 14px semibold · label 10px uppercase · body 14px · small 12px · STAT_VALUE 20px.",
@@ -100,7 +100,7 @@ add("Surfaces", "Callout · ProgressBar", "ui/Feedback.tsx", "Callout tone info 
 
 # Forms
 add("Forms", "FormLayout · FormSection · FormGrid", "ui/Form.tsx", "FormLayout 24px stack, 768px cap (dense: 12px); FormSection = label + fields; FormGrid 1–4 columns, 12px gaps; FormGridItem spans.",
-    f'<div class="col"><span class="lbl">Client</span><div class="g2">{lab("Client *")}{lab("Project")}{fld("Art Basel","", "", f"<span class=trail>{ic(I["chev"],12)}</span>")}{fld("Key visual 2027")}</div></div>', "forms", "layout grid section")
+    f'<div class="col"><span class="lbl">Client</span><div class="g2">{lab("Client *")}{lab("Project")}{fld("Alder Finch","", "", f"<span class=trail>{ic(I["chev"],12)}</span>")}{fld("Key visual 2027")}</div></div>', "forms", "layout grid section")
 add("Forms", "FormField · FieldError · FormGroup", "ui/FormField.tsx · ui/Form.tsx", "Label linked to the field, required *, hint, error (replaces the hint), span. FieldError alone; FormGroup labels several controls.",
     f'<div class="col">{lab("PO number")}{fld("PO-","err")}<span class="ferr">Use the client\'s PO format (PO-0000).</span>{lab("Billing address")}{fld("Messeplatz 10, 4058 Basel")}<span class="small">Taken from the client.</span></div>', "forms", "label validation hint")
 add("Forms", "FormActions", "ui/Form.tsx", "Right-aligned, primary last; destructive on the far left. Same row as the Modal footer.",
@@ -122,7 +122,7 @@ add("Data", "Skeletons", "ui/Skeleton.tsx · ui/TableSkeleton.tsx · ui/Spinner.
 
 # Navigation
 add("Navigation", "NavItem · TabItem", "ui/NavItem.tsx · ui/TabItem.tsx", "Navigation rows sm · md with aria-current; navItemClass for router links; tabs with close button.",
-    f'<div class="col"><span class="nav on">{ic(I["home"],14)} Dashboard</span><span class="nav">{ic(I["file"],14)} Invoices</span><span class="row nowrap"><span class="tab on">INV-2026-014 {ic(I["x"],10)}</span><span class="tab">Art Basel {ic(I["x"],10)}</span></span></div>', None, "sidebar menu tab")
+    f'<div class="col"><span class="nav on">{ic(I["home"],14)} Dashboard</span><span class="nav">{ic(I["file"],14)} Invoices</span><span class="row nowrap"><span class="tab on">INV-2026-014 {ic(I["x"],10)}</span><span class="tab">Alder Finch {ic(I["x"],10)}</span></span></div>', None, "sidebar menu tab")
 
 # Patterns
 add("Patterns", "InlineRename", "ui/InlineRename.tsx", "Rename in place: Enter or blur saves, Esc cancels, validate + error, keeps the row's text size.",

@@ -29,7 +29,7 @@ const LABEL_PX = 11;
 const FOCUS_LABEL_PX = 12;
 /** Below this many graph units per screen pixel (zoomed in), every label may show. */
 const ALL_LABELS_AT = 0.9;
-// Drag motion, as in the Art Basel hub: lively while a dot is held, then it cools.
+// Drag motion, as in a client hub: lively while a dot is held, then it cools.
 const ALPHA_HELD = 0.35;
 const ALPHA_WAKE = 0.3;
 const ALPHA_COOL = 0.955;

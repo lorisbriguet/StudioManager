@@ -33,7 +33,7 @@ today = "".join([
 proposal = f'''<div class="panel"><div class="stagebg" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">
 <div><div class="xs muted" style="margin-bottom:6px">padding="md" · 16px · default</div><div class="cd p4"><div class="ct">Revenue by client <span class="xs muted" style="font-weight:400">View all</span></div>{L()}{L("70%")}{L("85%")}</div></div>
 <div><div class="xs muted" style="margin-bottom:6px">padding="sm" · 12px · nested, bordered</div><div class="cd p4"><div class="ct">Contacts</div><div class="cd b p3" style="margin-bottom:8px"><b style="font-size:12px">Marc Spiegler</b><div class="xs muted">Director</div></div><div class="cd b p3"><b style="font-size:12px">Messeplatz 10</b><div class="xs muted">4058 Basel</div></div></div></div>
-<div><div class="xs muted" style="margin-bottom:6px">interactive · selected</div><div class="cd p4 hov sel"><div class="ct" style="margin-bottom:6px">Key visual 2027</div><div class="xs muted">Art Basel · due 12.12</div></div></div>
+<div><div class="xs muted" style="margin-bottom:6px">interactive · selected</div><div class="cd p4 hov sel"><div class="ct" style="margin-bottom:6px">Key visual 2027</div><div class="xs muted">Alder Finch · due 12.12</div></div></div>
 <div><div class="xs muted" style="margin-bottom:6px">tone="dashed" · add / draft</div><div class="cd dash p3" style="text-align:center"><span class="xs muted">+ Add contact</span></div></div>
 </div></div>'''
 

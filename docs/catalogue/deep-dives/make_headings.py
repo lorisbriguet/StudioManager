@@ -19,11 +19,11 @@ ARROW = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="cur
 
 today = "".join([
     var("Page titles", "4 styles", '<div class="t-xl">Invoices</div><div class="xs muted">PageHeader · no tracking</div><div class="t-xlt" style="margin-top:10px">October 2026</div><div class="xs muted">Calendar · tight</div><div class="lbl10" style="margin-top:12px">Settings</div><div class="xs muted">Settings sidebar · a 10px label as h1</div>'),
-    var("Back buttons", "IconButton vs outline Button", f'<div class="hrow"><span class="ib2">{ARROW}</span><span class="t-xl">Art Basel</span></div><div class="xs muted" style="margin:2px 0 10px">Client detail</div><div class="hrow"><span class="b o" style="padding:0 8px">{ARROW}</span><span class="t-xl">New invoice</span></div><div class="xs muted">Invoice and quote forms (18px icon)</div>'),
+    var("Back buttons", "IconButton vs outline Button", f'<div class="hrow"><span class="ib2">{ARROW}</span><span class="t-xl">Alder Finch</span></div><div class="xs muted" style="margin:2px 0 10px">Client detail</div><div class="hrow"><span class="b o" style="padding:0 8px">{ARROW}</span><span class="t-xl">New invoice</span></div><div class="xs muted">Invoice and quote forms (18px icon)</div>'),
     var("Card titles", "6 styles", '<div class="t-sm">Revenue by client</div><div class="xs muted" style="margin-bottom:8px">Finances · h2 text-sm</div><div class="t-base">Recurring invoices</div><div class="xs muted" style="margin-bottom:8px">Invoices · text-base (off scale)</div><div class="t-xs">Tasks</div><div class="xs muted" style="margin-bottom:8px">Project blocks · text-xs semibold</div><div class="lbl10">Projects (4)</div><div class="xs muted">Client detail · label, count in the text</div>'),
     var("Dashboard widgets", "2 title systems", '<div class="t-sm" style="margin-bottom:8px">Overdue invoices</div><div class="xs muted" style="margin-bottom:10px">22 widgets · PanelTitle</div><div class="lbl10">Revenue this month</div><div class="t-lg">CHF 18 130</div><div class="xs muted">9 stat widgets · label + text-lg value (off scale)</div>'),
     var("Wiki", "body h1 bigger than the title", '<div class="t-xlt">Brand guidelines</div><div class="xs muted" style="margin-bottom:8px">title: an input, not a heading · 20px</div><div style="font-size:21px;font-weight:600">Colours</div><div class="xs muted">body h1 · 21px</div>'),
-    var("Detail pages", "title in the back row, or below it", f'<div class="hrow"><span class="ib2">{ARROW}</span><span class="t-xl">Art Basel</span><span class="b d" style="margin-left:auto">Delete</span></div><div class="xs muted" style="margin:2px 0 10px">Client: one row, h1</div><div class="hrow"><span class="ib2">{ARROW}</span><span class="b d" style="margin-left:auto">Delete</span></div><div class="t-xlt">Key visual 2027</div><div class="xs muted">Project: two rows, h2, no h1</div>'),
+    var("Detail pages", "title in the back row, or below it", f'<div class="hrow"><span class="ib2">{ARROW}</span><span class="t-xl">Alder Finch</span><span class="b d" style="margin-left:auto">Delete</span></div><div class="xs muted" style="margin:2px 0 10px">Client: one row, h1</div><div class="hrow"><span class="ib2">{ARROW}</span><span class="b d" style="margin-left:auto">Delete</span></div><div class="t-xlt">Key visual 2027</div><div class="xs muted">Project: two rows, h2, no h1</div>'),
 ])
 
 scale = '<div class="panel"><div class="scale">' + "".join(
@@ -35,7 +35,7 @@ scale = '<div class="panel"><div class="scale">' + "".join(
 
 header = f'''<div class="panel" style="padding:16px 20px">
 <div class="hrow"><span class="ib2">{ARROW}</span><span class="t-xlt">Key visual 2027</span><span class="pill" style="background:var(--color-warning-bg);color:var(--color-warning-text);font-size:12px;padding:2px 8px;border-radius:99px;font-weight:500">In progress</span><span style="margin-left:auto;display:flex;gap:8px"><span class="b">Duplicate</span><span class="b d">Delete</span></span></div>
-<div class="xs muted" style="margin:4px 0 0 36px">Art Basel · due 12.12.2026</div>
+<div class="xs muted" style="margin:4px 0 0 36px">Alder Finch · due 12.12.2026</div>
 <div class="xs muted" style="margin-top:12px">PageHeader with <code>back</code>, a <code>meta</code> line and actions. The same header in a peek panel, at level 2.</div></div>'''
 
 
@@ -59,24 +59,24 @@ def pair(name, before, after, note=""):
             f'<div><div class="lbl10" style="margin-bottom:6px">With PageHeader</div>{after}</div></div>{n}</div>')
 PH = '<div class="panel">' + "".join([
   pair("Client detail",
-       f'<div class="hrow"><span class="ib2">{ARROW}</span><span class="t-xl">Art Basel</span><span style="margin-left:auto;display:flex;gap:8px"><span class="b d">Delete</span></span></div>',
-       ph("Art Basel", meta="Basel · 12 projects · CHF 96 400 this year", actions='<span class="b d">Delete</span>'),
+       f'<div class="hrow"><span class="ib2">{ARROW}</span><span class="t-xl">Alder Finch</span><span style="margin-left:auto;display:flex;gap:8px"><span class="b d">Delete</span></span></div>',
+       ph("Alder Finch", meta="Basel · 12 projects · CHF 96 400 this year", actions='<span class="b d">Delete</span>'),
        "Same row, plus a meta line; tight title."),
   pair("Project detail",
-       f'<div class="hrow"><span class="ib2">{ARROW}</span><span class="b d" style="margin-left:auto">Delete</span></div><div class="hrow" style="margin-top:12px"><span class="t-xlt">Key visual 2027</span><span class="b" style="padding:0 8px">In progress ▾</span></div><div class="xs muted">Art Basel</div>',
-       ph("Key visual 2027", meta="Art Basel · due 12.12.2026", actions=pill("In progress ▾") + '<span class="b d">Delete</span>'),
+       f'<div class="hrow"><span class="ib2">{ARROW}</span><span class="b d" style="margin-left:auto">Delete</span></div><div class="hrow" style="margin-top:12px"><span class="t-xlt">Key visual 2027</span><span class="b" style="padding:0 8px">In progress ▾</span></div><div class="xs muted">Alder Finch</div>',
+       ph("Key visual 2027", meta="Alder Finch · due 12.12.2026", actions=pill("In progress ▾") + '<span class="b d">Delete</span>'),
        "Two rows become one; the title becomes the page's h1."),
   pair("Invoice and quote forms",
        f'<div class="hrow"><span class="b o" style="padding:0 8px">{ARROW}</span><span class="t-xl">New invoice</span></div>',
-       ph("New invoice", meta="Draft · Art Basel"),
+       ph("New invoice", meta="Draft · Alder Finch"),
        "The outline back button becomes the same quiet arrow; it still asks before leaving unsaved changes."),
   pair("Calendar",
        f'<div class="hrow"><span class="ib2">{CHL}</span><span class="ib2">{CHR}</span><span class="b">Today</span><span class="t-xlt">October 2026</span><span style="margin-left:auto" class="xs muted">Month · Week · Day</span></div>',
        ph("October 2026", back=False, leading=f'<span class="ib2">{CHL}</span><span class="ib2">{CHR}</span><span class="b">Today</span>', actions='<span class="xs muted">Month · Week · Day</span>'),
        "Same layout; the arrows go in <code>leading</code>, the view switch in the actions."),
   pair("Invoice and quote preview",
-       f'<div style="padding:10px 16px;border-bottom:1px solid var(--color-border-header);background:var(--color-surface)"><div class="hrow"><span class="ib2">{ARROW}</span><span style="font-size:14px;font-weight:600">INV-2026-014 — Art Basel</span><span style="margin-left:auto" class="b p">Download PDF</span></div></div>',
-       ph("INV-2026-014", compact=True, actions='<span class="xs muted">Art Basel</span><span class="b p">Download PDF</span>'),
+       f'<div style="padding:10px 16px;border-bottom:1px solid var(--color-border-header);background:var(--color-surface)"><div class="hrow"><span class="ib2">{ARROW}</span><span style="font-size:14px;font-weight:600">INV-2026-014 — Alder Finch</span><span style="margin-left:auto" class="b p">Download PDF</span></div></div>',
+       ph("INV-2026-014", compact=True, actions='<span class="xs muted">Alder Finch</span><span class="b p">Download PDF</span>'),
        "Compact bar: level-2 title, same back arrow and actions."),
   pair("Profile and Settings sidebars",
        '<div style="display:flex;gap:24px"><div><div class="t-xl">Profile</div><div class="xs muted">20px</div></div><div><div class="lbl10">Settings</div><div class="xs muted">10px label</div></div></div>',
