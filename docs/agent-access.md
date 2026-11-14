@@ -31,6 +31,13 @@ The Demo build registers itself under the name `studiomanager-demo` so both can 
 
 To check which data folder a bundle will use, run `studiomanager-mcp --print-data-dir`.
 
+## The modes of the program
+
+Besides the server, `studiomanager-mcp` has modes that the app gives to the Claude Code sessions it starts itself (see [Workers](agents.md#workers)). They read Claude Code's hook input on stdin, never use the network, and are not tools:
+
+- `--stop-hook` is the `Stop` hook of a worker. It sends the worker on once when it stops without having called `report_result`, and once when it ends on a question it did not send through `ask` ([the Stop hook](agents.md#the-stop-hook)). It never blocks twice and always exits 0.
+- `--worker-guard` is the `PreToolUse` hook of a worker. It gets the worker's worktree, branch and settings file as arguments and answers every shell command and file edit: exit code 0 lets it go on to Claude Code's own permission rules, exit code 2 refuses it with one line on stderr that tells the worker what to do instead. It refuses anything but `git commit -m "…"` and the push of the worker's own branch to `origin`, anything that names `.git` or the settings file, and `gh pr create`. It never touches the database, and it refuses when its input or its arguments are wrong. The app sets it to block when it fails, which needs Claude Code 2.1.295 or newer. What it refuses is spelled out in [Workers](agents.md#workers).
+
 ## Tools
 
 Organisation and folders: `list_organisations`, `find_project_for_folder`, `link_folder`.
