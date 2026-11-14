@@ -101,6 +101,31 @@ describe("HubsCard", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
+  it("Try again inside the gap after a run says why nothing ran, in both languages", async () => {
+    hubs = [view({ fresh: false, problem: "It stopped.", problemKind: "failed" })];
+    setInvokeHandler((cmd) => {
+      if (cmd === "hubs_counts") return hubs;
+      if (cmd === "hubs_refresh") throw "Wait 12 seconds before trying again.";
+      return null;
+    });
+    show();
+    fireEvent.click(await screen.findByRole("button", { name: "Try again" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Tried less than 30 seconds ago. Try again in a moment.");
+    cleanup();
+    useAppStore.setState({ language: "FR" });
+    show();
+    fireEvent.click(await screen.findByRole("button", { name: "Réessayer" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Essayé il y a moins de 30 secondes. Réessayez dans un instant.");
+  });
+
+  it("the folder path wraps at slashes and only breaks inside a word when one segment is too long", async () => {
+    hubs = [view({ folder: "/data/Studio A/demo-hub" })];
+    show();
+    const path = await screen.findByText("/data/Studio A/demo-hub");
+    expect(path).toHaveClass("break-words");
+    expect(path).not.toHaveClass("break-all");
+  });
+
   it("Edit prefills the program and the arguments, and sends them back as they are", async () => {
     hubs = [view()];
     show();
@@ -129,6 +154,21 @@ describe("HubsCard", () => {
     useAppStore.setState({ language: "FR" });
     show();
     expect(await screen.findByText("Injoignable : le connecteur a mis trop de temps à répondre")).toBeInTheDocument();
+  });
+
+  it("puts one full stop between the reason and the next try, never two", async () => {
+    const at = new Date(2026, 10, 14, 10, 44).getTime();
+    hubs = [
+      view({ id: "h2", name: "Studio B hub", fresh: false, problem: "The connector timed out after 10 seconds.", problemKind: "timedOut", nextTryAt: at }),
+      view({ id: "h3", name: "Other hub", fresh: false, problem: "It stopped.", problemKind: "failed", nextTryAt: at }),
+    ];
+    show();
+    expect(await screen.findByText("Not reached: the connector took too long to answer. Next try at 10:44")).toBeInTheDocument();
+    expect(screen.getByText("Not reached: It stopped. Next try at 10:44")).toBeInTheDocument();
+    cleanup();
+    useAppStore.setState({ language: "FR" });
+    show();
+    expect(await screen.findByText("Injoignable : le connecteur a mis trop de temps à répondre. Prochain essai à 10:44")).toBeInTheDocument();
   });
 
   it("trims each argument line, drops empty ones and a trailing carriage return", async () => {

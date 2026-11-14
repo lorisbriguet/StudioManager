@@ -44,6 +44,9 @@ export const HUB_NOT_CONFIRMED = "Not saved: the connector was not allowed";
 /** Every hub command answers an error text while the gate is closed (demo, Agents off, a mode). */
 export const hubErrorText = (e: unknown): string => (e instanceof Error ? e.message : String(e));
 
+/** Rust's error for a Try again inside the 30 second gap after a run: "Wait 12 seconds before trying again." */
+export const isHubTooSoon = (e: unknown): boolean => /^Wait \d+ seconds? before trying again\.$/.test(hubErrorText(e).trim());
+
 export const isHubNotConfirmed = (e: unknown): boolean => hubErrorText(e).trim() === HUB_NOT_CONFIRMED;
 
 export const listHubs = (): Promise<HubView[]> => invoke<HubView[]>("hubs_list");

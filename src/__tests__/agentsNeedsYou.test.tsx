@@ -567,14 +567,14 @@ describe("NeedsYouTab, connected hubs", () => {
     clearInvokedCommands();
   });
 
-  it("shows the Connected hubs group last, with the count and the way into the hub", async () => {
+  it("shows the Connected hubs group above Decided alone, with the count and the way into the hub", async () => {
     hooks.alone = [row({ id: 20, kind: "alone", status: "answered", decided_by: "app", title: "Restarted", reason: null })];
     withHubs((cmd) => (cmd === "hubs_counts" ? [hub()] : null));
     setup([]);
     expect(await screen.findByText("Demo hub")).toBeInTheDocument();
     expect(screen.getByText("3 waiting")).toBeInTheDocument();
     const names = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
-    expect(names).toEqual(["Decided alone1", "Connected hubs1"]);
+    expect(names).toEqual(["Connected hubs1", "Decided alone1"]);
     fireEvent.click(screen.getByRole("button", { name: "Open in the hub" }));
     await waitFor(() => expect(invokedCommands).toContainEqual({ cmd: "hubs_open", args: { id: "h1" } }));
   });
@@ -598,6 +598,18 @@ describe("NeedsYouTab, connected hubs", () => {
     expect(await screen.findByText(/Not reached: The connector timed out after 10 seconds\./)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     await waitFor(() => expect(invokedCommands).toContainEqual({ cmd: "hubs_refresh", args: { id: "h1" } }));
+  });
+
+  it("Try again inside the gap says why nothing ran", async () => {
+    withHubs((cmd) => {
+      if (cmd === "hubs_counts") return [hub({ fresh: false, problem: "The connector timed out after 10 seconds.", nextTryAt: null })];
+      if (cmd === "hubs_refresh") throw "Wait 12 seconds before trying again.";
+      return null;
+    });
+    setup([]);
+    await screen.findByText(/Not reached/);
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Tried less than 30 seconds ago. Try again in a moment.");
   });
 
   it("with no entries but one hub it shows the group, not the empty state", async () => {
