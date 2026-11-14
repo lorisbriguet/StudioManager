@@ -15,6 +15,7 @@
 
 use super::events::{notice, Event};
 use super::git::{self, Git};
+use super::merge;
 use super::start::Env;
 use super::store::{self, NewCheck, WatcherLink};
 use super::{Deps, Memory};
@@ -415,12 +416,106 @@ pub fn step(env: &Env, d: &Deps, mem: &mut Memory, links: &[(PathBuf, WatcherLin
     changed
 }
 
+/// The most characters of the worker's result that go into the pull request's description.
+pub const PR_BODY_CAP: usize = 4000;
+/// The most characters of the task's title that go into the pull request's title.
+pub const PR_TITLE_CAP: usize = 200;
+
+/// The arguments of `gh pr create`. The title and the body are each one `--option=value` argument
+/// (so a leading dash is never an option), run without a shell, and never a file option. An empty
+/// title becomes the branch name; both are cut on a character.
+fn pr_create_args(branch: &str, base: &str, title: &str, body: &str) -> Vec<String> {
+    let title: String = title.trim().chars().take(PR_TITLE_CAP).collect();
+    let title = if title.is_empty() { branch.to_string() } else { title };
+    let body: String = body.chars().take(PR_BODY_CAP).collect();
+    ["pr", "create", "--head", branch, "--base", base].iter().map(|s| s.to_string()).chain([format!("--title={title}"), format!("--body={body}")]).collect()
+}
+
+/// The url a pull request command printed: its last line that is not empty.
+fn last_line(tail: &str) -> &str {
+    tail.lines().map(str::trim).rev().find(|l| !l.is_empty()).unwrap_or("")
+}
+
+/// The url of the open pull request of `branch`, from `gh pr list --head <branch> --state open --json url`.
+fn listed_url(g: &dyn Git, worktree: &str, branch: &str) -> Result<String, String> {
+    let o = merge::gh(g, worktree, &["pr", "list", "--head", branch, "--state", "open", "--json", "url"]);
+    if !git::succeeded(&o) {
+        return Err(merge::gh_failure(&o, "gh pr list failed"));
+    }
+    // The output interleaves stdout and stderr: the JSON is the last line that reads as a list.
+    let list = o.tail.lines().rev().find_map(|l| serde_json::from_str::<Vec<serde_json::Value>>(l.trim()).ok());
+    list.and_then(|v| v.first().and_then(|e| e["url"].as_str().map(str::to_string))).ok_or_else(|| "No open pull request found".to_string())
+}
+
+/// Opens the pull request of a pushed branch, or finds the one that is open. Err is the line the
+/// Check entry carries. Nothing is stored here.
+fn open_pull_request(g: &dyn Git, link: &WatcherLink, worktree: &str, title: &str, result: &str) -> Result<String, String> {
+    let branch = git::branch_name(link.kind, link.item_id);
+    let head = merge::head_of(g, worktree).map_err(|e| format!("The worktree's commit could not be read ({e}): no pull request opened."))?;
+    let pushed = git::git(g, worktree, &["ls-remote", "origin", &format!("refs/heads/{branch}")]);
+    if !git::succeeded(&pushed) {
+        let why = git::first_line(&pushed, "git ls-remote failed");
+        return Err(format!("The branch could not be looked up on origin ({why}): no pull request opened."));
+    }
+    match pushed.tail.lines().find_map(|l| l.split_whitespace().next()) {
+        None => return Err("The branch is not pushed: no pull request opened.".to_string()),
+        Some(sha) if sha != head => return Err("The pushed branch is not at the worktree's commit: no pull request opened.".to_string()),
+        Some(_) => {}
+    }
+    let failed = |e: String| format!("The pull request could not be opened: {e}");
+    let Some(base) = link.base_ref.as_deref().map(|b| b.strip_prefix("origin/").unwrap_or(b)).filter(|b| git::ref_ok(b)) else {
+        return Err(failed("the link has no usable base branch".to_string()));
+    };
+    let args = pr_create_args(&branch, base, title, result);
+    let o = g.run("gh", &args, worktree);
+    let url = if git::succeeded(&o) {
+        last_line(&o.tail).to_string()
+    } else {
+        // A pull request that exists already (or one a pass that was killed before it stored the
+        // url opened) is found by its branch. If that fails too, the create error is the one said.
+        listed_url(g, worktree, &branch).map_err(|_| failed(merge::gh_failure(&o, "gh pr create failed")))?
+    };
+    merge::pr_url_ok(&url).ok_or_else(|| failed("gh did not print a pull request url".to_string()))?;
+    merge::check_url(g, worktree, &url).map_err(failed)?;
+    Ok(url)
+}
+
 fn failure_output(run: &CheckRun) -> String {
     let tail = for_agent(&run.tail);
     if run.timed_out {
         format!("The check took longer than {} minutes and was stopped.\n{tail}", CHECK_TIMEOUT.as_secs() / 60)
     } else {
         tail
+    }
+}
+
+/// Opens the pull request of a link that has no url yet and stores the url. Returns the line the
+/// Check entry carries when that did not work; the next report of the worker (which clears the
+/// check state) is the next try, since the url is still empty.
+fn ensure_pull_request(env: &Env, db: &Path, link: &WatcherLink, worktree: &str, title: &str, result: &str) -> Option<String> {
+    let has = {
+        let _shared = crate::org_shared();
+        store::pr_url_of(db, link.id)
+    };
+    match has {
+        Ok(Some(_)) => return None,
+        Ok(None) => {}
+        Err(e) => {
+            log::warn!("[watcher] pull request of link {}: {e}", link.id);
+            return None;
+        }
+    }
+    let url = match open_pull_request(env.git, link, worktree, title, result) {
+        Ok(url) => url,
+        Err(line) => return Some(line),
+    };
+    let _shared = crate::org_shared();
+    match store::set_pr_url(db, link.id, &url) {
+        Ok(()) => None,
+        Err(e) => {
+            log::warn!("[watcher] could not store the pull request url of link {}: {e}", link.id);
+            Some(format!("The pull request could not be opened: {e}"))
+        }
     }
 }
 
@@ -475,7 +570,7 @@ fn handle(
             return (false, false);
         }
     };
-    let base = NewCheck {
+    let mut base = NewCheck {
         kind: link.kind,
         item_id: link.item_id,
         link_id: link.id,
@@ -506,6 +601,11 @@ fn handle(
         };
         return (write(c, None), false);
     };
+    // The app opens the pull request, before the check runs: the entry and the lead see its url. A
+    // link that has one is left alone; a failure is a line in the entry and is never fatal.
+    if let Some(line) = ensure_pull_request(env, db, link, worktree, &facts.title, &facts.result) {
+        base.body = if base.body.trim().is_empty() { line } else { format!("{}\n\n{line}", base.body) };
+    }
     {
         let _shared = crate::org_shared();
         if let Err(e) = store::set_check_state(db, link.id, Some("running")) {
@@ -622,7 +722,8 @@ mod tests {
     }
 
     /// An app folder with one task "Poster tool" (id 1, running, with a reported result), a
-    /// worktree folder, and one open watcher link (id 1) that reported.
+    /// worktree folder, and one open watcher link (id 1) that reported and has its pull request url
+    /// already (the pull request tests clear it in `with_pr_git`).
     fn fx(name: &str, check: Option<&str>) -> Fx {
         let dir = app(&format!("check-{name}"), &["a"]);
         let db = db_of(&dir, "a");
@@ -633,8 +734,9 @@ mod tests {
         c.execute("INSERT INTO tasks (project_id, title, stage, result) VALUES (1, 'Poster tool', 'running', 'Made the poster tool.')", [])
             .unwrap();
         c.execute(
-            "INSERT INTO task_agents (task_id, short_id, name, started_at, started_by, worktree, base_ref, reported_at)
-             VALUES (1, 'abc12345', 'sm-w-task-1', '2027-01-15 08:00:00', 'watcher', ?1, 'origin/main', datetime('now'))",
+            "INSERT INTO task_agents (task_id, short_id, name, started_at, started_by, worktree, base_ref, reported_at, pr_url)
+             VALUES (1, 'abc12345', 'sm-w-task-1', '2027-01-15 08:00:00', 'watcher', ?1, 'origin/main', datetime('now'),
+                     'https://github.com/studio-a/poster-tool/pull/1')",
             [wt.to_string_lossy().to_string()],
         )
         .unwrap();
@@ -1332,5 +1434,264 @@ mod tests {
         let f = fx("decide", None);
         let id = store::add_entry(&f.db, ItemKind::Task, 1, "Could not start: x", "body").unwrap();
         assert_eq!(one::<String>(&f.db, &format!("SELECT kind FROM needs_you WHERE id = {id}")), "decide");
+    }
+
+    // ------------------------------------------------------------ the pull request
+
+    const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
+    const OTHER_SHA: &str = "fedcba9876543210fedcba9876543210fedcba98";
+    const PR: &str = "https://github.com/studio-a/poster-tool/pull/12";
+    const CREATE_LINE: &str = "pr create --head sm/task-1 --base main --title=Poster tool --body=Made the poster tool.";
+    const LIST_LINE: &str = "pr list --head sm/task-1 --state open --json url";
+
+    /// `f` with a git that knows the worktree's commit, what origin holds for the branch and its
+    /// own url, and a `gh` that answers as `gh` says.
+    fn with_pr_git(
+        f: &mut Fx,
+        pushed: String,
+        gh: impl Fn(&str) -> crate::agents::routines::run::CommandOutcome + Send + Sync + 'static,
+    ) {
+        Connection::open(&f.db).unwrap().execute("UPDATE task_agents SET pr_url = NULL", []).unwrap();
+        f.git = FakeGit::new(move |c| match c {
+            "rev-parse HEAD" => out(0, &format!("{SHA}\n")),
+            "ls-remote origin refs/heads/sm/task-1" => out(0, &pushed),
+            "remote get-url origin" => out(0, "git@github.com:studio-a/poster-tool.git\n"),
+            _ => out(0, ""),
+        })
+        .with_gh(gh);
+    }
+
+    fn pushed_at(sha: &str) -> String {
+        format!("{sha}\trefs/heads/sm/task-1\n")
+    }
+
+    fn stored(f: &Fx) -> Option<String> {
+        one(&f.db, "SELECT pr_url FROM task_agents")
+    }
+
+    fn entry_body(f: &Fx) -> String {
+        one(&f.db, "SELECT body FROM needs_you WHERE kind = 'check'")
+    }
+
+    fn creates(f: &Fx) -> Vec<String> {
+        f.git.gh_commands().into_iter().filter(|c| c.starts_with("pr create")).collect()
+    }
+
+    #[test]
+    fn the_app_opens_the_pull_request_and_stores_its_url() {
+        let mut f = fx("pr-open", Some("true"));
+        with_pr_git(&mut f, pushed_at(SHA), |c| {
+            assert!(c.starts_with("pr create"), "{c}");
+            out(0, &format!("Creating pull request for sm/task-1 into main\n\n{PR}\n"))
+        });
+        go(&f, DONE, &mut Memory::default(), 10);
+        // The exact argv: no file option, the base without `origin/`, title and body as one value each.
+        assert_eq!(f.git.gh_commands(), vec![CREATE_LINE.to_string()]);
+        assert_eq!(stored(&f).as_deref(), Some(PR));
+        assert_eq!(one::<String>(&f.db, "SELECT check_state FROM task_agents"), "passed");
+        assert_eq!(entries(&f), 1);
+        assert!(!entry_body(&f).contains("pull request could not"), "{}", entry_body(&f));
+        // The entry joins the stored url: the lead and the owner see it.
+        let seen: Option<String> = one(&f.db, "SELECT a.pr_url FROM needs_you n JOIN task_agents a ON a.id = n.link_id");
+        assert_eq!(seen.as_deref(), Some(PR));
+        // The gh call ran in the worktree.
+        let cwds = f.git.cwds.lock().unwrap().clone();
+        let calls = f.git.calls.lock().unwrap().clone();
+        let at = calls.iter().position(|(p, _)| p == "gh").unwrap();
+        assert_eq!(cwds[at], f.wt);
+    }
+
+    #[test]
+    fn a_branch_that_is_not_pushed_gets_no_pull_request() {
+        let mut f = fx("pr-unpushed", Some("true"));
+        with_pr_git(&mut f, String::new(), |c| panic!("no gh call expected: {c}"));
+        go(&f, DONE, &mut Memory::default(), 10);
+        assert!(f.git.gh_commands().is_empty());
+        assert_eq!(stored(&f), None);
+        assert!(entry_body(&f).contains("The branch is not pushed: no pull request opened."), "{}", entry_body(&f));
+        assert!(entry_body(&f).starts_with("Made the poster tool."), "the worker's result stays first");
+        assert_eq!(one::<String>(&f.db, "SELECT check_state FROM task_agents"), "passed");
+    }
+
+    #[test]
+    fn a_branch_pushed_at_another_commit_gets_no_pull_request() {
+        let mut f = fx("pr-othersha", Some("true"));
+        with_pr_git(&mut f, pushed_at(OTHER_SHA), |c| panic!("no gh call expected: {c}"));
+        go(&f, DONE, &mut Memory::default(), 10);
+        assert!(f.git.gh_commands().is_empty());
+        assert_eq!(stored(&f), None);
+        assert!(
+            entry_body(&f).contains("The pushed branch is not at the worktree's commit: no pull request opened."),
+            "{}",
+            entry_body(&f)
+        );
+    }
+
+    #[test]
+    fn an_existing_pull_request_is_found_through_gh_pr_list() {
+        let mut f = fx("pr-exists", Some("true"));
+        with_pr_git(&mut f, pushed_at(SHA), |c| {
+            if c.starts_with("pr create") {
+                out(1, &format!("a pull request for branch \"sm/task-1\" into branch \"main\" already exists:\n{PR}\n"))
+            } else {
+                assert_eq!(c, LIST_LINE);
+                out(0, &format!("[{{\"url\":\"{PR}\"}}]\n"))
+            }
+        });
+        go(&f, DONE, &mut Memory::default(), 10);
+        assert_eq!(f.git.gh_commands(), vec![CREATE_LINE.to_string(), LIST_LINE.to_string()]);
+        assert_eq!(stored(&f).as_deref(), Some(PR));
+        assert!(!entry_body(&f).contains("could not be opened"));
+    }
+
+    #[test]
+    fn a_pass_after_the_app_quit_between_create_and_store_finds_the_pull_request() {
+        let mut f = fx("pr-quit", Some("true"));
+        with_pr_git(&mut f, pushed_at(SHA), |c| {
+            if c.starts_with("pr create") {
+                out(1, "a pull request for branch \"sm/task-1\" into branch \"main\" already exists:\n")
+            } else {
+                out(0, &format!("[{{\"url\":\"{PR}\"}}]"))
+            }
+        });
+        // The first pass created it on GitHub and was killed before the url was stored: the link
+        // has no url and no entry.
+        assert_eq!(stored(&f), None);
+        go(&f, DONE, &mut Memory::default(), 10);
+        assert_eq!(stored(&f).as_deref(), Some(PR));
+    }
+
+    #[test]
+    fn a_failing_gh_leaves_a_line_in_the_entry_and_no_url() {
+        let mut f = fx("pr-fails", Some("true"));
+        with_pr_git(&mut f, pushed_at(SHA), |_| out(1, "\nHTTP 401: Bad credentials\nsecond line\n"));
+        go(&f, DONE, &mut Memory::default(), 10);
+        assert_eq!(stored(&f), None);
+        assert_eq!(entries(&f), 1, "the check still got its entry");
+        assert_eq!(one::<String>(&f.db, "SELECT check_state FROM task_agents"), "passed");
+        let body = entry_body(&f);
+        assert!(body.contains("The pull request could not be opened: HTTP 401: Bad credentials"), "{body}");
+        assert!(!body.contains("second line"), "{body}");
+    }
+
+    #[test]
+    fn a_gh_that_times_out_leaves_a_line_and_the_check_still_runs() {
+        let mut f = fx("pr-timeout", Some("touch ran.txt"));
+        with_pr_git(&mut f, pushed_at(SHA), |_| {
+            let mut o = out(0, "");
+            o.code = None;
+            o.timed_out = true;
+            o
+        });
+        go(&f, DONE, &mut Memory::default(), 10);
+        assert_eq!(stored(&f), None);
+        assert!(Path::new(&f.wt).join("ran.txt").exists(), "the check ran");
+        assert!(entry_body(&f).contains("The pull request could not be opened: gh took too long"), "{}", entry_body(&f));
+    }
+
+    #[test]
+    fn a_url_of_another_repository_or_a_malformed_one_is_refused() {
+        for (n, bad) in [
+            ("other", "https://github.com/studio-b/other-tool/pull/3"),
+            ("host", "https://example.com/studio-a/poster-tool/pull/12"),
+            ("issue", "https://github.com/studio-a/poster-tool/issues/12"),
+            ("text", "Done."),
+            ("trail", "https://github.com/studio-a/poster-tool/pull/12/files"),
+        ] {
+            let mut f = fx(&format!("pr-bad-{n}"), Some("true"));
+            with_pr_git(&mut f, pushed_at(SHA), move |c| {
+                if c.starts_with("pr create") {
+                    out(0, &format!("{bad}\n"))
+                } else {
+                    out(0, "[]")
+                }
+            });
+            go(&f, DONE, &mut Memory::default(), 10);
+            assert_eq!(stored(&f), None, "{bad}");
+            assert!(entry_body(&f).contains("The pull request could not be opened: "), "{bad}: {}", entry_body(&f));
+        }
+    }
+
+    #[test]
+    fn a_listed_url_of_another_repository_is_refused_too() {
+        let mut f = fx("pr-listbad", Some("true"));
+        with_pr_git(&mut f, pushed_at(SHA), |c| {
+            if c.starts_with("pr create") {
+                out(1, "already exists")
+            } else {
+                out(0, "[{\"url\":\"https://github.com/studio-b/other-tool/pull/3\"}]")
+            }
+        });
+        go(&f, DONE, &mut Memory::default(), 10);
+        assert_eq!(stored(&f), None);
+        assert!(entry_body(&f).contains("The pull request could not be opened: "), "{}", entry_body(&f));
+    }
+
+    #[test]
+    fn a_link_that_already_has_a_url_gets_no_gh_call() {
+        let mut f = fx("pr-has", Some("true"));
+        with_pr_git(&mut f, pushed_at(SHA), |c| panic!("no gh call expected: {c}"));
+        Connection::open(&f.db).unwrap().execute("UPDATE task_agents SET pr_url = ?1", [PR]).unwrap();
+        go(&f, DONE, &mut Memory::default(), 10);
+        assert!(f.git.gh_commands().is_empty());
+        assert!(!f.git.commands().iter().any(|c| c.starts_with("ls-remote")), "{:?}", f.git.commands());
+        assert_eq!(stored(&f).as_deref(), Some(PR));
+        assert_eq!(entries(&f), 1);
+    }
+
+    #[test]
+    fn the_title_and_the_body_are_one_argument_each() {
+        let hostile_title = "--head=evil\nsecond \"quoted\" 'single' $(touch pwned) `id` ; rm -rf /";
+        let args = pr_create_args("sm/task-1", "main", hostile_title, "-F /etc/passwd\n--body-file=x\n$(id)");
+        assert_eq!(args.len(), 8, "{args:?}");
+        assert_eq!(&args[..6], ["pr", "create", "--head", "sm/task-1", "--base", "main"]);
+        assert_eq!(args[6], format!("--title={hostile_title}"));
+        assert_eq!(args[7], "--body=-F /etc/passwd\n--body-file=x\n$(id)");
+        assert!(!args.iter().any(|a| a == "--body-file" || a == "--template" || a == "-F" || a == "--fill"));
+    }
+
+    #[test]
+    fn a_hostile_task_is_passed_whole_and_a_long_body_is_cut() {
+        let mut f = fx("pr-hostile", Some("true"));
+        with_pr_git(&mut f, pushed_at(SHA), |_| out(0, &format!("{PR}\n")));
+        let title = "-Dash \"q\" $(touch pwned)\nline two";
+        let long = format!("-F x\n$(touch pwned) {}é", "ab".repeat(PR_BODY_CAP));
+        Connection::open(&f.db)
+            .unwrap()
+            .execute("UPDATE tasks SET title = ?1, result = ?2 WHERE id = 1", [title, long.as_str()])
+            .unwrap();
+        go(&f, DONE, &mut Memory::default(), 10);
+        let calls = creates(&f);
+        assert_eq!(calls.len(), 1);
+        let want_body: String = long.chars().take(PR_BODY_CAP).collect();
+        assert_eq!(calls[0], format!("pr create --head sm/task-1 --base main --title={title} --body={want_body}"));
+        assert_eq!(want_body.chars().count(), PR_BODY_CAP);
+        assert!(!Path::new(&f.wt).join("pwned").exists());
+        assert_eq!(stored(&f).as_deref(), Some(PR));
+    }
+
+    #[test]
+    fn an_empty_title_falls_back_to_the_branch_and_a_long_body_is_cut_on_a_character() {
+        let args = pr_create_args("sm/task-1", "main", "   ", "é".repeat(PR_BODY_CAP + 5).as_str());
+        assert_eq!(args[6], "--title=sm/task-1");
+        assert_eq!(args[7].chars().count(), "--body=".len() + PR_BODY_CAP);
+    }
+
+    #[test]
+    fn the_base_loses_its_origin_prefix_and_a_flag_like_base_is_refused() {
+        let mut f = fx("pr-base", Some("true"));
+        Connection::open(&f.db).unwrap().execute("UPDATE task_agents SET base_ref = 'origin/release/2'", []).unwrap();
+        with_pr_git(&mut f, pushed_at(SHA), |_| out(0, &format!("{PR}\n")));
+        go(&f, DONE, &mut Memory::default(), 10);
+        assert_eq!(
+            creates(&f),
+            vec!["pr create --head sm/task-1 --base release/2 --title=Poster tool --body=Made the poster tool.".to_string()]
+        );
+        let mut g = fx("pr-flagbase", Some("true"));
+        Connection::open(&g.db).unwrap().execute("UPDATE task_agents SET base_ref = 'origin/--delete'", []).unwrap();
+        with_pr_git(&mut g, pushed_at(SHA), |c| panic!("no gh call expected: {c}"));
+        go(&g, DONE, &mut Memory::default(), 10);
+        assert!(g.git.gh_commands().is_empty());
+        assert_eq!(stored(&g), None);
     }
 }

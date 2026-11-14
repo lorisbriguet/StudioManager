@@ -459,6 +459,24 @@ pub fn set_check_state(db: &Path, link_id: i64, state: Option<&str>) -> Result<(
     Ok(())
 }
 
+/// The pull request url a link stored, None when it has none yet.
+pub fn pr_url_of(db: &Path, link_id: i64) -> Result<Option<String>, String> {
+    let conn = open(db)?;
+    let url: Option<String> = conn
+        .query_row("SELECT pr_url FROM task_agents WHERE id = ?1", [link_id], |r| r.get(0))
+        .map_err(|e| format!("Failed to read the link: {e}"))?;
+    Ok(url.map(|u| u.trim().to_string()).filter(|u| !u.is_empty()))
+}
+
+/// Stores the pull request url the app opened (or found) for a link, replacing any other: the
+/// app's url wins over a worker's. The caller has checked it (`merge::check_url`).
+pub fn set_pr_url(db: &Path, link_id: i64, url: &str) -> Result<(), String> {
+    let conn = super::super::capture::open(db)?;
+    conn.execute("UPDATE task_agents SET pr_url = ?1 WHERE id = ?2", params![url, link_id])
+        .map_err(|e| format!("Failed to write the pull request url: {e}"))?;
+    Ok(())
+}
+
 /// The decision to send a failed check back to the worker, in one transaction: the failure is
 /// counted and the check state cleared. Returns the new `check_fails`. The message is typed only
 /// after this returned, so a crash in between loses the message and never allows a second one.
