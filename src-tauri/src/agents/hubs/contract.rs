@@ -7,12 +7,20 @@ use serde_json::{Map, Value};
 
 pub const VERSION: u32 = 1;
 pub const MAX_WAITING: u32 = 9999;
+// The limits below are used by the events parser (Task 8) and the questions parser (Task 10).
+#[allow(dead_code)]
 pub const TITLE_CHARS: usize = 200;
+#[allow(dead_code)]
 pub const NOTE_CHARS: usize = 1000;
+#[allow(dead_code)]
 pub const TEXT_CHARS: usize = 1000;
+#[allow(dead_code)]
 pub const RECOMMENDATION_CHARS: usize = 500;
+#[allow(dead_code)]
 pub const MAX_EVENTS: usize = 2000;
+#[allow(dead_code)]
 pub const MAX_QUESTIONS: usize = 200;
+#[allow(dead_code)]
 pub const MAX_SPAN_DAYS: i64 = 366;
 pub const ERROR_CHARS: usize = 200;
 /// The longest id (the rule of `valid_id`, used by the events and questions parsers too).
@@ -156,6 +164,8 @@ pub fn parse_open(b: &[u8]) -> Result<Answer<Target>, String> {
     })
 }
 
+// Capture is sent from the capture field in Task 11.
+#[allow(dead_code)]
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct CaptureWire {
@@ -164,6 +174,7 @@ struct CaptureWire {
     saved: bool,
 }
 
+#[allow(dead_code)] // Task 11 (capture into a hub)
 pub fn parse_capture(b: &[u8]) -> Result<Answer<()>, String> {
     parse(b, |w: CaptureWire| if w.saved { Ok(()) } else { Err("saved is not true".into()) })
 }

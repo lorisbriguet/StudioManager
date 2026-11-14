@@ -34,8 +34,12 @@ const READER_GRACE: Duration = Duration::from_secs(1);
 pub enum Request {
     Counts,
     Open { id: Option<String> },
+    // Asked by the calendar layer (Task 8), the questions list (Task 10) and capture (Task 11).
+    #[allow(dead_code)]
     Events,
+    #[allow(dead_code)]
     Questions,
+    #[allow(dead_code)]
     Capture { text: String },
 }
 
