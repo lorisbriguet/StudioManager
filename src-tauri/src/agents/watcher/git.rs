@@ -91,6 +91,11 @@ pub fn base_ref(g: &dyn Git, folder: &str) -> Result<String, String> {
     Err("No base branch".to_string())
 }
 
+/// The branch of an item's worktree: `sm/<kind>-<id>`, built from the kind and the id only.
+pub fn branch_name(kind: ItemKind, id: i64) -> String {
+    format!("sm/{}-{id}", kind_word(kind))
+}
+
 pub fn kind_word(kind: ItemKind) -> &'static str {
     match kind {
         ItemKind::Task => "task",
@@ -108,7 +113,7 @@ pub fn add_worktree(g: &dyn Git, folder: &str, kind: ItemKind, id: i64, base: &s
         return Err("The project folder is not an absolute path".to_string());
     }
     let word = kind_word(kind);
-    let branch = format!("sm/{word}-{id}");
+    let branch = branch_name(kind, id);
     let path = format!("{}/.claude/worktrees/sm-{word}-{id}", folder.trim_end_matches('/'));
     if Path::new(&path).exists() {
         return Err(format!("The worktree sm-{word}-{id} already exists"));
@@ -256,6 +261,12 @@ mod tests {
         });
         assert_eq!(base_ref(&g, "/x").unwrap_err(), "No base branch");
         assert!(add_worktree(&FakeGit::repo(), "/x", ItemKind::Task, 1, "--force").is_err());
+    }
+
+    #[test]
+    fn the_branch_is_named_from_the_kind_and_the_id() {
+        assert_eq!(branch_name(ItemKind::Task, 31), "sm/task-31");
+        assert_eq!(branch_name(ItemKind::Subtask, 7), "sm/subtask-7");
     }
 
     #[test]

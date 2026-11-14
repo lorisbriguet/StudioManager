@@ -209,7 +209,9 @@ fn resume(env: &Env, d: &Deps, mem: &mut Memory, budget: &Budget, db: &Path, lin
         // edits without a prompt, the dev server), the link follows the copy, then type into it.
         (env.cli)().and_then(|cli| {
             let hook = super::start::hook_settings(d.app_dir, env.mcp_path, env.dev)?;
-            let extra = super::start::worker_args(env.dev, d.app_dir, env.mcp_path, &hook)?;
+            // The same rules as the start, for the same branch: it is named from the item.
+            let branch = super::git::branch_name(link.kind, link.item_id);
+            let extra = super::start::worker_args(env.dev, d.app_dir, env.mcp_path, &hook, &branch)?;
             let new_id = actions::resume_with(&*cli, &actions::home_dir(), agent, "opus", &extra)?;
             // Recorded before anything is typed: the old agent's "done" must not close the link.
             {
@@ -614,6 +616,11 @@ mod tests {
                 "mcp__studiomanager__get_wiki_article",
                 "mcp__studiomanager__ask",
                 "mcp__studiomanager__report_result",
+                "Bash(git add *)",
+                "Bash(git commit *)",
+                "Bash(gh pr create *)",
+                "Bash(git push -u origin sm/task-1)",
+                "Bash(git push origin sm/task-1)",
                 "--settings",
                 hook.to_string_lossy().as_ref(),
                 "--permission-mode",
