@@ -567,14 +567,14 @@ describe("NeedsYouTab, connected hubs", () => {
     clearInvokedCommands();
   });
 
-  it("shows the Connected hubs group last, with the count and the way into the hub", async () => {
+  it("shows the Connected hubs group above Decided alone, with the count and the way into the hub", async () => {
     hooks.alone = [row({ id: 20, kind: "alone", status: "answered", decided_by: "app", title: "Restarted", reason: null })];
     withHubs((cmd) => (cmd === "hubs_counts" ? [hub()] : null));
     setup([]);
     expect(await screen.findByText("Demo hub")).toBeInTheDocument();
     expect(screen.getByText("3 waiting")).toBeInTheDocument();
     const names = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
-    expect(names).toEqual(["Decided alone1", "Connected hubs1"]);
+    expect(names).toEqual(["Connected hubs1", "Decided alone1"]);
     fireEvent.click(screen.getByRole("button", { name: "Open in the hub" }));
     await waitFor(() => expect(invokedCommands).toContainEqual({ cmd: "hubs_open", args: { id: "h1" } }));
   });
