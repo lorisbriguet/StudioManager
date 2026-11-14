@@ -110,6 +110,34 @@ pub fn open_watcher_links(db: &Path, org: &str) -> Result<Vec<WatcherLink>, Stri
     Ok(out)
 }
 
+/// The ids of the open watcher links that wait for the owner and hold no work: the check has
+/// finished (`passed`, `failed`, `none` or `error`) and an open Check entry of the link is there.
+/// A check still running, a link without an open entry, and a hand-started link are not. They do
+/// not count against the worker cap.
+pub fn waiting_link_ids(db: &Path) -> Result<Vec<i64>, String> {
+    let conn = open(db)?;
+    let e = |e: rusqlite::Error| format!("Failed to read waiting links: {e}");
+    let has = |table: &str| {
+        conn.query_row("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?1", [table], |_| Ok(()))
+            .optional()
+            .map(|r| r.is_some())
+    };
+    if !has("task_agents").map_err(e)? || !has("needs_you").map_err(e)? {
+        return Ok(vec![]);
+    }
+    let mut st = conn
+        .prepare(
+            "SELECT t.id FROM task_agents t
+             WHERE t.ended_at IS NULL AND t.started_by = 'watcher'
+               AND t.check_state IN ('passed', 'failed', 'none', 'error')
+               AND EXISTS (SELECT 1 FROM needs_you n WHERE n.link_id = t.id AND n.kind = 'check' AND n.status = 'open')
+             ORDER BY t.id",
+        )
+        .map_err(e)?;
+    let rows = st.query_map([], |r| r.get(0)).map_err(e)?;
+    rows.collect::<Result<Vec<i64>, _>>().map_err(e)
+}
+
 /// The title of the app's "idle without a result" entry.
 pub const IDLE_ENTRY: &str = "Stopped without a result or a question";
 
@@ -1234,6 +1262,39 @@ mod tests {
         assert_eq!(links[0].resumes, 2);
         assert_eq!(links[0].org, "org1");
         assert_eq!(links[0].kind, ItemKind::Task);
+    }
+
+    #[test]
+    fn waiting_links_are_the_checked_ones_with_an_open_check_entry() {
+        let db = migrated("waiting");
+        assert_eq!(waiting_link_ids(&db).unwrap(), Vec::<i64>::new());
+        let c = Connection::open(&db).unwrap();
+        c.execute("INSERT INTO tasks (project_id, title, stage) VALUES (1, 'Poster tool', 'running')", []).unwrap();
+        for (short, state, by) in [
+            ("abc12341", Some("passed"), "watcher"),
+            ("abc12342", Some("running"), "watcher"),
+            ("abc12343", None, "watcher"),
+            ("abc12344", Some("failed"), "watcher"),
+            ("abc12345", Some("passed"), "hand"),
+        ] {
+            c.execute(
+                "INSERT INTO task_agents (task_id, short_id, name, started_at, started_by, check_state)
+                 VALUES (1, ?1, 'work', '2027-01-15 08:00:00', ?2, ?3)",
+                params![short, by, state],
+            )
+            .unwrap();
+            c.execute(
+                "INSERT INTO needs_you (kind, task_id, link_id, title) SELECT 'check', 1, MAX(id), 'Done' FROM task_agents",
+                [],
+            )
+            .unwrap();
+        }
+        // Link 4 has its entry settled; link 3 has no check yet; link 5 is not the watcher's.
+        c.execute("UPDATE needs_you SET status = 'dismissed' WHERE link_id = 4", []).unwrap();
+        assert_eq!(waiting_link_ids(&db).unwrap(), vec![1]);
+        // An ended link is not waiting.
+        c.execute("UPDATE task_agents SET ended_at = '2027-01-15 09:00:00' WHERE id = 1", []).unwrap();
+        assert_eq!(waiting_link_ids(&db).unwrap(), Vec::<i64>::new());
     }
 
     #[test]

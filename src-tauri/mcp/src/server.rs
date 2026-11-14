@@ -1227,7 +1227,7 @@ impl Server {
     }
 
     #[tool(
-        description = "Lead only. Get one entry with its task or subtask (title, brief, result), its project and, for a check, the stored diff."
+        description = "Lead only. Get one entry with its task or subtask (title, brief, result), its project, the pull request url its link stored and, for a check, the stored diff."
     )]
     async fn get_needs_you(&self, Parameters(p): Parameters<GetNeedsYouInput>) -> CallToolResult {
         self.run(move |d| {

@@ -1,5 +1,5 @@
 //! The tie between a hub and its projects: a project whose folder is inside a hub's folder is
-//! never merged alone. The watcher asks `in_any_hub` before every merge; `mark_hub_projects`
+//! never merged alone (the merge refuses it whatever `merge_alone` holds). The watcher asks `in_any_hub` before every merge; `mark_hub_projects`
 //! writes the mark when a hub is saved, so removing the hub later does not free its projects.
 
 use super::settings::{read_hubs, HubsRead};
@@ -46,18 +46,18 @@ pub fn in_any_hub(app_dir: &Path, folder: Option<&str>, demo: bool) -> Result<bo
     }
 }
 
-/// The projects of one organisation that are in the folder and still need the mark.
+/// The projects of one organisation that are in the folder and are not marked yet.
 struct Found {
     db: PathBuf,
     ids: Vec<i64>,
 }
 
-/// Whether `projects` has the columns the mark needs (migration 018).
+/// Whether `projects` has the column the mark needs (migration 018).
 fn has_mark_columns(conn: &Connection) -> bool {
     let Ok(mut stmt) = conn.prepare("PRAGMA table_info(projects)") else { return false };
     let Ok(rows) = stmt.query_map([], |r| r.get::<_, String>(1)) else { return false };
     let names: Vec<String> = rows.flatten().collect();
-    names.iter().any(|n| n == "hub_project") && names.iter().any(|n| n == "merge_alone")
+    names.iter().any(|n| n == "hub_project")
 }
 
 /// Reads, in every organisation, the projects inside `hub_folder` that are not marked yet. Takes
@@ -80,7 +80,7 @@ fn find_projects(app_dir: &Path, hub_folder: &str) -> Result<Vec<Found>, String>
             return Err(format!("Open {name} once in StudioManager so it is brought up to date, then try again. Nothing was marked."));
         }
         let mut stmt = conn
-            .prepare("SELECT id, folder_path FROM projects WHERE folder_path IS NOT NULL AND folder_path != '' AND (hub_project = 0 OR merge_alone != 0)")
+            .prepare("SELECT id, folder_path FROM projects WHERE folder_path IS NOT NULL AND folder_path != '' AND hub_project = 0")
             .map_err(|e| format!("Failed to read the projects of {name}: {e}"))?;
         let rows = stmt
             .query_map([], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, Option<String>>(1)?)))
@@ -101,7 +101,8 @@ pub fn count_hub_projects(app_dir: &Path, hub_folder: &str) -> Result<usize, Str
 }
 
 /// Marks every project, in every organisation, whose folder is inside `hub_folder`: hub project
-/// on, merging alone off. Refused while any organisation is in test or presentation mode, the
+/// on. The stored merging-alone choice is kept: it has no effect while the project is a hub's,
+/// and it shows again if the mark is removed by hand. Refused while any organisation is in test or presentation mode, the
 /// organisations cannot be listed, or one of them is not up to date (nothing is written then).
 /// Returns how many projects changed.
 pub fn mark_hub_projects(app_dir: &Path, hub_folder: &str) -> Result<usize, String> {
@@ -113,7 +114,7 @@ pub fn mark_hub_projects(app_dir: &Path, hub_folder: &str) -> Result<usize, Stri
         let _ = conn.busy_timeout(Duration::from_secs(5));
         let tx = conn.transaction().map_err(|e| format!("Failed to start a write: {e}"))?;
         for id in &f.ids {
-            tx.execute("UPDATE projects SET hub_project = 1, merge_alone = 0 WHERE id = ?1", [id])
+            tx.execute("UPDATE projects SET hub_project = 1 WHERE id = ?1", [id])
                 .map_err(|e| format!("Failed to mark a project: {e}"))?;
             changed += 1;
         }
@@ -207,17 +208,31 @@ mod tests {
         let dir = app("mark", &[("a", &["/w/hub/one", "/w/elsewhere"]), ("b", &["/w/hub", "/w/hub-old"])]);
         let n = mark_hub_projects(&dir, "/w/hub").unwrap();
         assert_eq!(n, 2);
-        assert_eq!(flags(&dir, "a"), vec![(1, 0), (0, 1)]);
-        assert_eq!(flags(&dir, "b"), vec![(1, 0), (0, 1)]);
+        // The stored merging-alone choice (1 here) is kept: the merge refuses a hub's project anyway.
+        assert_eq!(flags(&dir, "a"), vec![(1, 1), (0, 1)]);
+        assert_eq!(flags(&dir, "b"), vec![(1, 1), (0, 1)]);
         // Again: nothing more changes.
         assert_eq!(mark_hub_projects(&dir, "/w/hub").unwrap(), 0);
+    }
+
+    #[test]
+    fn marking_keeps_every_stored_merge_alone_value_and_skips_a_project_already_marked() {
+        let dir = app("keep", &[("a", &["/w/hub/one", "/w/hub/two"])]);
+        let c = Connection::open(org_dir(&dir, "a").join(DB_FILE)).unwrap();
+        c.execute("UPDATE projects SET merge_alone = 0 WHERE id = 2", []).unwrap();
+        drop(c);
+        assert_eq!(mark_hub_projects(&dir, "/w/hub").unwrap(), 2);
+        assert_eq!(flags(&dir, "a"), vec![(1, 1), (1, 0)]);
+        // A project already marked is not touched again, even with merge_alone on.
+        assert_eq!(mark_hub_projects(&dir, "/w/hub").unwrap(), 0);
+        assert_eq!(count_hub_projects(&dir, "/w/hub").unwrap(), 0);
     }
 
     #[test]
     fn a_percent_or_underscore_in_a_folder_name_matches_nothing_extra() {
         let dir = app("like", &[("a", &["/w/ab/x", "/w/a%/x", "/w/a_/x"])]);
         assert_eq!(mark_hub_projects(&dir, "/w/a%").unwrap(), 1);
-        assert_eq!(flags(&dir, "a"), vec![(0, 1), (1, 0), (0, 1)]);
+        assert_eq!(flags(&dir, "a"), vec![(0, 1), (1, 1), (0, 1)]);
     }
 
     #[test]

@@ -61,7 +61,7 @@ That is 47 tools, 5 of them money tools, not counting the three lead-only tools 
 
 If the environment variable `STUDIOMANAGER_TOOLS` is set and not empty, the server lists and allows only the tools it names (comma-separated, without the `mcp__studiomanager__` prefix, for example `list_captures,file_capture`). Any other call is refused with "This tool is not available in this session". Names that are no tool are ignored; unset, nothing changes. The brief session's config sets it to its seven tools (see [Brief session](agents.md#brief-session)), and a lead session's config to its own seven (see [Lead sessions](agents.md#lead-sessions)).
 
-Three tools are for the lead session only: `get_needs_you` (one entry with its task, project and, for a check, the stored diff, at most 200 KB), `resolve` (answer an entry the lead is working on, with the reason) and `hand_over` (pass it to the user with a recommendation; it stays open). They are neither listed nor allowed unless `STUDIOMANAGER_TOOLS` names them. They only act on an open entry whose `lead_state` is `running`, and never write a stage, a task status or `delivered_at`.
+Three tools are for the lead session only: `get_needs_you` (one entry with its task, project, the pull request url its worker's link stored (`pr_url`) and, for a check, the stored diff, at most 200 KB), `resolve` (answer an entry the lead is working on, with the reason) and `hand_over` (pass it to the user with a recommendation; it stays open). They are neither listed nor allowed unless `STUDIOMANAGER_TOOLS` names them. They only act on an open entry whose `lead_state` is `running`, and never write a stage, a task status or `delivered_at`.
 
 ## Safety rules
 

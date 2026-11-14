@@ -66,9 +66,11 @@ export async function updateProject(
 }
 
 /**
- * A project's agent settings. `merge_alone` is refused while the project belongs to a hub, and
- * making it a hub's project turns `merge_alone` off, in the same statement. The check command
- * is trimmed, at most 500 characters; empty clears it.
+ * A project's agent settings. Turning `merge_alone` on is refused while the project belongs to a
+ * hub (or is made one in the same call). `hub_project` never touches the stored `merge_alone`:
+ * the lead refuses to merge a hub's project alone whatever it holds, and removing the hub mark
+ * brings the choice back. Turning it off under a hub is allowed. The check command is trimmed,
+ * at most 500 characters; empty clears it.
  */
 export async function setProjectAgentSettings(
   id: number,
@@ -93,12 +95,14 @@ export async function setProjectAgentSettings(
     params.push(hub);
     sets.push(`hub_project = $${params.length}`);
   }
-  if (hub === 1) {
-    sets.push("merge_alone = 0");
-  } else if (merge !== null) {
+  if (merge !== null) {
     params.push(merge);
-    // The guard in SQL: a hub flag set after the read above still wins.
-    sets.push(`merge_alone = CASE WHEN ${hub === 0 ? "0" : "hub_project"} = 1 THEN 0 ELSE $${params.length} END`);
+    // The guard in SQL: a hub flag set after the read above leaves the stored value as it is.
+    sets.push(
+      merge === 1 && hub !== 0
+        ? `merge_alone = CASE WHEN hub_project = 1 THEN merge_alone ELSE $${params.length} END`
+        : `merge_alone = $${params.length}`,
+    );
   }
   if (sets.length === 0) return;
   await db.execute(`UPDATE projects SET ${sets.join(", ")}, updated_at = datetime('now') WHERE id = $1`, params);

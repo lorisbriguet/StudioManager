@@ -53,7 +53,7 @@ describe("the watcher line on the Needs you tab", () => {
   it("says why the watcher waits", async () => {
     status = { ...base, paused: "cap", running: 2, cap: 2 };
     show();
-    expect(await screen.findByText("Paused: 2 of 2 workers running")).toBeTruthy();
+    expect(await screen.findByText("Paused: 2 of 2 worker slots in use")).toBeTruthy();
   });
 
   it("uses the budget words when the budget pauses it", async () => {

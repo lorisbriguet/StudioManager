@@ -332,7 +332,8 @@ fn removing_a_hub_keeps_its_projects_out() {
     // The hub is taken out of hubs.json: the project stays marked and does not merge alone.
     crate::agents::hubs::settings::write_hubs(&f.dir, &[]).unwrap();
     assert_eq!(f.one::<i64>("SELECT hub_project FROM projects"), 1);
-    assert_eq!(f.one::<i64>("SELECT merge_alone FROM projects"), 0);
+    // The stored choice is kept (it has no effect), and the merge is still refused.
+    assert_eq!(f.one::<i64>("SELECT merge_alone FROM projects"), 1);
     pass(&f, &mut mem, 1);
     assert_refused(&f, id, "the project belongs to a hub");
 }
@@ -404,6 +405,19 @@ fn a_small_checked_change_is_merged_once_and_the_item_is_done() {
     assert_eq!(f.merges(), 1, "never a second merge");
     assert_eq!(f.one::<i64>("SELECT COUNT(*) FROM needs_you WHERE kind = 'alone'"), 1);
     assert_safe(&f);
+}
+
+#[test]
+fn a_one_line_change_is_listed_as_1_line_not_1_lines() {
+    let scene = Scene {
+        numstat: "1\t0\tsrc/poster.ts\n",
+        view: view_of("OPEN", false, SHA, "main", "MERGEABLE", 1, 0, &["src/poster.ts"], 1),
+        ..Scene::default()
+    };
+    let (f, _id, mut mem) = merging("one-line", &scene, "true");
+    pass(&f, &mut mem, 1);
+    assert_eq!(f.merges(), 1);
+    assert_eq!(f.alone_rows()[0].0, "Merged: check passed, 1 line");
 }
 
 #[test]

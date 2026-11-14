@@ -17,6 +17,7 @@ import {
   dismissEntry,
   reopenEntry,
 } from "../db/queries/needsYou";
+import { getDb } from "../db";
 import { setProjectAgentSettings, getProject, updateProject } from "../db/queries/projects";
 
 const prep = (sql: string) => rawDb().prepare(sql.replace(/\$(\d+)/g, "?$1"));
@@ -192,10 +193,34 @@ describe("setProjectAgentSettings", () => {
     expect(one("SELECT merge_alone, hub_project FROM projects WHERE id = $1", projectId)).toEqual({ merge_alone: 0, hub_project: 0 });
   });
 
-  it("turns merge_alone off when the project becomes a hub's", async () => {
+  it("keeps the stored merge_alone when the project becomes a hub's, and when the hub mark is removed", async () => {
     await setProjectAgentSettings(projectId, { merge_alone: 1 });
     await setProjectAgentSettings(projectId, { hub_project: 1 });
-    expect(one("SELECT merge_alone, hub_project FROM projects WHERE id = $1", projectId)).toEqual({ merge_alone: 0, hub_project: 1 });
+    expect(one("SELECT merge_alone, hub_project FROM projects WHERE id = $1", projectId)).toEqual({ merge_alone: 1, hub_project: 1 });
+    await setProjectAgentSettings(projectId, { hub_project: 0 });
+    expect(one("SELECT merge_alone, hub_project FROM projects WHERE id = $1", projectId)).toEqual({ merge_alone: 1, hub_project: 0 });
+  });
+
+  it("turns merge_alone off under a hub, and keeps it off when the hub mark is removed", async () => {
+    await setProjectAgentSettings(projectId, { hub_project: 1 });
+    await setProjectAgentSettings(projectId, { merge_alone: 0 });
+    await setProjectAgentSettings(projectId, { hub_project: 0 });
+    expect(one("SELECT merge_alone, hub_project FROM projects WHERE id = $1", projectId)).toEqual({ merge_alone: 0, hub_project: 0 });
+  });
+
+  it("the SQL guard keeps a stored merge_alone when a hub flag appears between the read and the write", async () => {
+    await setProjectAgentSettings(projectId, { merge_alone: 1 });
+    // The read sees no hub; the hub flag is set before the write runs.
+    const db = await getDb();
+    const realSelect = db.select.bind(db);
+    const spy = vi.spyOn(db, "select").mockImplementation(async (q: string, b?: unknown[]) => {
+      const rows = await realSelect(q, b);
+      run("UPDATE projects SET hub_project = 1 WHERE id = $1", projectId);
+      return rows as never;
+    });
+    await setProjectAgentSettings(projectId, { merge_alone: 1 });
+    spy.mockRestore();
+    expect(one("SELECT merge_alone, hub_project FROM projects WHERE id = $1", projectId)).toEqual({ merge_alone: 1, hub_project: 1 });
   });
 
   it("allows merge_alone once the hub flag is cleared in the same call", async () => {
