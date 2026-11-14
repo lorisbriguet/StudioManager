@@ -10,7 +10,7 @@
 //! written (counter, `wrap_asked_at`) before the message is typed, so a failed send still counts.
 
 use super::budget::Budget;
-use super::events::{notice, stuck_in, Event, STUCK_IDLE_MS};
+use super::events::{is_stopped, notice, stuck_in, Event, STUCK_IDLE_MS};
 use super::start::Env;
 use super::store::{self, Counter, LinkEntry, NewCheck, WatcherLink};
 use super::{Deps, Memory};
@@ -88,7 +88,7 @@ pub fn step(env: &Env, d: &Deps, mem: &mut Memory, budget: &Budget, links: &[(Pa
         // The transcript is read only for an idle agent that has been idle for a while.
         let stuck = !given_up
             && agent.group == Group::Idle
-            && d.now - since >= STUCK_IDLE_MS
+            && (is_stopped(agent) || d.now - since >= STUCK_IDLE_MS)
             && (env.transcript_tail)(&agent.session_id).is_some_and(|t| stuck_in(&t));
         let ask = {
             let _shared = crate::org_shared();
@@ -107,9 +107,10 @@ pub fn step(env: &Env, d: &Deps, mem: &mut Memory, budget: &Budget, links: &[(Pa
                 let body = &format!("{WAITING}: {title}. Open the agent to answer it.");
                 note(mem, db, link, "prompt", since, LinkEntry { lead_state: Some("prompt"), title, body, ..entry(link) })
             }
-            Event::IdleNoResult { since } => {
+            Event::IdleNoResult { since, stopped } => {
+                let state = if stopped { "was stopped" } else { "is idle" };
                 let body = format!(
-                    "{NO_RESULT_OR_QUESTION}. The worker is idle: it did not call report_result and did not ask a question. \
+                    "{NO_RESULT_OR_QUESTION}. The worker {state}: it did not call report_result and did not ask a question. \
                      Type an instruction into it from here, or open it."
                 );
                 let body = body.as_str();
@@ -818,6 +819,54 @@ mod tests {
         go(&g, &idle(), &mut mem, 0);
         go(&g, &idle(), &mut mem, 40);
         assert_eq!(decide_count(&g), 1);
+    }
+
+    fn stopped() -> String {
+        agent_json("idle", Some("stopped"), false, None)
+    }
+
+    #[test]
+    fn a_stopped_worker_without_a_result_is_one_entry_at_the_next_pass_that_says_so() {
+        let f = watcher("stopped");
+        let mut mem = Memory::default();
+        go(&f, &stopped(), &mut mem, 2);
+        assert_eq!(decide_count(&f), 1, "no thirty-minute wait");
+        let (title, body): (String, String) = Connection::open(&f.db)
+            .unwrap()
+            .query_row("SELECT title, body FROM needs_you WHERE kind = 'decide'", [], |r| Ok((r.get(0)?, r.get(1)?)))
+            .unwrap();
+        assert_eq!(title, NO_RESULT_OR_QUESTION);
+        assert!(body.contains("stopped") && !body.contains("is idle"), "{body}");
+        assert!(body.contains("Type an instruction into it from here, or open it"), "{body}");
+        // Once per wait.
+        go(&f, &stopped(), &mut mem, 3);
+        go(&f, &stopped(), &mut mem, 40);
+        assert_eq!(decide_count(&f), 1);
+        assert!(texts(&f).is_empty() && calls(&f).is_empty(), "nothing is typed, started or stopped");
+    }
+
+    #[test]
+    fn a_stopped_worker_that_reported_or_asked_gets_no_stopped_entry_and_a_server_error_still_resumes() {
+        // Reported: `check`'s path, no decide entry.
+        let f = watcher("stopped-reported");
+        Connection::open(&f.db).unwrap().execute("UPDATE task_agents SET reported_at = 1", []).unwrap();
+        let mut mem = Memory::default();
+        go(&f, &stopped(), &mut mem, 2);
+        go(&f, &stopped(), &mut mem, 6);
+        assert_eq!(decide_count(&f), 0);
+        // A server error in the transcript: resumed, not an entry.
+        let g = watcher("stopped-error");
+        *g.tail.lock().unwrap() = Some(ERROR_TAIL.to_string());
+        let mut mem = Memory::default();
+        go(&g, &agent_json("idle", Some("stopped"), true, None), &mut mem, 2);
+        assert_eq!(decide_count(&g), 0);
+        assert_eq!(one::<i64>(&g, "SELECT resumes FROM task_agents"), 1);
+        // A plainly idle worker keeps the thirty minutes.
+        let h = watcher("idle-still");
+        let mut mem = Memory::default();
+        go(&h, &idle(), &mut mem, 2);
+        go(&h, &idle(), &mut mem, 31);
+        assert_eq!(decide_count(&h), 0);
     }
 
     // ------------------------------------------------------------ old

@@ -263,6 +263,7 @@ Each of these Check entries is read by a lead session when the budget allows, wh
 - **Stuck on a connection error** (the Mac slept mid-answer; the worker has been idle for 2 minutes with a server error at the end of its conversation): told to continue, at most three times and at least 5 minutes apart, then listed under Decide. A worker whose process is gone is resumed as a new agent with the same conversation. A rate limit or an ended sign-in is never retried: the worker stays idle and comes to Decide after 30 minutes.
 - **Waiting at a permission prompt** for more than 2 minutes: a Decide entry that opens the agent. The lead never answers a prompt.
 - **Idle for 30 minutes without a result or a question:** a Decide entry.
+- **Stopped without a result or a question** (you ran `claude stop`, or the session died): a Decide entry at the next pass, with no 30-minute wait. A server error at the end of its conversation is still resumed first. Typing an instruction into it restarts the same session.
 - **Started more than a day ago, idle, no result:** asked once to write its result, then stopped 30 minutes later if it still has none; the work comes to you under Check ("Wrapped up after a day"). If the request cannot be typed, it is listed under Decide and the worker is not stopped.
 - **Its work was accepted or dismissed:** the worker is stopped if it still runs and its link is closed, so it no longer counts in the cap.
 

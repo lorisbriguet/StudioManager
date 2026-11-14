@@ -39,6 +39,12 @@ pub fn stuck_in(transcript_tail: &str) -> bool {
     false
 }
 
+/// Whether the session was stopped (`claude stop`) or died, as the list reports it: `stopped` as
+/// the state, or as the status when the state is missing.
+pub fn is_stopped(agent: &Agent) -> bool {
+    agent.state.as_deref() == Some("stopped") || agent.status == "stopped"
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Event {
     /// The worker asked a question: the open `decide` entry.
@@ -46,7 +52,8 @@ pub enum Event {
     AtPrompt { since: i64 },
     Finished { reported: bool },
     Stuck,
-    IdleNoResult { since: i64 },
+    /// `stopped`: the session was stopped (or died) rather than left idle.
+    IdleNoResult { since: i64, stopped: bool },
     Old,
     Gone,
 }
@@ -84,8 +91,12 @@ pub fn notice(
     }
     match agent.group {
         Group::NeedsYou if agent.status == "waiting" && now - since >= AT_PROMPT_MS => Some(Event::AtPrompt { since }),
+        // A stopped session will not do anything by itself: its entry needs no wait.
+        Group::Idle if !link.reported && is_stopped(agent) => Some(Event::IdleNoResult { since, stopped: true }),
         Group::Idle if now - link.started_at >= OLD_MS => Some(Event::Old),
-        Group::Idle if !link.reported && now - since >= IDLE_NO_RESULT_MS => Some(Event::IdleNoResult { since }),
+        Group::Idle if !link.reported && now - since >= IDLE_NO_RESULT_MS => {
+            Some(Event::IdleNoResult { since, stopped: false })
+        }
         _ => None,
     }
 }
@@ -148,11 +159,32 @@ mod tests {
         let a = agent("idle", None);
         let at = T0 + IDLE_NO_RESULT_MS;
         assert_eq!(notice(&l, Some(&a), false, None, at - 1, None), None);
-        assert_eq!(notice(&l, Some(&a), false, None, at, None), Some(Event::IdleNoResult { since: T0 }));
+        assert_eq!(notice(&l, Some(&a), false, None, at, None), Some(Event::IdleNoResult { since: T0, stopped: false }));
         // With a result written, or a question open, it is not "without a result".
         let reported = WatcherLink { reported: true, ..l.clone() };
         assert_eq!(notice(&reported, Some(&a), false, None, at, None), Some(Event::Finished { reported: true }));
         assert_eq!(notice(&l, Some(&a), false, Some(7), at, None), Some(Event::Asked { entry: 7 }));
+    }
+
+    #[test]
+    fn a_stopped_worker_without_result_is_noticed_at_once_and_a_plainly_idle_one_keeps_the_thirty_minutes() {
+        let l = WatcherLink { seen_since: Some(T0), ..link() };
+        for a in [agent("idle", Some("stopped")), agent("stopped", None)] {
+            assert_eq!(notice(&l, Some(&a), false, None, T0, None), Some(Event::IdleNoResult { since: T0, stopped: true }));
+            // First sight (no `seen_since`) counts too.
+            assert_eq!(notice(&link(), Some(&a), false, None, T0, None), Some(Event::IdleNoResult { since: T0, stopped: true }));
+            // A question open, a server error, a reported result: the same order as before.
+            assert_eq!(notice(&l, Some(&a), false, Some(7), T0, None), Some(Event::Asked { entry: 7 }));
+            assert_eq!(notice(&l, Some(&a), true, None, T0, None), Some(Event::Stuck));
+            let reported = WatcherLink { reported: true, ..l.clone() };
+            assert_eq!(notice(&reported, Some(&a), false, None, T0 + REPORTED_IDLE_MS, None), Some(Event::Finished { reported: true }));
+        }
+        let idle = agent("idle", None);
+        assert_eq!(notice(&l, Some(&idle), false, None, T0 + IDLE_NO_RESULT_MS - 1, None), None);
+        assert_eq!(
+            notice(&l, Some(&idle), false, None, T0 + IDLE_NO_RESULT_MS, None),
+            Some(Event::IdleNoResult { since: T0, stopped: false })
+        );
     }
 
     #[test]
@@ -174,7 +206,7 @@ mod tests {
     fn old_after_a_day_idle_and_not_a_millisecond_before() {
         let l = WatcherLink { seen_since: Some(T0), ..link() };
         let a = agent("idle", None);
-        assert_eq!(notice(&l, Some(&a), false, None, T0 + OLD_MS - 1, None), Some(Event::IdleNoResult { since: T0 }));
+        assert_eq!(notice(&l, Some(&a), false, None, T0 + OLD_MS - 1, None), Some(Event::IdleNoResult { since: T0, stopped: false }));
         assert_eq!(notice(&l, Some(&a), false, None, T0 + OLD_MS, None), Some(Event::Old));
         // A working agent is never old.
         let busy = agent("busy", None);
