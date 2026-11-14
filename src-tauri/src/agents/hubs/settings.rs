@@ -119,8 +119,9 @@ pub fn validate(input: HubInput, existing: &[Hub]) -> Result<Hub, String> {
         }
         p.canonicalize().map_err(|e| format!("The folder cannot be read: {e}"))?
     };
-    if folder == Path::new("/") || home().is_some_and(|h| h == folder) {
-        return Err("The folder cannot be the root or the home folder.".into());
+    // The home folder and every folder that contains it are too wide (they hold every project).
+    if folder == Path::new("/") || home().is_some_and(|h| h.starts_with(&folder)) {
+        return Err("The folder cannot be the root, the home folder or a folder that contains it.".into());
     }
     let program = Path::new(&input.program);
     if !program.is_absolute() || !program.is_file() {
@@ -263,6 +264,16 @@ mod tests {
         if let Some(h) = home() {
             let i = HubInput { folder: h.display().to_string(), ..input(&tmp("home")) };
             assert!(validate(i, &[]).is_err());
+        }
+    }
+
+    #[test]
+    fn a_folder_that_contains_the_home_folder_is_refused() {
+        if let Some(h) = home() {
+            for anc in h.ancestors().filter(|a| a.is_dir()) {
+                let i = HubInput { folder: anc.display().to_string(), ..input(&tmp("ancestor")) };
+                assert!(validate(i, &[]).is_err(), "{}", anc.display());
+            }
         }
     }
 

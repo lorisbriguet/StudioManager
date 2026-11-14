@@ -26,6 +26,20 @@ pub enum ErrorKind {
     Failed,
 }
 
+impl ErrorKind {
+    /// The name the page gets (camelCase), so it can word the problem in its own language.
+    pub fn label(self) -> &'static str {
+        match self {
+            ErrorKind::NotApproved => "notApproved",
+            ErrorKind::NotStarted => "notStarted",
+            ErrorKind::TimedOut => "timedOut",
+            ErrorKind::TooLarge => "tooLarge",
+            ErrorKind::BadAnswer => "badAnswer",
+            ErrorKind::Failed => "failed",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Tries {

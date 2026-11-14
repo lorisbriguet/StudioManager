@@ -1,16 +1,24 @@
 import { invoke } from "@tauri-apps/api/core";
 
+/** Why the last try failed, as Rust names it (`ErrorKind::label`); the page words it. */
+export type HubProblemKind = "notApproved" | "notStarted" | "timedOut" | "tooLarge" | "badAnswer" | "failed";
+
 /** A hub as the Rust side shows it (camelCase over the wire). Every text but `name` comes from a connector or Rust: show it as plain text. */
 export interface HubView {
   id: string;
   name: string;
   colour: string;
   folder: string;
+  /** The connector, so Edit can prefill it. */
+  program: string;
+  args: string[];
   approved: boolean;
   waiting: number | null;
   fresh: boolean;
   checkedAt: number | null;
   problem: string | null;
+  /** The kind of `problem`, to word it in the app's language; `problem` is the fallback text. */
+  problemKind: HubProblemKind | null;
   nextTryAt: number | null;
   paused: boolean;
   busy: boolean;

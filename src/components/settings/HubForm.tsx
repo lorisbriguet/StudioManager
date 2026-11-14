@@ -14,9 +14,8 @@ const pick = async (directory: boolean): Promise<string | null> => {
 };
 
 /**
- * Adds a hub, or changes `hub`. The saved hub's program and arguments are not sent back to the
- * app, so an edit asks for them again. Saving opens a native dialog; if the owner cancels it the
- * form stays open.
+ * Adds a hub, or changes `hub` (its program and arguments are prefilled). Saving opens a native
+ * dialog when the connector is not allowed yet; if the owner cancels it the form stays open.
  */
 export function HubForm({ hub, onClose }: { hub: HubView | null; onClose: () => void }) {
   const t = useT();
@@ -24,8 +23,8 @@ export function HubForm({ hub, onClose }: { hub: HubView | null; onClose: () => 
   const [name, setName] = useState(hub?.name ?? "");
   const [colour, setColour] = useState(hub?.colour ?? "blue");
   const [folder, setFolder] = useState(hub?.folder ?? "");
-  const [program, setProgram] = useState("");
-  const [argsText, setArgsText] = useState("");
+  const [program, setProgram] = useState(hub?.program ?? "");
+  const [argsText, setArgsText] = useState((hub?.args ?? []).join("\n"));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [failure, setFailure] = useState<string | null>(null);
 
@@ -47,7 +46,8 @@ export function HubForm({ hub, onClose }: { hub: HubView | null; onClose: () => 
         colour,
         folder: folder.trim(),
         program: program.trim(),
-        args: argsText.split("\n").filter((l) => l.trim() !== ""),
+        // As typed, but a line is trimmed (a trailing space or carriage return is never meant) and an empty one dropped.
+        args: argsText.split("\n").map((l) => l.trim()).filter((l) => l !== ""),
       });
     } catch (err) {
       setFailure(isHubNotConfirmed(err) ? t.hubs_not_allowed : hubErrorText(err));
@@ -103,7 +103,6 @@ export function HubForm({ hub, onClose }: { hub: HubView | null; onClose: () => 
         >
           <Input aria-label={t.hubs_program} aria-invalid={errors.program ? true : undefined} value={program} onChange={(ev) => setProgram(ev.target.value)} />
           {errors.program && <FieldError>{errors.program}</FieldError>}
-          {hub && <p className="mt-1 text-xs text-muted">{t.hubs_reenter_hint}</p>}
         </FormGroup>
         <FormField label={t.hubs_args} hint={t.hubs_args_hint}>
           <Textarea rows={3} value={argsText} onChange={(ev) => setArgsText(ev.target.value)} />

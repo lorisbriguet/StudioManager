@@ -18,8 +18,8 @@ vi.mock("../db/hooks/useCaptures", () => ({ useBriefEntries: () => ({ data: [{ c
 vi.mock("../db/hooks/useTasks", () => ({ useUpdateTask: () => ({}), useUpdateSubtask: () => ({}) }));
 
 const hub = (over: Partial<HubView> = {}): HubView => ({
-  id: "h1", name: "Demo hub", colour: "purple", folder: "/data/demo-hub", approved: true, waiting: 3, fresh: true,
-  checkedAt: 1, problem: null, nextTryAt: null, paused: false, busy: false, offers: ["counts"], ...over,
+  id: "h1", name: "Demo hub", colour: "purple", folder: "/data/demo-hub", program: "/bin/sh", args: ["connector.sh"],
+  approved: true, waiting: 3, fresh: true, checkedAt: 1, problem: null, problemKind: null, nextTryAt: null, paused: false, busy: false, offers: ["counts"], ...over,
 });
 
 function wrapper() {
@@ -114,6 +114,35 @@ describe("useHubWaiting and the Needs you count", () => {
     await waitFor(() => expect(invokedCommands.filter((c) => c.cmd === "hubs_counts")).toHaveLength(1));
     await emit("hubs-changed");
     await waitFor(() => expect(invokedCommands.filter((c) => c.cmd === "hubs_counts")).toHaveLength(2));
+  });
+});
+
+describe("the hubs-changed listener", () => {
+  it("is one for the app, however many callers read the hubs", async () => {
+    setInvokeHandler((cmd) => (cmd === "hubs_counts" ? [hub()] : null));
+    const w = wrapper();
+    renderHook(() => ({ a: useHubs(), b: useHubs(), c: useHubWaiting() }), { wrapper: w });
+    renderHook(() => useHubs(), { wrapper: w });
+    await waitFor(() => expect(invokedCommands.filter((c) => c.cmd === "hubs_counts")).toHaveLength(1));
+    await emit("hubs-changed");
+    await waitFor(() => expect(invokedCommands.filter((c) => c.cmd === "hubs_counts")).toHaveLength(2));
+    await new Promise((r) => setTimeout(r, 30));
+    // One event, one read: not one restart per caller.
+    expect(invokedCommands.filter((c) => c.cmd === "hubs_counts")).toHaveLength(2);
+  });
+
+  it("is removed with the last caller and set again by the next", async () => {
+    setInvokeHandler((cmd) => (cmd === "hubs_counts" ? [hub()] : null));
+    const first = renderHook(() => useHubs(), { wrapper: wrapper() });
+    await waitFor(() => expect(invokedCommands.filter((c) => c.cmd === "hubs_counts")).toHaveLength(1));
+    first.unmount();
+    await emit("hubs-changed");
+    await new Promise((r) => setTimeout(r, 20));
+    expect(invokedCommands.filter((c) => c.cmd === "hubs_counts")).toHaveLength(1);
+    renderHook(() => useHubs(), { wrapper: wrapper() });
+    await waitFor(() => expect(invokedCommands.filter((c) => c.cmd === "hubs_counts")).toHaveLength(2));
+    await emit("hubs-changed");
+    await waitFor(() => expect(invokedCommands.filter((c) => c.cmd === "hubs_counts")).toHaveLength(3));
   });
 });
 

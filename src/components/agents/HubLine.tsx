@@ -24,7 +24,10 @@ export function hubStateLine(h: HubView, t: T, now: number): string {
   if (!h.approved) return t.hubs_needs_allowing;
   if (h.paused) return t.hubs_paused.replace("{n}", String(HUB_MAX_FAILS));
   if (h.problem) {
-    const base = t.hubs_not_reached.replace("{problem}", h.problem);
+    // A failed or unstarted connector keeps Rust's text: it carries the reason (the first error line).
+    const worded = h.problemKind && h.problemKind !== "failed" && h.problemKind !== "notStarted";
+    const text = worded && h.problemKind ? t[`hubs_problem_${h.problemKind}`] : h.problem;
+    const base = t.hubs_not_reached.replace("{problem}", text);
     return h.nextTryAt ? `${base} ${t.hubs_next_try.replace("{time}", format(new Date(h.nextTryAt), "HH:mm"))}` : base;
   }
   if (h.waiting !== null && h.checkedAt !== null) {
@@ -57,6 +60,7 @@ export function HubLine({ hub: h }: { hub: HubView }) {
   const now = useNow();
   const refresh = useHubRefresh();
   const [error, setError] = useState<string | null>(null);
+  const [opening, setOpening] = useState(false);
   const unreached = hubIsUnreached(h);
   const waiting = h.waiting ?? 0;
 
@@ -79,12 +83,16 @@ export function HubLine({ hub: h }: { hub: HubView }) {
           <Button
             variant="link"
             icon={ICONS.openExternal}
-            onClick={() =>
-              void openInHub(h.id).then(
-                () => setError(null),
-                (e) => setError(hubErrorText(e)),
-              )
-            }
+            loading={opening}
+            onClick={() => {
+              setOpening(true);
+              void openInHub(h.id)
+                .then(
+                  () => setError(null),
+                  (e) => setError(hubErrorText(e)),
+                )
+                .finally(() => setOpening(false));
+            }}
           >
             {t.hubs_open}
           </Button>

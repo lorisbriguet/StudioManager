@@ -186,7 +186,13 @@ pub fn run_connector(
             }
             Ok(false) => std::thread::sleep(Duration::from_millis(10)),
             Err(e) => {
-                end_group(&mut child, group);
+                if group_may_be_signalled(&e) {
+                    end_group(&mut child, group);
+                } else {
+                    // The leader was reaped elsewhere: its pid may belong to a stranger by now.
+                    untrack_group(group);
+                    let _ = child.wait();
+                }
                 return Err(RunError::Exit { code: None, line: clean_text(&e.to_string(), ERROR_CHARS) });
             }
         }
@@ -230,6 +236,12 @@ fn has_exited(group: libc::pid_t) -> std::io::Result<bool> {
         }
         Ok(info.si_pid != 0)
     }
+}
+
+/// Whether the group may still be signalled after `waitid` failed: not when the leader is gone
+/// (`ECHILD`), because its process group id may have been reused.
+fn group_may_be_signalled(e: &std::io::Error) -> bool {
+    e.raw_os_error() != Some(libc::ECHILD)
 }
 
 /// However a connector ended, nothing it started stays: the whole group is killed (the leader is
@@ -476,13 +488,20 @@ mod tests {
         let dir = tmp("capture-grandchild");
         let pid_file = dir.join("child");
         // Ends on TERM but leaves its `sleep` running.
-        let body = format!("sleep 30 &\necho $! > '{}'\ntrap 'exit 0' TERM\nwhile :; do sleep 1; done", pid_file.display());
+        // The grandchild ignores TERM, so only the final kill of the group can end it.
+        let body = format!("(trap '' TERM; exec sleep 30) &\necho $! > '{}'\ntrap 'exit 0' TERM\nwhile :; do sleep 1; done", pid_file.display());
         let started = Instant::now();
         let res = sh(&dir, &body, &[], Some(b"{}"), Duration::from_millis(700));
         assert_eq!(res, Err(RunError::TimedOut));
         assert!(started.elapsed() < TERM_GRACE, "{:?}", started.elapsed());
         assert_gone(pid_from(&pid_file));
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_reaped_leader_is_never_signalled() {
+        assert!(!group_may_be_signalled(&std::io::Error::from_raw_os_error(libc::ECHILD)));
+        assert!(group_may_be_signalled(&std::io::Error::from_raw_os_error(libc::EINVAL)));
     }
 
     #[test]

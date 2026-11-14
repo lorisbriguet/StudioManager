@@ -74,7 +74,7 @@ function setup(entries: BriefEntry[]) {
 }
 
 const hub = (over: Record<string, unknown> = {}) => ({
-  id: "h1", name: "Demo hub", colour: "purple", folder: "/data/demo-hub", approved: true, waiting: 3, fresh: true,
+  id: "h1", name: "Demo hub", colour: "purple", folder: "/data/demo-hub", program: "/bin/sh", args: ["connector.sh"], problemKind: null, approved: true, waiting: 3, fresh: true,
   checkedAt: Date.now() - 120_000, problem: null, nextTryAt: null, paused: false, busy: false, offers: ["counts"], ...over,
 });
 
@@ -605,6 +605,27 @@ describe("NeedsYouTab, connected hubs", () => {
     setup([]);
     expect(await screen.findByText("Demo hub")).toBeInTheDocument();
     expect(screen.queryByText("Nothing waits for you.")).not.toBeInTheDocument();
+  });
+
+  it("Open in the hub shows a pending state and cannot be clicked twice meanwhile", async () => {
+    let release: () => void = () => {};
+    withHubs((cmd) => {
+      if (cmd === "hubs_counts") return [hub()];
+      if (cmd === "hubs_open") return new Promise<void>((r) => (release = r));
+      return null;
+    });
+    setup([]);
+    const button = await screen.findByRole("button", { name: "Open in the hub" });
+    fireEvent.click(button);
+    await waitFor(() => expect(button).toHaveAttribute("aria-busy", "true"));
+    fireEvent.click(button);
+    fireEvent.click(button);
+    expect(invokedCommands.filter((c) => c.cmd === "hubs_open")).toHaveLength(1);
+    release();
+    await waitFor(() => expect(button).not.toHaveAttribute("aria-busy"));
+    fireEvent.click(button);
+    await waitFor(() => expect(invokedCommands.filter((c) => c.cmd === "hubs_open")).toHaveLength(2));
+    release();
   });
 
   it("shows an error of Open in the hub under the line, as plain text", async () => {

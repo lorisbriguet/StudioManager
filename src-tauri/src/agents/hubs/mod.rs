@@ -92,6 +92,8 @@ pub struct Held {
     pub waiting: Option<(u32, i64)>,
     /// The app's own words for why the last run failed.
     pub problem: Option<String>,
+    /// Why the last run failed, for the page to word.
+    pub problem_kind: Option<ErrorKind>,
     /// Requests the hub answered `unsupported` to.
     pub unsupported: HashSet<&'static str>,
 }
@@ -101,6 +103,9 @@ pub struct Held {
 pub struct HubsState {
     cache: Arc<Mutex<HashMap<String, Held>>>,
     busy: Arc<Mutex<HashSet<(String, &'static str)>>>,
+    /// The retry counters: the working copy, read from `hubs-state.json` the first time they are
+    /// needed and written through after each change. A failed write loosens no cap.
+    tries: Arc<Mutex<Option<HashMap<String, Tries>>>>,
 }
 
 /// Removes the (hub, request) from the busy set however the run ends.
@@ -122,11 +127,14 @@ pub struct HubView {
     pub name: String,
     pub colour: String,
     pub folder: String,
+    pub program: String,
+    pub args: Vec<String>,
     pub approved: bool,
     pub waiting: Option<u32>,
     pub fresh: bool,
     pub checked_at: Option<i64>,
     pub problem: Option<String>,
+    pub problem_kind: Option<&'static str>,
     pub next_try_at: Option<i64>,
     pub paused: bool,
     pub busy: bool,
@@ -152,8 +160,6 @@ pub struct Deps {
 static EDIT_LOCK: Mutex<()> = Mutex::new(());
 /// One read-modify-write of the Keychain fingerprints at a time.
 static APPROVAL_LOCK: Mutex<()> = Mutex::new(());
-/// One read-modify-write of `hubs-state.json` at a time. Never held while a connector runs.
-static TRIES_LOCK: Mutex<()> = Mutex::new(());
 
 /// Checks the gate, reading as little as possible: the demo first, then the switch, then the
 /// organisations.
@@ -203,6 +209,20 @@ fn problem_text(e: &RunError) -> String {
 const BAD_ANSWER: &str = "The connector answered something that is not the contract.";
 const NEEDS_ALLOWING: &str = "Needs allowing: save the hub again to allow its connector.";
 
+/// Runs `f` on the counters in memory (read from the file the first time). Never held while a
+/// connector runs.
+fn with_tries<R>(d: &Deps, st: &HubsState, f: impl FnOnce(&mut HashMap<String, Tries>) -> R) -> R {
+    let mut guard = lock(&st.tries);
+    f(guard.get_or_insert_with(|| read_tries(&d.app_dir)))
+}
+
+/// Writes the counters through to the file; a failure is logged and the memory stays the authority.
+fn keep_tries(d: &Deps, all: &HashMap<String, Tries>) {
+    if let Err(e) = write_tries(&d.app_dir, all) {
+        log::warn!("[hubs] could not keep the retry counters: {e}");
+    }
+}
+
 fn view(d: &Deps, st: &HubsState, h: &Hub, tries: &HashMap<String, Tries>) -> HubView {
     let now = (d.now)();
     let held = lock(&st.cache).get(&h.id).cloned().unwrap_or_default();
@@ -211,16 +231,22 @@ fn view(d: &Deps, st: &HubsState, h: &Hub, tries: &HashMap<String, Tries>) -> Hu
     let paused = t.fails >= MAX_AUTO_FAILS;
     let ahead = t.next_try_at - now;
     let busy = lock(&st.busy).iter().any(|(id, _)| *id == h.id);
+    let problem = if ok { held.problem.clone() } else { Some(NEEDS_ALLOWING.into()) };
+    let problem_kind = if ok { held.problem_kind } else { Some(ErrorKind::NotApproved) }.filter(|_| problem.is_some());
     HubView {
         id: h.id.clone(),
         name: h.name.clone(),
         colour: h.colour.clone(),
         folder: h.folder.clone(),
+        program: h.program.clone(),
+        args: h.args.clone(),
         approved: ok,
         waiting: held.waiting.map(|(n, _)| n),
-        fresh: held.waiting.is_some_and(|(_, at)| (0..FRESH_MS).contains(&(now - at))),
+        // A hub whose last run failed adds nothing: the last number stays for its line only.
+        fresh: problem.is_none() && held.waiting.is_some_and(|(_, at)| (0..FRESH_MS).contains(&(now - at))),
         checked_at: held.waiting.map(|(_, at)| at),
-        problem: if ok { held.problem.clone() } else { Some(NEEDS_ALLOWING.into()) },
+        problem_kind: problem_kind.map(ErrorKind::label),
+        problem,
         next_try_at: Some(t.next_try_at).filter(|_| !paused && ahead > 0 && ahead <= MAX_WAIT_MS),
         paused,
         busy,
@@ -229,7 +255,7 @@ fn view(d: &Deps, st: &HubsState, h: &Hub, tries: &HashMap<String, Tries>) -> Hu
 }
 
 fn views(d: &Deps, st: &HubsState, hubs: &[Hub]) -> Vec<HubView> {
-    let tries = read_tries(&d.app_dir);
+    let tries = with_tries(d, st, |t| t.clone());
     hubs.iter().map(|h| view(d, st, h, &tries)).collect()
 }
 
@@ -253,11 +279,7 @@ fn start_counts(d: &Deps, st: &HubsState, hub: &Hub, by_hand: bool) -> Start {
         if busy.contains(&busy_key) {
             return Start::Busy;
         }
-        let tries = {
-            let _t = lock(&TRIES_LOCK);
-            read_tries(&d.app_dir)
-        };
-        let t = tries.get(&key(&hub.id, "counts")).cloned().unwrap_or_default();
+        let t = with_tries(d, st, |all| all.get(&key(&hub.id, "counts")).cloned().unwrap_or_default());
         if let Err(w) = may_run(&t, (d.now)(), by_hand) {
             return Start::Wait(w);
         }
@@ -305,26 +327,29 @@ fn finish_counts(d: &Deps, st: &HubsState, hub: &Hub, result: Result<Vec<u8>, Ru
             Outcome::Count(n) => {
                 held.waiting = Some((*n, now));
                 held.problem = None;
+                held.problem_kind = None;
                 held.unsupported.remove("counts");
             }
             Outcome::Unsupported => {
                 held.waiting = None;
                 held.problem = None;
+                held.problem_kind = None;
                 held.unsupported.insert("counts");
             }
-            Outcome::Fail(_, text) => held.problem = Some(text.clone()),
+            Outcome::Fail(kind, text) => {
+                held.problem = Some(text.clone());
+                held.problem_kind = Some(*kind);
+            }
         }
     }
-    let _t = lock(&TRIES_LOCK);
-    let mut all = read_tries(&d.app_dir);
-    let tries = all.entry(key(&hub.id, "counts")).or_default();
-    match outcome {
-        Outcome::Count(_) | Outcome::Unsupported => retry::after_success(tries, now),
-        Outcome::Fail(kind, _) => retry::after_failure(tries, kind, now),
-    }
-    if let Err(e) = write_tries(&d.app_dir, &all) {
-        log::warn!("[hubs] could not keep the retry counters: {e}");
-    }
+    with_tries(d, st, |all| {
+        let tries = all.entry(key(&hub.id, "counts")).or_default();
+        match outcome {
+            Outcome::Count(_) | Outcome::Unsupported => retry::after_success(tries, now),
+            Outcome::Fail(kind, _) => retry::after_failure(tries, kind, now),
+        }
+        keep_tries(d, all);
+    });
 }
 
 /// Starts a counts run for each approved hub whose count is older than a minute.
@@ -348,16 +373,14 @@ fn refresh_counts(d: &Deps, st: &HubsState, hubs: &[Hub]) {
 /// Forgets what is held and counted for a hub.
 fn drop_data(d: &Deps, st: &HubsState, id: &str) {
     lock(&st.cache).remove(id);
-    let _t = lock(&TRIES_LOCK);
-    let mut all = read_tries(&d.app_dir);
-    let prefix = format!("{id}/");
-    let before = all.len();
-    all.retain(|k, _| !k.starts_with(&prefix));
-    if all.len() != before {
-        if let Err(e) = write_tries(&d.app_dir, &all) {
-            log::warn!("[hubs] could not drop the retry counters: {e}");
+    with_tries(d, st, |all| {
+        let prefix = format!("{id}/");
+        let before = all.len();
+        all.retain(|k, _| !k.starts_with(&prefix));
+        if all.len() != before {
+            keep_tries(d, all);
         }
-    }
+    });
 }
 
 pub fn list(d: &Deps, st: &HubsState) -> Result<Vec<HubView>, String> {
@@ -376,19 +399,25 @@ pub fn refresh(d: &Deps, st: &HubsState, id: &str) -> Result<HubView, String> {
     gate_now(d)?;
     let hub = find_hub(d, id)?;
     // Trying again by hand asks a hub that declined `counts` once more.
-    lock(&st.cache).entry(hub.id.clone()).or_default().unsupported.remove("counts");
-    match start_counts(d, st, &hub, true) {
+    // The mark is kept when the try is refused (the gap, a run under way, not allowed).
+    let had = lock(&st.cache).entry(hub.id.clone()).or_default().unsupported.remove("counts");
+    let started = start_counts(d, st, &hub, true);
+    if had && !matches!(started, Start::Started) {
+        lock(&st.cache).entry(hub.id.clone()).or_default().unsupported.insert("counts");
+    }
+    match started {
         Start::Started | Start::Busy => {}
         Start::NotApproved => return Err(NEEDS_ALLOWING.into()),
         Start::Wait(Wait::Gap(ms)) => return Err(format!("Wait {} seconds before trying again.", ms / 1000 + 1)),
         Start::Wait(_) => return Err("The hub cannot be tried again yet.".into()),
     }
-    Ok(view(d, st, &hub, &read_tries(&d.app_dir)))
+    let tries = with_tries(d, st, |t| t.clone());
+    Ok(view(d, st, &hub, &tries))
 }
 
 /// The text of the dialog that asks whether to allow a connector: program, each argument and the
 /// folder in full, as plain text.
-pub fn confirm_text(h: &Hub) -> String {
+pub fn confirm_text(h: &Hub, projects: usize) -> String {
     use crate::agents::routines::shown;
     let mut out = String::from("This connector will run a program on your Mac whenever the app asks the hub, without asking again.");
     out.push_str(&format!("\n\n\u{201C}{}\u{201D}\nProgram: {}\n", shown(&h.name), shown(&h.program)));
@@ -400,16 +429,21 @@ pub fn confirm_text(h: &Hub) -> String {
             out.push_str(&format!("    {}\n", shown(a)));
         }
     }
-    out.push_str(&format!("Working folder: {}", shown(&h.folder)));
+    out.push_str(&format!("Working folder: {}\n", shown(&h.folder)));
+    out.push_str(&match projects {
+        0 => "Projects in this folder: none".to_string(),
+        1 => "Projects in this folder: 1. It will be marked as a hub's and never merged alone.".to_string(),
+        n => format!("Projects in this folder: {n}. They will be marked as a hub's and never merged alone."),
+    });
     out.push_str("\n\nAllow only connectors you set up yourself.");
     out
 }
 
 /// A native dialog (out of the webview's reach), as `routines::confirm_commands` shows one.
 /// Blocks until answered: call it on a blocking thread.
-fn confirm_connector(app: &AppHandle, h: &Hub) -> bool {
+fn confirm_connector(app: &AppHandle, h: &Hub, projects: usize) -> bool {
     app.dialog()
-        .message(confirm_text(h))
+        .message(confirm_text(h, projects))
         .title("Allow this connector?")
         .kind(MessageDialogKind::Warning)
         .buttons(MessageDialogButtons::OkCancelCustom("Allow".into(), "Cancel".into()))
@@ -417,15 +451,24 @@ fn confirm_connector(app: &AppHandle, h: &Hub) -> bool {
 }
 
 /// `confirm` is asked only when the connector's fingerprint is not approved yet.
-pub fn save(d: &Deps, st: &HubsState, input: HubInput, confirm: &dyn Fn(&Hub) -> bool) -> Result<HubView, String> {
+pub fn save(d: &Deps, st: &HubsState, input: HubInput, confirm: &dyn Fn(&Hub, usize) -> bool) -> Result<HubView, String> {
     gate_now(d)?;
     // Held through the dialog, so two saves do not interleave.
     let _edit = lock(&EDIT_LOCK);
     let existing = load_hubs(d)?;
     let hub = validate(input, &existing)?;
     let old = existing.iter().find(|h| h.id == hub.id).cloned();
-    if !approved(&*d.store, &hub) && !confirm(&hub) {
-        return Err(NOT_CONFIRMED.into());
+    // The fingerprint holds the folder, so a new folder is a new fingerprint: the dialog shows
+    // whenever the folder changes (unless an identical connector in that folder is allowed).
+    if !approved(&*d.store, &hub) {
+        let projects = tie::count_hub_projects(&d.app_dir, &hub.folder)?;
+        if !confirm(&hub, projects) {
+            return Err(NOT_CONFIRMED.into());
+        }
+    }
+    // A folder that changes frees nothing: the old folder's projects are marked too.
+    if let Some(old) = old.as_ref().filter(|o| o.folder != hub.folder) {
+        tie::mark_hub_projects(&d.app_dir, &old.folder)?;
     }
     tie::mark_hub_projects(&d.app_dir, &hub.folder)?;
     let mut hubs = existing;
@@ -434,20 +477,30 @@ pub fn save(d: &Deps, st: &HubsState, input: HubInput, confirm: &dyn Fn(&Hub) ->
         None => hubs.push(hub.clone()),
     }
     write_hubs(&d.app_dir, &hubs)?;
+    // A failed `allow` or `forget` is reported after the held data is dropped, never instead.
+    let mut failure: Option<String> = None;
     {
         let _a = lock(&APPROVAL_LOCK);
-        allow(&*d.store, &hub).map_err(|e| format!("Saved, but the connector could not be allowed: {e}"))?;
+        if let Err(e) = allow(&*d.store, &hub) {
+            failure = Some(format!("Saved, but the connector could not be allowed: {e}"));
+        }
         if let Some(old) = old.as_ref().filter(|o| fingerprint(o) != fingerprint(&hub)) {
             // Another hub with the same connector keeps its approval.
             if !hubs.iter().any(|h| fingerprint(h) == fingerprint(old)) {
-                forget(&*d.store, old)?;
+                if let Err(e) = forget(&*d.store, old) {
+                    failure.get_or_insert(e);
+                }
             }
         }
     }
     if old.as_ref().is_some_and(|o| fingerprint(o) != fingerprint(&hub)) {
         drop_data(d, st, &hub.id);
     }
-    Ok(view(d, st, &hub, &read_tries(&d.app_dir)))
+    if let Some(e) = failure {
+        return Err(e);
+    }
+    let tries = with_tries(d, st, |t| t.clone());
+    Ok(view(d, st, &hub, &tries))
 }
 
 pub fn remove(d: &Deps, st: &HubsState, id: &str) -> Result<(), String> {
@@ -459,14 +512,16 @@ pub fn remove(d: &Deps, st: &HubsState, id: &str) -> Result<(), String> {
     tie::mark_hub_projects(&d.app_dir, &hub.folder)?;
     let rest: Vec<Hub> = hubs.into_iter().filter(|h| h.id != id).collect();
     write_hubs(&d.app_dir, &rest)?;
-    {
+    let forgotten = {
         let _a = lock(&APPROVAL_LOCK);
-        if !rest.iter().any(|h| fingerprint(h) == fingerprint(&hub)) {
-            forget(&*d.store, &hub)?;
+        if rest.iter().any(|h| fingerprint(h) == fingerprint(&hub)) {
+            Ok(())
+        } else {
+            forget(&*d.store, &hub)
         }
-    }
+    };
     drop_data(d, st, id);
-    Ok(())
+    forgotten
 }
 
 /// Whether the hub listed `item` (an event or a question). This version asks for neither, so
@@ -546,7 +601,7 @@ pub async fn hubs_save(
 ) -> Result<HubView, String> {
     let d = deps(&app, &state, crate::host::is_demo(&app));
     let st = hubs.inner().clone();
-    crate::agents::pty::blocking(move || save(&d, &st, hub, &|h| confirm_connector(&app, h))).await
+    crate::agents::pty::blocking(move || save(&d, &st, hub, &|h, n| confirm_connector(&app, h, n))).await
 }
 
 #[tauri::command]
@@ -817,7 +872,7 @@ mod command_tests {
         assert_eq!(remove(&e.d, &e.st, "h0000000a").unwrap_err(), Off::Demo.message());
         assert_eq!(open_in_hub(&e.d, &e.st, "h0000000a", None, &|_| Ok(())).unwrap_err(), Off::Demo.message());
         let input = HubInput { id: None, name: "x".into(), colour: "blue".into(), folder: "/tmp".into(), program: "/bin/sh".into(), args: vec![] };
-        assert_eq!(save(&e.d, &e.st, input, &|_| true).unwrap_err(), Off::Demo.message());
+        assert_eq!(save(&e.d, &e.st, input, &|_, _| true).unwrap_err(), Off::Demo.message());
         assert_eq!(e.fake.calls(), 0);
     }
 
@@ -885,15 +940,26 @@ mod command_tests {
         let e = env("slow", false, count(4));
         add_hub(&e, "slow", true);
         e.fake.hold();
-        let t = Instant::now();
-        let views = counts(&e.d, &e.st).unwrap();
-        assert!(t.elapsed() < Duration::from_millis(50), "{:?}", t.elapsed());
+        // The fake stays blocked until released: a call that waited for the run would never
+        // answer, so the answer itself is the proof (no time bound that a loaded machine breaks).
+        let answered = |e: &Env| {
+            let (d, st) = (e.d.clone(), e.st.clone());
+            let (tx, rx) = std::sync::mpsc::channel();
+            std::thread::spawn(move || {
+                let _ = tx.send(counts(&d, &st));
+            });
+            let r = rx.recv_timeout(Duration::from_secs(5));
+            if r.is_err() {
+                e.fake.release();
+            }
+            r.expect("counts waited for the slow run").unwrap()
+        };
+        let views = answered(&e);
         assert!(views[0].busy);
         assert_eq!(views[0].waiting, None);
-        // A second call during the run answers at once too.
-        let t = Instant::now();
-        assert!(counts(&e.d, &e.st).unwrap()[0].busy);
-        assert!(t.elapsed() < Duration::from_millis(50));
+        // A second call during the run answers too.
+        assert!(answered(&e)[0].busy);
+        assert_eq!(e.fake.calls(), 1);
         e.fake.release();
         wait_idle(&e);
         let v = list(&e.d, &e.st).unwrap().remove(0);
@@ -924,14 +990,16 @@ mod command_tests {
         assert!(list(&e.d, &e.st).unwrap()[0].fresh);
         e.fake.set(Err(RunError::TimedOut));
         e.fake.release();
-        // Past the backoff-free gap, 16 minutes later: the count is stale and the run fails.
-        e.now.fetch_add(16 * MIN, Ordering::SeqCst);
+        // Two minutes later: the count is stale (over a minute) but under 15 minutes old, and the
+        // run fails. The number stays for the line; it is not fresh any more at once.
+        e.now.fetch_add(2 * MIN, Ordering::SeqCst);
         e.changes.store(0, Ordering::SeqCst);
         counts(&e.d, &e.st).unwrap();
         wait_idle(&e);
         let v = list(&e.d, &e.st).unwrap().remove(0);
         assert_eq!(v.waiting, Some(7));
         assert!(!v.fresh);
+        assert_eq!(v.problem_kind, Some("timedOut"));
         assert!(v.problem.as_deref().unwrap().contains("timed out after 10 seconds"), "{:?}", v.problem);
         assert!(v.next_try_at.is_some());
         let state = std::fs::read_to_string(e.dir.join("hubs-state.json")).unwrap();
@@ -1038,7 +1106,7 @@ mod command_tests {
     #[test]
     fn save_cancelled_writes_nothing() {
         let e = env("cancel", false, count(1));
-        let err = save(&e.d, &e.st, input(&e, "cancel"), &|_| false).unwrap_err();
+        let err = save(&e.d, &e.st, input(&e, "cancel"), &|_, _| false).unwrap_err();
         assert_eq!(err, NOT_CONFIRMED);
         assert!(!e.dir.join("hubs.json").exists());
         assert!(e.store.0.lock().unwrap().is_empty());
@@ -1048,23 +1116,26 @@ mod command_tests {
     fn save_allows_once_and_remove_forgets() {
         let e = env("save", false, count(1));
         let asked = AtomicUsize::new(0);
-        let v = save(&e.d, &e.st, input(&e, "save"), &|h| {
+        let v = save(&e.d, &e.st, input(&e, "save"), &|h, n| {
             asked.fetch_add(1, Ordering::SeqCst);
-            let text = confirm_text(h);
+            let text = confirm_text(h, n);
             assert!(text.contains("/bin/sh") && text.contains("connector.sh") && text.contains(&h.folder), "{text}");
+            assert!(text.contains("Projects in this folder: none"), "{text}");
             true
         })
         .unwrap();
         assert!(v.approved);
+        // Edit prefills from the view.
+        assert_eq!((v.program.as_str(), v.args.clone()), ("/bin/sh", vec!["connector.sh".to_string()]));
         assert_eq!(asked.load(Ordering::SeqCst), 1);
         assert_eq!(list(&e.d, &e.st).unwrap().len(), 1);
         // Saving it again, unchanged, does not ask.
         let again = HubInput { id: Some(v.id.clone()), ..input(&e, "save") };
-        save(&e.d, &e.st, again, &|_| panic!("asked again")).unwrap();
+        save(&e.d, &e.st, again, &|_, _| panic!("asked again")).unwrap();
         // Changing an argument asks again and forgets the old fingerprint.
         let old = read_hubs_now(&e).remove(0);
         let changed = HubInput { id: Some(v.id.clone()), args: vec!["other.sh".into()], ..input(&e, "save") };
-        save(&e.d, &e.st, changed, &|_| true).unwrap();
+        save(&e.d, &e.st, changed, &|_, _| true).unwrap();
         assert!(!approved(&*e.d.store, &old));
         let now_hub = read_hubs_now(&e).remove(0);
         assert!(approved(&*e.d.store, &now_hub));
@@ -1107,5 +1178,163 @@ mod command_tests {
         }
         let tries = read_tries(&e.dir);
         assert!(tries.contains_key(&key(&a.id, "counts")) && tries.contains_key(&key(&b.id, "counts")), "{tries:?}");
+    }
+
+    /// An organisation whose `projects` table holds the given `(folder, merge_alone)` rows.
+    fn org_with_projects(e: &Env, rows: &[(&str, i64)]) -> PathBuf {
+        let db = one_org(&e.dir);
+        let c = rusqlite::Connection::open(&db).unwrap();
+        c.execute_batch("CREATE TABLE projects (id INTEGER PRIMARY KEY, folder_path TEXT, merge_alone INTEGER NOT NULL DEFAULT 0, hub_project INTEGER NOT NULL DEFAULT 0);").unwrap();
+        for (f, alone) in rows {
+            c.execute("INSERT INTO projects (folder_path, merge_alone) VALUES (?1, ?2)", rusqlite::params![f, alone]).unwrap();
+        }
+        db
+    }
+
+    fn project_flags(db: &Path) -> Vec<(i64, i64)> {
+        let c = rusqlite::Connection::open(db).unwrap();
+        let mut s = c.prepare("SELECT hub_project, merge_alone FROM projects ORDER BY id").unwrap();
+        let rows = s.query_map([], |r| Ok((r.get(0)?, r.get(1)?))).unwrap().map(|r| r.unwrap()).collect();
+        rows
+    }
+
+    #[test]
+    fn the_dialog_says_how_many_projects_will_be_marked() {
+        let e = env("dialogcount", false, count(1));
+        let inp = input(&e, "dialogcount");
+        let db = org_with_projects(&e, &[(&format!("{}/p1", inp.folder), 1), ("/elsewhere", 1)]);
+        let seen = Mutex::new(String::new());
+        save(&e.d, &e.st, inp, &|h, n| {
+            *seen.lock().unwrap() = confirm_text(h, n);
+            true
+        })
+        .unwrap();
+        let text = seen.lock().unwrap().clone();
+        assert!(text.contains("Projects in this folder: 1."), "{text}");
+        assert_eq!(project_flags(&db), vec![(1, 0), (0, 1)]);
+    }
+
+    #[test]
+    fn changing_the_folder_marks_the_old_folders_projects_and_asks_again() {
+        let e = env("oldfolder", false, count(1));
+        let db = org_with_projects(&e, &[]);
+        let a = input(&e, "old-a");
+        let first = save(&e.d, &e.st, a.clone(), &|_, _| true).unwrap();
+        // A project made in the old folder after the first save, free to merge alone.
+        let c = rusqlite::Connection::open(&db).unwrap();
+        c.execute("INSERT INTO projects (folder_path, merge_alone) VALUES (?1, 1)", [format!("{}/late", a.folder)]).unwrap();
+        drop(c);
+        assert_eq!(project_flags(&db), vec![(0, 1)]);
+        let b = input(&e, "old-b");
+        let asked = AtomicUsize::new(0);
+        let edit = HubInput { id: Some(first.id.clone()), ..b.clone() };
+        save(&e.d, &e.st, edit, &|_, _| {
+            asked.fetch_add(1, Ordering::SeqCst);
+            true
+        })
+        .unwrap();
+        // A new folder is a new fingerprint: the dialog showed.
+        assert_eq!(asked.load(Ordering::SeqCst), 1);
+        // The old folder is no longer listed, so only the mark protects the project: hub_project
+        // is read by the merge's facts, and merging alone is off.
+        assert_eq!(project_flags(&db), vec![(1, 0)]);
+        assert_eq!(tie::in_any_hub(&e.dir, Some(&format!("{}/late", a.folder)), false), Ok(false));
+    }
+
+    #[test]
+    fn a_failing_state_file_does_not_loosen_the_backoff() {
+        let e = env("nostate", false, Err(RunError::TooLarge));
+        add_hub(&e, "nostate", true);
+        // The state file cannot be written (or read): it is a folder.
+        std::fs::create_dir(e.dir.join(retry::STATE_FILE)).unwrap();
+        counts(&e.d, &e.st).unwrap();
+        wait_idle(&e);
+        assert_eq!(e.fake.calls(), 1);
+        // 31 seconds on: past the gap, inside the one-minute backoff.
+        e.now.fetch_add(31_000, Ordering::SeqCst);
+        counts(&e.d, &e.st).unwrap();
+        std::thread::sleep(Duration::from_millis(50));
+        assert_eq!(e.fake.calls(), 1);
+        assert!(e.dir.join(retry::STATE_FILE).is_dir());
+        assert!(list(&e.d, &e.st).unwrap()[0].next_try_at.is_some());
+    }
+
+    /// A store whose writes can be made to fail.
+    struct Flaky {
+        inner: MemoryStore,
+        fail: std::sync::atomic::AtomicBool,
+    }
+
+    impl SecretStore for Flaky {
+        fn get(&self, account: &str) -> Result<Option<String>, String> {
+            self.inner.get(account)
+        }
+        fn set(&self, account: &str, secret: &str) -> Result<(), String> {
+            if self.fail.load(Ordering::SeqCst) {
+                return Err("the Keychain refused".into());
+            }
+            self.inner.set(account, secret)
+        }
+        fn delete(&self, account: &str) -> Result<(), String> {
+            self.inner.delete(account)
+        }
+    }
+
+    fn flaky_env(name: &str) -> (Env, Arc<Flaky>, Hub) {
+        let mut e = env(name, false, count(3));
+        let store = Arc::new(Flaky { inner: MemoryStore(Default::default()), fail: Default::default() });
+        e.d.store = store.clone();
+        let v = save(&e.d, &e.st, input(&e, name), &|_, _| true).unwrap();
+        counts(&e.d, &e.st).unwrap();
+        wait_idle(&e);
+        assert!(lock(&e.st.cache).contains_key(&v.id));
+        assert!(!read_tries(&e.dir).is_empty());
+        let hub = read_hubs_now(&e).remove(0);
+        (e, store, hub)
+    }
+
+    #[test]
+    fn a_failed_allow_or_forget_still_drops_what_is_held() {
+        // Save with a changed connector while the Keychain refuses writes.
+        let (e, store, hub) = flaky_env("flaky-save");
+        store.fail.store(true, Ordering::SeqCst);
+        let changed = HubInput { id: Some(hub.id.clone()), args: vec!["other.sh".into()], ..input(&e, "flaky-save") };
+        assert!(save(&e.d, &e.st, changed, &|_, _| true).is_err());
+        assert!(!lock(&e.st.cache).contains_key(&hub.id));
+        assert!(read_tries(&e.dir).is_empty());
+        // Remove while the Keychain refuses writes.
+        let (e, store, hub) = flaky_env("flaky-remove");
+        store.fail.store(true, Ordering::SeqCst);
+        assert!(remove(&e.d, &e.st, &hub.id).is_err());
+        assert!(!lock(&e.st.cache).contains_key(&hub.id));
+        assert!(read_tries(&e.dir).is_empty());
+    }
+
+    #[test]
+    fn a_refused_hand_try_keeps_the_unsupported_mark() {
+        let e = env("keepmark", false, Ok(b"{\"version\":1,\"error\":\"unsupported\"}".to_vec()));
+        add_hub(&e, "keepmark", true);
+        counts(&e.d, &e.st).unwrap();
+        wait_idle(&e);
+        assert_eq!(list(&e.d, &e.st).unwrap()[0].offers, vec!["open"]);
+        // Right after the run, the gap refuses the try: the hub still declines `counts`.
+        assert!(refresh(&e.d, &e.st, "h0000000a").unwrap_err().contains("Wait"));
+        assert_eq!(list(&e.d, &e.st).unwrap()[0].offers, vec!["open"]);
+        // Past the gap a hand try asks again.
+        e.now.fetch_add(31_000, Ordering::SeqCst);
+        refresh(&e.d, &e.st, "h0000000a").unwrap();
+        wait_idle(&e);
+        assert_eq!(e.fake.calls(), 2);
+    }
+
+    #[test]
+    fn the_page_constants_match_rust() {
+        let ts = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../src/lib/hubs.ts")).unwrap();
+        let value = |name: &str| -> String {
+            let line = ts.lines().find(|l| l.contains(&format!("export const {name} "))).unwrap_or_else(|| panic!("{name} missing"));
+            line[line.find('=').unwrap() + 1..].trim().trim_end_matches(';').trim().trim_matches('"').to_string()
+        };
+        assert_eq!(value("HUB_NOT_CONFIRMED"), NOT_CONFIRMED);
+        assert_eq!(value("HUB_MAX_FAILS"), MAX_AUTO_FAILS.to_string());
     }
 }

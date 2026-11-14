@@ -7,7 +7,7 @@ import { useAppStore } from "../stores/app-store";
 import { setInvokeHandler, invokedCommands, clearInvokedCommands } from "../__mocks__/tauri-api";
 
 const view = (over: Record<string, unknown> = {}) => ({
-  id: "h1", name: "Demo hub", colour: "purple", folder: "/data/demo-hub", approved: true, waiting: 3, fresh: true,
+  id: "h1", name: "Demo hub", colour: "purple", folder: "/data/demo-hub", program: "/bin/sh", args: ["connector.sh", "two words"], problemKind: null, approved: true, waiting: 3, fresh: true,
   checkedAt: Date.now() - 120_000, problem: null, nextTryAt: null, paused: false, busy: false, offers: ["counts"], ...over,
 });
 
@@ -85,6 +85,52 @@ describe("HubsCard", () => {
     show();
     fireEvent.click(await screen.findByRole("button", { name: "Try again" }));
     await waitFor(() => expect(invokedCommands).toContainEqual({ cmd: "hubs_refresh", args: { id: "h1" } }));
+  });
+
+  it("Edit prefills the program and the arguments, and sends them back as they are", async () => {
+    hubs = [view()];
+    show();
+    fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    expect(screen.getByRole("textbox", { name: "Program" })).toHaveValue("/bin/sh");
+    expect(screen.getByRole("textbox", { name: /Arguments/ })).toHaveValue("connector.sh\ntwo words");
+    expect(screen.queryByText(/enter them again/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(invokedCommands).toContainEqual({
+        cmd: "hubs_save",
+        args: { hub: { id: "h1", name: "Demo hub", colour: "purple", folder: "/data/demo-hub", program: "/bin/sh", args: ["connector.sh", "two words"] } },
+      }),
+    );
+  });
+
+  it("words a problem in the app's language from its kind, and falls back to the text", async () => {
+    hubs = [
+      view({ id: "h2", name: "Studio B hub", fresh: false, problem: "The connector timed out after 10 seconds.", problemKind: "timedOut" }),
+      view({ id: "h3", name: "Other hub", fresh: false, problem: "Some new text." }),
+    ];
+    show();
+    expect(await screen.findByText("Not reached: the connector took too long to answer")).toBeInTheDocument();
+    expect(screen.getByText("Not reached: Some new text.")).toBeInTheDocument();
+    cleanup();
+    useAppStore.setState({ language: "FR" });
+    show();
+    expect(await screen.findByText("Injoignable : le connecteur a mis trop de temps à répondre")).toBeInTheDocument();
+  });
+
+  it("trims each argument line, drops empty ones and a trailing carriage return", async () => {
+    show();
+    fireEvent.click(await screen.findByRole("button", { name: "Add a hub" }));
+    fireEvent.change(screen.getByRole("textbox", { name: /^Name/ }), { target: { value: "Demo hub" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Folder" }), { target: { value: "/data/demo-hub" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Program" }), { target: { value: "/bin/sh" } });
+    fireEvent.change(screen.getByRole("textbox", { name: /Arguments/ }), { target: { value: "  connector.sh \r\n \r\n--flag\r\n  " } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(invokedCommands).toContainEqual({
+        cmd: "hubs_save",
+        args: { hub: { id: null, name: "Demo hub", colour: "blue", folder: "/data/demo-hub", program: "/bin/sh", args: ["connector.sh", "--flag"] } },
+      }),
+    );
   });
 
   it("the form refuses an empty name and sends the arguments split by line", async () => {

@@ -4,7 +4,6 @@
 
 use super::settings::{read_hubs, HubsRead};
 use crate::agents::briefing::{in_mode, MODE_FILES};
-use crate::agents::watcher::org_dbs;
 use crate::orgs::Registry;
 use rusqlite::Connection;
 use std::path::{Path, PathBuf};
@@ -47,38 +46,76 @@ pub fn in_any_hub(app_dir: &Path, folder: Option<&str>, demo: bool) -> Result<bo
     }
 }
 
-/// Marks every project, in every organisation, whose folder is inside `hub_folder`: hub project
-/// on, merging alone off. Refused while any organisation is in test or presentation mode, or the
-/// organisations cannot be listed. Returns how many projects changed.
-pub fn mark_hub_projects(app_dir: &Path, hub_folder: &str) -> Result<usize, String> {
-    Registry::load(app_dir).map_err(|e| format!("Organisations unreadable, nothing marked: {e}"))?;
-    let dbs: Vec<PathBuf> = org_dbs(app_dir).into_iter().map(|(_, db)| db).filter(|db| db.exists()).collect();
-    if dbs.iter().any(|db| in_mode(db)) {
+/// The projects of one organisation that are in the folder and still need the mark.
+struct Found {
+    db: PathBuf,
+    ids: Vec<i64>,
+}
+
+/// Whether `projects` has the columns the mark needs (migration 018).
+fn has_mark_columns(conn: &Connection) -> bool {
+    let Ok(mut stmt) = conn.prepare("PRAGMA table_info(projects)") else { return false };
+    let Ok(rows) = stmt.query_map([], |r| r.get::<_, String>(1)) else { return false };
+    let names: Vec<String> = rows.flatten().collect();
+    names.iter().any(|n| n == "hub_project") && names.iter().any(|n| n == "merge_alone")
+}
+
+/// Reads, in every organisation, the projects inside `hub_folder` that are not marked yet. Takes
+/// the organisations lock first and checks the modes and every database under it, so nothing
+/// changes between this check and the writes (the lock is held by the caller).
+fn find_projects(app_dir: &Path, hub_folder: &str) -> Result<Vec<Found>, String> {
+    let reg = Registry::load(app_dir).map_err(|e| format!("Organisations unreadable, nothing marked: {e}"))?;
+    let orgs: Vec<(String, PathBuf)> = reg
+        .map(|r| r.organisations.into_iter().map(|o| (o.name.clone(), crate::orgs::org_dir(app_dir, &o.id).join(crate::orgs::DB_FILE))).collect())
+        .unwrap_or_default();
+    let orgs: Vec<(String, PathBuf)> = orgs.into_iter().filter(|(_, db)| db.exists()).collect();
+    if orgs.iter().any(|(_, db)| in_mode(db)) {
         return Err(format!("An organisation is in test or presentation mode ({}): nothing marked.", MODE_FILES.join(", ")));
     }
-    let _shared = crate::org_shared();
-    let mut changed = 0;
-    for db in dbs {
-        let mut conn = Connection::open(&db).map_err(|e| format!("Failed to open a database: {e}"))?;
+    let mut found = Vec::new();
+    for (name, db) in orgs {
+        let conn = Connection::open(&db).map_err(|e| format!("Failed to open the database of {name}: {e}"))?;
         let _ = conn.busy_timeout(Duration::from_secs(5));
-        let rows: Vec<(i64, Option<String>)> = {
-            let mut stmt = conn
-                .prepare("SELECT id, folder_path FROM projects WHERE folder_path IS NOT NULL AND folder_path != '' AND (hub_project = 0 OR merge_alone != 0)")
-                .map_err(|e| format!("Failed to read projects: {e}"))?;
-            let rows = stmt
-                .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
-                .map_err(|e| format!("Failed to read projects: {e}"))?
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(|e| format!("Failed to read projects: {e}"))?;
-            rows
-        };
+        if !has_mark_columns(&conn) {
+            return Err(format!("Open {name} once in StudioManager so it is brought up to date, then try again. Nothing was marked."));
+        }
+        let mut stmt = conn
+            .prepare("SELECT id, folder_path FROM projects WHERE folder_path IS NOT NULL AND folder_path != '' AND (hub_project = 0 OR merge_alone != 0)")
+            .map_err(|e| format!("Failed to read the projects of {name}: {e}"))?;
+        let rows = stmt
+            .query_map([], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, Option<String>>(1)?)))
+            .map_err(|e| format!("Failed to read the projects of {name}: {e}"))?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| format!("Failed to read the projects of {name}: {e}"))?;
+        let ids: Vec<i64> = rows.into_iter().filter(|(_, f)| f.as_deref().is_some_and(|f| folder_in(f, hub_folder))).map(|(id, _)| id).collect();
+        found.push(Found { db, ids });
+    }
+    Ok(found)
+}
+
+/// How many projects, in every organisation, are inside `hub_folder` and would be marked. Reads
+/// only; refused in the same cases as `mark_hub_projects`.
+pub fn count_hub_projects(app_dir: &Path, hub_folder: &str) -> Result<usize, String> {
+    let _shared = crate::org_shared();
+    Ok(find_projects(app_dir, hub_folder)?.iter().map(|f| f.ids.len()).sum())
+}
+
+/// Marks every project, in every organisation, whose folder is inside `hub_folder`: hub project
+/// on, merging alone off. Refused while any organisation is in test or presentation mode, the
+/// organisations cannot be listed, or one of them is not up to date (nothing is written then).
+/// Returns how many projects changed.
+pub fn mark_hub_projects(app_dir: &Path, hub_folder: &str) -> Result<usize, String> {
+    let _shared = crate::org_shared();
+    let found = find_projects(app_dir, hub_folder)?;
+    let mut changed = 0;
+    for f in found.into_iter().filter(|f| !f.ids.is_empty()) {
+        let mut conn = Connection::open(&f.db).map_err(|e| format!("Failed to open a database: {e}"))?;
+        let _ = conn.busy_timeout(Duration::from_secs(5));
         let tx = conn.transaction().map_err(|e| format!("Failed to start a write: {e}"))?;
-        for (id, folder) in rows {
-            if folder.as_deref().is_some_and(|f| folder_in(f, hub_folder)) {
-                tx.execute("UPDATE projects SET hub_project = 1, merge_alone = 0 WHERE id = ?1", [id])
-                    .map_err(|e| format!("Failed to mark a project: {e}"))?;
-                changed += 1;
-            }
+        for id in &f.ids {
+            tx.execute("UPDATE projects SET hub_project = 1, merge_alone = 0 WHERE id = ?1", [id])
+                .map_err(|e| format!("Failed to mark a project: {e}"))?;
+            changed += 1;
         }
         tx.commit().map_err(|e| format!("Failed to save: {e}"))?;
     }
@@ -190,6 +227,33 @@ mod tests {
         assert!(mark_hub_projects(&dir, "/w/hub").is_err());
         assert_eq!(flags(&dir, "a"), vec![(0, 1)]);
         assert_eq!(flags(&dir, "b"), vec![(0, 1)]);
+    }
+
+    #[test]
+    fn count_matches_mark_and_writes_nothing() {
+        let dir = app("count", &[("a", &["/w/hub/one", "/w/elsewhere"]), ("b", &["/w/hub", "/w/hub-old"])]);
+        assert_eq!(count_hub_projects(&dir, "/w/hub").unwrap(), 2);
+        assert_eq!(count_hub_projects(&dir, "/w/none").unwrap(), 0);
+        assert_eq!(flags(&dir, "a"), vec![(0, 1), (0, 1)]);
+        assert_eq!(mark_hub_projects(&dir, "/w/hub").unwrap(), 2);
+        assert_eq!(count_hub_projects(&dir, "/w/hub").unwrap(), 0);
+        std::fs::write(org_dir(&dir, "b").join(MODE_FILES[0]), "").unwrap();
+        assert!(count_hub_projects(&dir, "/w/hub").is_err());
+    }
+
+    #[test]
+    fn an_organisation_not_brought_up_to_date_stops_everything_and_is_named() {
+        let dir = app("old", &[("a", &["/w/hub/one"]), ("b", &["/w/hub/two"])]);
+        // Organisation b has no `hub_project` column yet.
+        let c = Connection::open(org_dir(&dir, "b").join(DB_FILE)).unwrap();
+        c.execute_batch("DROP TABLE projects; CREATE TABLE projects (id INTEGER PRIMARY KEY, folder_path TEXT, merge_alone INTEGER NOT NULL DEFAULT 0); INSERT INTO projects (folder_path, merge_alone) VALUES ('/w/hub/two', 1);")
+            .unwrap();
+        drop(c);
+        for err in [mark_hub_projects(&dir, "/w/hub").unwrap_err(), count_hub_projects(&dir, "/w/hub").unwrap_err()] {
+            assert!(err.contains("Studio b") && err.contains("Open"), "{err}");
+        }
+        // Organisation a, listed first, was not written either.
+        assert_eq!(flags(&dir, "a"), vec![(0, 1)]);
     }
 
     #[test]
