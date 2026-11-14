@@ -9,7 +9,7 @@ import { useStartAgentOn } from "../../hooks/useStartAgentOn";
 import { useWatcherStatus } from "../../hooks/useWatcherStatus";
 import { watcherLine } from "../../lib/agents";
 import { formatDisplayDateTime } from "../../utils/formatDate";
-import { Button, EmptyState, ICONS, ICON_SIZE, SECTION_LABEL, Textarea } from "../ui";
+import { Badge, Button, EmptyState, ICONS, ICON_SIZE, SECTION_LABEL, Textarea } from "../ui";
 import { CheckEntry } from "./CheckEntry";
 import { DecideEntry } from "./DecideEntry";
 
@@ -95,6 +95,8 @@ function Group({ label, count, children }: { label: string; count: number; child
 function AloneItem({ entry: e }: { entry: NeedsYouEntry }) {
   const t = useT();
   const reopen = useReopenEntry();
+  // The lead's decision on a Check entry is its answer: "send_back: <notes>" (the title is the task's).
+  const sentBack = e.kind === "check" && e.decided_by === "lead" && (e.answer ?? "").trim().startsWith("send_back:");
   return (
     <li className="px-2 py-3 border-b border-[var(--color-border-divider)] hover:bg-[var(--color-hover-row)] transition-colors">
       <div className="flex items-start gap-2">
@@ -110,7 +112,10 @@ function AloneItem({ entry: e }: { entry: NeedsYouEntry }) {
             <span aria-hidden>·</span>
             <span>{formatDisplayDateTime(e.answered_at ?? e.created_at)}</span>
           </div>
-          <p className="mt-1 text-sm font-medium">{e.title}</p>
+          <p className="mt-1 flex flex-wrap items-center gap-2 text-sm font-medium">
+            {sentBack && <Badge variant="neutral">{t.alone_sent_back}</Badge>}
+            <span>{e.title}</span>
+          </p>
           {e.reason && <p className="text-xs text-muted whitespace-pre-wrap">{e.reason}</p>}
         </div>
         <Button variant="secondary" onClick={() => reopen.mutate(e.id)}>

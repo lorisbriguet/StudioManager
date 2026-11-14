@@ -112,6 +112,9 @@ pub struct NeedsYouDetail {
     pub item_title: String,
     pub item_brief: Option<String>,
     pub item_result: Option<String>,
+    /// The pull request the worker's link stored (set by `report_result`), whatever its result
+    /// text says. None when the entry has no link or the link has none.
+    pub pr_url: Option<String>,
     pub project_id: i64,
     pub project: String,
     /// The stored diff of a check (at most 200 KB), when a file exists.
@@ -148,6 +151,16 @@ pub fn get_needs_you(conn: &Connection, dir: &Path, org: &Org, id: i64) -> R<Nee
         _ => return Err(format!("Entry {id} has no task or subtask.")),
     };
     let (item_title, item_brief, item_result, project_id, project) = item;
+    let pr_url: Option<String> = db(conn
+        .query_row(
+            "SELECT a.pr_url FROM needs_you n JOIN task_agents a ON a.id = n.link_id WHERE n.id = ?1",
+            [id],
+            |r| r.get(0),
+        )
+        .optional())?
+    .flatten()
+    .map(|u: String| u.trim().to_string())
+    .filter(|u| !u.is_empty());
     let (diff, diff_truncated) = if row.kind == "check" {
         read_diff(&dir.join("lead").join("checks").join(format!("{}-{}.diff", org.id, id)))
     } else {
@@ -158,6 +171,7 @@ pub fn get_needs_you(conn: &Connection, dir: &Path, org: &Org, id: i64) -> R<Nee
         item_title,
         item_brief,
         item_result,
+        pr_url,
         project_id,
         project,
         diff,
@@ -255,6 +269,27 @@ mod tests {
         let json = serde_json::to_value(&d).unwrap();
         assert_eq!(json["id"], id);
         assert_eq!(json["diff"], "+added line\n");
+    }
+
+    #[test]
+    fn get_shows_the_pull_request_url_the_link_stored() {
+        let (dir, org, conn) = fixture();
+        let url = "https://github.com/studio-a/poster-tool/pull/12";
+        let id = insert(&conn, "check", "open", None, "2026-11-13 09:00:00");
+        assert_eq!(get_needs_you(&conn, &dir, &org, id).unwrap().pr_url, None, "no link");
+        conn.execute(
+            "INSERT INTO task_agents (task_id, short_id, name, started_at, pr_url) \
+             VALUES (1, 'ab12cd', 'Poster tool', '2026-11-13 09:00:00', ?1)",
+            [url],
+        )
+        .unwrap();
+        let link = conn.last_insert_rowid();
+        conn.execute("UPDATE needs_you SET link_id = ?1 WHERE id = ?2", params![link, id]).unwrap();
+        let d = get_needs_you(&conn, &dir, &org, id).unwrap();
+        assert_eq!(d.pr_url.as_deref(), Some(url));
+        assert_eq!(serde_json::to_value(&d).unwrap()["pr_url"], url);
+        conn.execute("UPDATE task_agents SET pr_url = NULL", []).unwrap();
+        assert_eq!(get_needs_you(&conn, &dir, &org, id).unwrap().pr_url, None);
     }
 
     #[test]

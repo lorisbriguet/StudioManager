@@ -533,6 +533,15 @@ describe("Needs you: groups and Decided alone", () => {
     expect(hooks.reopen).toHaveBeenCalledWith(20);
   });
 
+  it("marks a check the lead sent back, and only that one", () => {
+    hooks.alone = [
+      row({ id: 30, kind: "check", status: "answered", decided_by: "lead", title: "Poster tool", answer: "send_back: add the test" }),
+      row({ id: 31, kind: "check", status: "answered", decided_by: "lead", title: "Other tool", answer: "accept" }),
+    ];
+    setup([]);
+    expect(screen.getAllByText("Sent back")).toHaveLength(1);
+  });
+
   it("shows only Decided alone when it is all there is", () => {
     hooks.alone = [row({ id: 20, kind: "alone", status: "answered", decided_by: "app", title: "Restarted after a connection error" })];
     setup([]);

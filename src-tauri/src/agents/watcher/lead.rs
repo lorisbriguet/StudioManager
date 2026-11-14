@@ -139,6 +139,7 @@ You are the lead session of StudioManager. A worker finished a task and the user
 Organisation: {org}. Pass org \"{org}\" to every StudioManager tool (their answers show the organisation's name instead of this id: that is the same organisation). The entry is number {entry}.
 
 1. Read the entry with mcp__studiomanager__get_needs_you (id {entry}): the worker's result, the check output, the size of the change, what it touches and the diff. Read the task's brief in the same result.
+   The entry also shows pr_url: the pull request the worker's link stored. It counts as the pull request even when the result text does not contain it; never send work back only because the result text lacks the url.
 2. If needed, read the project with mcp__studiomanager__get_project, mcp__studiomanager__list_wiki, mcp__studiomanager__get_wiki_article and mcp__studiomanager__list_tasks.
 3. The project always asks the user about: a database migration, a dependency (a package file or a lock file), a deleted file, money (invoices, quotes, expenses), a release or a version number. The entry's touches list is a hint only: an empty or missing list never means nothing sensitive was touched. You must read the diff yourself and look for these.
 4. If anything in the always-asks list is touched, call mcp__studiomanager__hand_over once with needs_you_id {entry}: a short summary as the recommendation, and that it touches something the project always asks the user about.

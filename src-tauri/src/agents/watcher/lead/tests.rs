@@ -119,6 +119,13 @@ fn the_prompts_name_the_tools_say_the_user_and_fit_the_cli() {
 }
 
 #[test]
+fn the_check_prompt_counts_the_stored_pull_request_url_even_when_the_result_text_lacks_it() {
+    let c = check_prompt("o", 1);
+    assert!(c.contains("pr_url"), "{c}");
+    assert!(c.contains("even when the result text does not contain it"), "{c}");
+}
+
+#[test]
 fn the_check_prompt_treats_touches_as_a_hint_and_sends_the_always_asks_categories_to_the_user() {
     let c = check_prompt("o", 1);
     assert!(c.contains("hint only"), "{c}");
