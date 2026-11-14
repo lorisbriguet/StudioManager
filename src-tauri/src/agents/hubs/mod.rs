@@ -1211,7 +1211,7 @@ mod command_tests {
         .unwrap();
         let text = seen.lock().unwrap().clone();
         assert!(text.contains("Projects in this folder: 1."), "{text}");
-        assert_eq!(project_flags(&db), vec![(1, 0), (0, 1)]);
+        assert_eq!(project_flags(&db), vec![(1, 1), (0, 1)]);
     }
 
     #[test]
@@ -1236,8 +1236,8 @@ mod command_tests {
         // A new folder is a new fingerprint: the dialog showed.
         assert_eq!(asked.load(Ordering::SeqCst), 1);
         // The old folder is no longer listed, so only the mark protects the project: hub_project
-        // is read by the merge's facts, and merging alone is off.
-        assert_eq!(project_flags(&db), vec![(1, 0)]);
+        // is read by the merge's facts (merging alone keeps its stored value, which has no effect).
+        assert_eq!(project_flags(&db), vec![(1, 1)]);
         assert_eq!(tie::in_any_hub(&e.dir, Some(&format!("{}/late", a.folder)), false), Ok(false));
     }
 

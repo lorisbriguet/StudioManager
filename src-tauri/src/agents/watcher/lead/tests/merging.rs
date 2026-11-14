@@ -332,7 +332,8 @@ fn removing_a_hub_keeps_its_projects_out() {
     // The hub is taken out of hubs.json: the project stays marked and does not merge alone.
     crate::agents::hubs::settings::write_hubs(&f.dir, &[]).unwrap();
     assert_eq!(f.one::<i64>("SELECT hub_project FROM projects"), 1);
-    assert_eq!(f.one::<i64>("SELECT merge_alone FROM projects"), 0);
+    // The stored choice is kept (it has no effect), and the merge is still refused.
+    assert_eq!(f.one::<i64>("SELECT merge_alone FROM projects"), 1);
     pass(&f, &mut mem, 1);
     assert_refused(&f, id, "the project belongs to a hub");
 }
