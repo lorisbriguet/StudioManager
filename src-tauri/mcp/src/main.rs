@@ -1,6 +1,12 @@
 //! StudioManager agent access: MCP server over stdio.
 
 fn main() {
+    // The PreToolUse guard of the watcher's workers: refuses with exit code 2 and one line on
+    // stderr, and fails closed (a panic, bad input or a missing argument is a refusal too).
+    if std::env::args().any(|a| a == "--worker-guard") {
+        let args: Vec<String> = std::env::args().collect();
+        std::process::exit(studiomanager_mcp::workerguard::run_process(&args));
+    }
     // The only stdout use outside JSON-RPC: lets the app and docs check where
     // this binary will look for data.
     if std::env::args().any(|a| a == "--print-data-dir") {
