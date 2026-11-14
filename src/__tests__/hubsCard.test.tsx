@@ -131,6 +131,21 @@ describe("HubsCard", () => {
     expect(await screen.findByText("Injoignable : le connecteur a mis trop de temps à répondre")).toBeInTheDocument();
   });
 
+  it("puts one full stop between the reason and the next try, never two", async () => {
+    const at = new Date(2026, 10, 14, 10, 44).getTime();
+    hubs = [
+      view({ id: "h2", name: "Studio B hub", fresh: false, problem: "The connector timed out after 10 seconds.", problemKind: "timedOut", nextTryAt: at }),
+      view({ id: "h3", name: "Other hub", fresh: false, problem: "It stopped.", problemKind: "failed", nextTryAt: at }),
+    ];
+    show();
+    expect(await screen.findByText("Not reached: the connector took too long to answer. Next try at 10:44")).toBeInTheDocument();
+    expect(screen.getByText("Not reached: It stopped. Next try at 10:44")).toBeInTheDocument();
+    cleanup();
+    useAppStore.setState({ language: "FR" });
+    show();
+    expect(await screen.findByText("Injoignable : le connecteur a mis trop de temps à répondre. Prochain essai à 10:44")).toBeInTheDocument();
+  });
+
   it("trims each argument line, drops empty ones and a trailing carriage return", async () => {
     show();
     fireEvent.click(await screen.findByRole("button", { name: "Add a hub" }));
