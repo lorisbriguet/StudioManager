@@ -38,7 +38,7 @@ export function ProjectAgentSettings({ project }: { project: Project }) {
         <p className="text-xs text-muted mt-1">{t.project_check_command_hint}</p>
       </div>
       <Toggle
-        checked={project.merge_alone === 1}
+        checked={project.merge_alone === 1 && !hub}
         disabled={hub}
         ariaLabel={t.project_merge_alone}
         onChange={(on) => set.mutate({ id: project.id, settings: { merge_alone: on ? 1 : 0 } })}

@@ -277,7 +277,7 @@ When the lead accepts, the entry comes back to you as "The lead would accept: â€
 
 ### Merging alone
 
-Off by default, per project: **The lead may merge small changes alone**, in the project's agent settings. A project marked **Belongs to a hub** can never have it on. With it on, a change is merged without you only when all of these hold; the app works each one out itself, and the lead's accept is only one of them:
+Off by default, per project: **The lead may merge small changes alone**, in the project's agent settings. A project marked **Belongs to a hub** is never merged alone: the switch is off and locked there, and your choice comes back if you remove the hub mark. With it on, a change is merged without you only when all of these hold; the app works each one out itself, and the lead's accept is only one of them:
 
 - the lead accepted the work, the budget allowed the pass, agent access is on for the organisation, and the watcher is still allowed to run after the check;
 - a check command is set, passed the first time, and passes again, run a second time by the app on the very commit that is merged;

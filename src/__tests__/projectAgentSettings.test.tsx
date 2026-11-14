@@ -82,4 +82,25 @@ describe("ProjectAgentSettings", () => {
     fireEvent.blur(field);
     expect(setSettings).not.toHaveBeenCalled();
   });
+  it("shows the merge switch off on a hub's project even when merge_alone is stored as on", () => {
+    renderIt(project({ hub_project: 1, merge_alone: 1 }));
+    const merge = screen.getByRole("switch", { name: "The lead may merge small changes alone" });
+    expect(merge).toBeDisabled();
+    expect(merge).toHaveAttribute("aria-checked", "false");
+  });
+
+  it("shows the stored merge_alone again as soon as the hub mark is removed", () => {
+    const qc = new QueryClient();
+    const ui = (p: Project) => (
+      <QueryClientProvider client={qc}>
+        <ProjectAgentSettings project={p} />
+      </QueryClientProvider>
+    );
+    const { rerender } = render(ui(project({ hub_project: 1, merge_alone: 1 })));
+    const name = "The lead may merge small changes alone";
+    expect(screen.getByRole("switch", { name })).toHaveAttribute("aria-checked", "false");
+    rerender(ui(project({ hub_project: 0, merge_alone: 1 })));
+    expect(screen.getByRole("switch", { name })).not.toBeDisabled();
+    expect(screen.getByRole("switch", { name })).toHaveAttribute("aria-checked", "true");
+  });
 });
