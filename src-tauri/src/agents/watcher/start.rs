@@ -655,14 +655,52 @@ mod tests {
     }
 
     #[test]
-    fn a_waiting_worker_with_an_empty_list_frees_only_its_own_slot() {
-        let f = fx("cap-waiting-empty", vec![]);
-        write_settings(&f.dir, &AgentsSettings { worker_cap: 1, ..on() }).unwrap();
-        add_checked_link(&f.db, 1, "passed", true);
-        add_checked_link(&f.db, 2, "none", false);
+    fn a_waiting_worker_frees_no_slot_without_a_list_that_shows_it_idle() {
+        let waiting_cap_one = |name: &str| {
+            let f = fx(name, vec![]);
+            write_settings(&f.dir, &AgentsSettings { worker_cap: 1, ..on() }).unwrap();
+            add_checked_link(&f.db, 1, "passed", true);
+            f
+        };
+        // An empty list: the waiting link counts.
+        let f = waiting_cap_one("cap-waiting-empty");
         let r = go(&f, &[], &mut Memory::default());
         assert_eq!(r.outlook.paused, Some(Paused::Cap(1)));
         assert_eq!(r.outlook.running, 1);
+        assert!(f.cli.calls().is_empty());
+        // A stale list that shows it idle: the same.
+        let f = waiting_cap_one("cap-waiting-stale");
+        let list = agents(&format!("[{}]", worker_json(1, "idle")));
+        let stale = Deps { listed_at: Some(T0 - super::super::check::LIST_MAX_AGE_MS - 1), ..deps(&f.dir, &list) };
+        let r = go_with(&f, &stale, &mut Memory::default());
+        assert_eq!(r.outlook.paused, Some(Paused::Cap(1)));
+        assert!(f.cli.calls().is_empty());
+        // No list time at all: the same.
+        let f = waiting_cap_one("cap-waiting-never");
+        let never = Deps { listed_at: None, ..deps(&f.dir, &list) };
+        let r = go_with(&f, &never, &mut Memory::default());
+        assert_eq!(r.outlook.paused, Some(Paused::Cap(1)));
+        // A fresh list that does not hold the agent: the same.
+        let f = waiting_cap_one("cap-waiting-notfound");
+        let other = agents(&format!("[{}]", worker_json(7, "idle")));
+        let r = go(&f, &other, &mut Memory::default());
+        assert_eq!(r.outlook.paused, Some(Paused::Cap(1)), "the other worker is not a Check worker here but counts too");
+    }
+
+    #[test]
+    fn a_busy_copy_sharing_the_session_of_a_waiting_links_stopped_original_still_counts() {
+        let f = fx("cap-waiting-copy", vec![]);
+        write_settings(&f.dir, &AgentsSettings { worker_cap: 1, ..on() }).unwrap();
+        add_checked_link(&f.db, 1, "passed", true);
+        let original = worker_json(1, "idle");
+        let copy = r#"{"sessionId":"s1","id":"ffff0001","name":"sm-w-task-101","cwd":"/x","kind":"bg","status":"busy"}"#;
+        // `parse_agents` keeps one row per session id, so the two rows are parsed apart.
+        let mut list = agents(&format!("[{original}]"));
+        list.extend(agents(&format!("[{copy}]")));
+        let r = go(&f, &list, &mut Memory::default());
+        // Before the fix both agents were dropped and a slot opened.
+        assert!(matches!(r.outlook.paused, Some(Paused::Cap(n)) if n >= 1), "{:?}", r.outlook.paused);
+        assert!(r.outlook.running >= 1);
         assert!(f.cli.calls().is_empty());
     }
 

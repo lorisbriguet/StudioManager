@@ -283,17 +283,29 @@ fn read_pass(d: &Deps, lock: LockState, pending: usize) -> Pass {
     ranked.sort_by(|a, b| store::order(&a.1.item, &b.1.item).then(a.0.cmp(&b.0)));
     pass.candidates = ranked.into_iter().map(|(_, c)| c).collect();
     pass.access = any_allowed;
-    // A worker that handed in its result and waits for the owner under Check holds no slot: its
-    // link and its (listed, not busy) agent are left out of the count. The rest counts as before.
-    let waiting: Vec<&WatcherLink> = pass.links.iter().map(|(_, l)| l).filter(|l| waiting_ids.contains(&(l.org.clone(), l.id))).collect();
-    let left_out: HashSet<&str> = waiting
-        .iter()
-        .filter_map(|l| check::find_agent(d.agents, l))
-        .filter(|a| a.group != Group::Working)
-        .map(|a| a.session_id.as_str())
-        .collect();
-    let counted: Vec<Agent> = d.agents.iter().filter(|a| !left_out.contains(a.session_id.as_str())).cloned().collect();
-    pass.running = start::running_workers(pass.links.len() - waiting.len(), &counted) + pending;
+    // A worker that handed in its result and waits for the owner under Check holds no slot, but
+    // only on positive, fresh evidence: its agent is found in a list read within the freshness
+    // window and is not Working (and no listed agent with the same session id is Working). With no
+    // list, a stale list, an agent not found or a busy agent the link counts as any other.
+    let fresh = d.listed_at.is_some_and(|t| d.now - t <= check::LIST_MAX_AGE_MS);
+    let mut left_out_links = 0;
+    let mut left_out: HashSet<&str> = HashSet::new();
+    if fresh {
+        for l in pass.links.iter().map(|(_, l)| l).filter(|l| waiting_ids.contains(&(l.org.clone(), l.id))) {
+            let Some(a) = check::find_agent(d.agents, l) else { continue };
+            let busy = d.agents.iter().any(|o| o.session_id == a.session_id && o.group == Group::Working);
+            if a.group == Group::Working || busy {
+                continue;
+            }
+            left_out_links += 1;
+            if let Some(id) = a.short_id.as_deref() {
+                left_out.insert(id);
+            }
+        }
+    }
+    let counted: Vec<Agent> =
+        d.agents.iter().filter(|a| !a.short_id.as_deref().is_some_and(|id| left_out.contains(id))).cloned().collect();
+    pass.running = start::running_workers(pass.links.len() - left_out_links, &counted) + pending;
     // Read only: in the dev build `limits_dir` is the installed app's folder.
     pass.budget = budget::budget(limits::load_dated(d.limits_dir, d.now), d.now);
     pass
