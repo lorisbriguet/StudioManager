@@ -6,7 +6,7 @@ import { useNow } from "../../hooks/useNow";
 import { qk } from "../../db/queryKeys";
 import { formatAgo } from "../../lib/network/format";
 import { getStoredTagColor } from "../../lib/tagColors";
-import { HUB_MAX_FAILS, hubErrorText, openInHub, refreshHub, type HubView } from "../../lib/hubs";
+import { HUB_MAX_FAILS, hubErrorText, isHubTooSoon, openInHub, refreshHub, type HubView } from "../../lib/hubs";
 import { Badge, Button, ICONS } from "../ui";
 
 type T = ReturnType<typeof useT>;
@@ -28,7 +28,8 @@ export function hubStateLine(h: HubView, t: T, now: number): string {
     const worded = h.problemKind && h.problemKind !== "failed" && h.problemKind !== "notStarted";
     const text = worded && h.problemKind ? t[`hubs_problem_${h.problemKind}`] : h.problem;
     const base = t.hubs_not_reached.replace("{problem}", text);
-    return h.nextTryAt ? `${base} ${t.hubs_next_try.replace("{time}", format(new Date(h.nextTryAt), "HH:mm"))}` : base;
+    // Texts from Rust end with a full stop, the app's own wording does not: one separator either way.
+    return h.nextTryAt ? `${/[.!?…]$/.test(base) ? base : `${base}.`} ${t.hubs_next_try.replace("{time}", format(new Date(h.nextTryAt), "HH:mm"))}` : base;
   }
   if (h.waiting !== null && h.checkedAt !== null) {
     return t.hubs_state_ok.replace("{n}", String(h.waiting)).replace("{time}", formatAgo(h.checkedAt, now, t));
@@ -42,12 +43,13 @@ export const hubIsUnreached = (h: HubView) => !h.approved || h.paused || !!h.pro
 /** Refreshes one hub, then lets the lists read again. Resolves to an error text or null. */
 export function useHubRefresh() {
   const qc = useQueryClient();
+  const t = useT();
   return async (id: string): Promise<string | null> => {
     try {
       await refreshHub(id);
       return null;
     } catch (e) {
-      return hubErrorText(e);
+      return isHubTooSoon(e) ? t.hubs_too_soon : hubErrorText(e);
     } finally {
       void qc.invalidateQueries({ queryKey: qk.hubs.all });
     }
