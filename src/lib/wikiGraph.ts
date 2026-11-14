@@ -298,7 +298,7 @@ export interface SimNode {
 }
 
 /** A force simulation in the manner of d3-force (velocity Verlet, an
- *  `alpha` that cools from 1), as in the Art Basel hub's graph: links pull
+ *  `alpha` that cools from 1), as in a client hub's graph: links pull
  *  to a rest length (longer and weaker between projects), dots push each
  *  other apart and don't overlap, and each project is pulled to its own
  *  spot on a ring. Deterministic: the same graph always settles the same

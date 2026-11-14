@@ -35,7 +35,7 @@ proposal = '<div class="panel" style="padding:16px 20px"><div class="g2" style="
     fld('unit="CHF"', '<div class="fx w28"><span class="v r">980.50</span><span class="u">CHF</span></div>'),
     fld('unit="%"', '<div class="fx w16"><span class="v r">10</span><span class="u">%</span></div>'),
     fld('unit="h" · "m"', '<div class="sib" style="gap:8px"><div class="fx w16"><span class="v r">1</span><span class="u">h</span></div><div class="fx w16"><span class="v r">30</span><span class="u">m</span></div></div>'),
-    fld('icon + onClear', f'<div class="fx" style="flex:1"><span class="ic">{S}</span><span class="v" style="padding-left:6px">art basel</span><span class="u">✕</span></div>'),
+    fld('icon + onClear', f'<div class="fx" style="flex:1"><span class="ic">{S}</span><span class="v" style="padding-left:6px">alder finch</span><span class="u">✕</span></div>'),
 ]) + "</div><div>" + "".join([
     fld('width="xs"', '<div class="fx w16"><span class="v">64px</span></div>'),
     fld('width="sm"', '<div class="fx w24"><span class="v">96px</span></div>'),
@@ -46,7 +46,7 @@ proposal = '<div class="panel" style="padding:16px 20px"><div class="g2" style="
 
 
 NOTE = "Paid by bank transfer. Reminder sent on 12.10."
-LONG = "<br>".join(["Kick-off on 03.10 with the Art Basel team.", "Key visual: three directions, pick by 15.10.", "Print: posters A0, A1, tram ads.", "Digital: social set, web banners, newsletter header.", "Budget split 60 / 40 print vs digital.", "Next review 22.10."])
+LONG = "<br>".join(["Kick-off on 03.10 with the Alder Finch team.", "Key visual: three directions, pick by 15.10.", "Print: posters A0, A1, tram ads.", "Digital: social set, web banners, newsletter header.", "Budget split 60 / 40 print vs digital.", "Next review 22.10."])
 VLONG = LONG + "<br>" + LONG
 def ta(rows, text, scroll=False, fill=False, resize=True):
     h = f"height:{rows*19+10}px;" if not fill else "height:100%;min-height:96px;"

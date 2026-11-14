@@ -56,10 +56,10 @@ def var(title, meta, body):
 
 today = "".join([
     var("Invoice form", "gap 12 · actions right",
-        f'<div class="g g2">{fld("Client","Art Basel",req=True,chev=True)}{fld("Date","28.10.2026",req=True)}</div>'
+        f'<div class="g g2">{fld("Client","Alder Finch",req=True,chev=True)}{fld("Date","28.10.2026",req=True)}</div>'
         '<div class="acts end"><span class="b d ml">Delete</span><span class="b">Cancel</span><span class="b p">Create</span></div>'),
     var("Quote form", "py-2 on some fields · actions left",
-        f'<div class="g g2">{fld("Client","Art Basel",cls="tall",req=True,chev=True)}{fld("Date","28.10.2026",req=True)}</div>'
+        f'<div class="g g2">{fld("Client","Alder Finch",cls="tall",req=True,chev=True)}{fld("Date","28.10.2026",req=True)}</div>'
         '<div class="acts"><span class="b">Cancel</span><span class="b p">Create</span></div>'),
     var("New client card", "Save before Cancel",
         f'<div class="g g2">{fld("Name","Fondation Artvis")}{fld("Email","hello@artvis.example")}</div>'
@@ -88,7 +88,7 @@ proposal = f'''
   <div class="sec">
     <span class="lbl10">Client</span>
     <div class="g g2">
-      {fld("Client", "Art Basel", req=True, chev=True)}
+      {fld("Client", "Alder Finch", req=True, chev=True)}
       {fld("Project", "Key visual 2027", chev=True)}
       {fld("Billing address", "Messeplatz 10, 4058 Basel", extra="", cls="")[:-6]}<div class="hint">Taken from the client; change it for this invoice only.</div></div>
       {fld("PO number", "PO-", cls="err", extra='<div class="errt">Use the client\'s PO format (PO-0000).</div>')}

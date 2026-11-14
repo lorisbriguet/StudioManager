@@ -59,7 +59,7 @@ SORT = '<path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><p
 DOWN = '<path d="M12 5v14"/><path d="m19 12-7 7-7-7"/>'
 
 def variant(title, meta, header_style, row_style, rows=2, extra_td=""):
-    trs = "".join(f'<tr><td style="{row_style}">INV-2026-01{i}</td><td style="{row_style}" class="muted">Art Basel</td><td style="{row_style};text-align:right">CHF 4 800.00</td></tr>' for i in range(rows))
+    trs = "".join(f'<tr><td style="{row_style}">INV-2026-01{i}</td><td style="{row_style}" class="muted">Alder Finch</td><td style="{row_style};text-align:right">CHF 4 800.00</td></tr>' for i in range(rows))
     return f'''<div class="var"><h3>{title}<span>{meta}</span></h3><table class="mini"><thead><tr><th style="{header_style}">Reference</th><th style="{header_style}">Client</th><th style="{header_style};text-align:right">Amount</th></tr></thead><tbody>{trs}</tbody></table></div>'''
 
 variants = "".join([
@@ -72,7 +72,7 @@ variants = "".join([
 ])
 
 rows_default = ""
-data = [("INV-2026-014", "Art Basel", "28.10.2026", "Sent", "c-warning", "4 800.00"),
+data = [("INV-2026-014", "Alder Finch", "28.10.2026", "Sent", "c-warning", "4 800.00"),
         ("INV-2026-013", "Fondation Artvis", "21.10.2026", "Paid", "c-success", "12 350.00"),
         ("INV-2026-012", "Atelier Noir", "02.10.2026", "Overdue", "c-danger", "980.50")]
 for i, (ref, client, date, st, cls, amt) in enumerate(data):
@@ -80,7 +80,7 @@ for i, (ref, client, date, st, cls, amt) in enumerate(data):
     rows_default += f'''<tr class="row"><td class="w8"><span class="cbx {sel}"></span></td><td><b style="font-weight:500">{ref}</b></td><td>{client}</td><td class="muted">{date}</td><td><span class="pill {cls}">{st}</span></td><td class="num" style="font-weight:500">{amt}</td><td class="w8"><button class="ib reveal" type="button" aria-label="Row actions">{svg(MORE)}</button></td></tr>'''
 
 compact_rows = ""
-for d, desc, h in [("28.10.2026", "Art Basel · key visual review", "1:30"), ("27.10.2026", "Studio Manager · dropdown spec", "2:45"), ("27.10.2026", "PlantR · onboarding screens", "0:50")]:
+for d, desc, h in [("28.10.2026", "Alder Finch · key visual review", "1:30"), ("27.10.2026", "Studio Manager · dropdown spec", "2:45"), ("27.10.2026", "PlantR · onboarding screens", "0:50")]:
     compact_rows += f'''<tr class="row"><td class="muted" style="font-variant-numeric:tabular-nums">{d}</td><td>{desc}</td><td class="num">{h}</td><td class="w8"><button class="ib reveal" type="button" aria-label="Edit">{svg(PENCIL)}</button></td><td class="w8"><button class="ib reveal" type="button" aria-label="Delete">{svg(TRASH)}</button></td></tr>'''
 
 body = f"""
