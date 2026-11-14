@@ -208,9 +208,12 @@ fn resume(env: &Env, d: &Deps, mem: &mut Memory, budget: &Budget, db: &Path, lin
         // Not running: start the session again on Opus with the worker's own arguments (the hook,
         // edits without a prompt, the dev server), the link follows the copy, then type into it.
         (env.cli)().and_then(|cli| {
-            let hook = super::start::hook_settings(d.app_dir, env.mcp_path, env.dev)?;
-            // The same rules as the start, for the same branch: it is named from the item.
+            // The same rules as the start, for the same branch: it is named from the item. The
+            // guard is told the worktree of the link (the folder the session runs in, when the
+            // link has none).
             let branch = super::git::branch_name(link.kind, link.item_id);
+            let worktree = link.worktree.as_deref().filter(|w| !w.trim().is_empty()).unwrap_or(&agent.cwd);
+            let hook = super::start::hook_settings(d.app_dir, env.mcp_path, env.dev, worktree, &branch)?;
             let extra = super::start::worker_args(env.dev, d.app_dir, env.mcp_path, &hook, &branch)?;
             let new_id = actions::resume_with(&*cli, &actions::home_dir(), agent, "opus", &extra)?;
             // Recorded before anything is typed: the old agent's "done" must not close the link.
@@ -597,8 +600,16 @@ mod tests {
         let (f, _) = resumed_fx("switch");
         let calls = calls(&f);
         assert_eq!(calls[0], vec!["stop", "abc12345"]);
-        let hook = f.dir.join("watcher/hook-settings.json");
+        let hook = f.dir.join("watcher/hook-settings-sm-task-1.json");
         assert!(hook.exists(), "the hook file is made");
+        // The guard of this worker is told its worktree (the folder the session runs in here), its
+        // branch and its own settings file; the Stop hook is still there.
+        let written: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&hook).unwrap()).unwrap();
+        let guard = written["hooks"]["PreToolUse"][0]["hooks"][0]["command"].as_str().unwrap().to_string();
+        assert!(guard.contains(" --worker-guard --worktree '/x' --branch 'sm/task-1' --settings '"), "{guard}");
+        assert!(guard.ends_with(&format!("{}'", hook.display())), "{guard}");
+        assert_eq!(written["hooks"]["PreToolUse"][0]["hooks"][0]["onFailure"], "block");
+        assert!(written["hooks"]["Stop"][0]["hooks"][0]["command"].as_str().unwrap().ends_with(" --stop-hook"));
         assert_eq!(
             calls[1],
             vec![
@@ -618,15 +629,18 @@ mod tests {
                 "mcp__studiomanager__report_result",
                 "Bash(git add *)",
                 "Bash(git commit *)",
-                "Bash(gh pr create *)",
                 "Bash(git push -u origin sm/task-1)",
                 "Bash(git push origin sm/task-1)",
+                "--disallowedTools",
+                "Edit(.git)",
+                "Edit(**/.git/**)",
+                format!("Edit(/{})", hook.display()).as_str(),
                 "--settings",
                 hook.to_string_lossy().as_ref(),
                 "--permission-mode",
                 "acceptEdits",
             ],
-            "the same arguments as the start: the allowed tools, the hook, edits without a prompt"
+            "the same arguments as the start: the allowed and denied rules, the hook, edits without a prompt"
         );
         assert_eq!(calls.len(), 2);
         let sent = f.sent.lock().unwrap().clone();
