@@ -62,17 +62,17 @@ export function NeedsYouTab() {
           ))}
         </Group>
       )}
-      {alone.length > 0 && (
-        <Group label={t.needs_alone_group} count={alone.length}>
-          {alone.map((e) => (
-            <AloneItem key={e.id} entry={e} />
-          ))}
-        </Group>
-      )}
       {hubs.length > 0 && (
         <Group label={t.needs_hubs_group} count={hubs.length}>
           {hubs.map((h) => (
             <HubLine key={h.id} hub={h} />
+          ))}
+        </Group>
+      )}
+      {alone.length > 0 && (
+        <Group label={t.needs_alone_group} count={alone.length}>
+          {alone.map((e) => (
+            <AloneItem key={e.id} entry={e} />
           ))}
         </Group>
       )}

@@ -1058,7 +1058,9 @@ mod command_tests {
         assert!(refresh(&e.d, &e.st, "h0000000a").is_ok());
         wait_idle(&e);
         assert_eq!(e.fake.calls(), 2);
-        assert!(refresh(&e.d, &e.st, "h0000000a").unwrap_err().contains("Wait"));
+        // The page words this refusal itself and matches this exact shape (`isHubTooSoon` in src/lib/hubs.ts).
+        let err = refresh(&e.d, &e.st, "h0000000a").unwrap_err();
+        assert!(err.starts_with("Wait ") && err.ends_with(" seconds before trying again."), "{err}");
     }
 
     #[test]

@@ -59,7 +59,7 @@ export function HubsCard() {
           }
           desc={
             <>
-              <span className="block break-all">{h.folder}</span>
+              <span className="block break-words">{h.folder}</span>
               <span className="block">{hubStateLine(h, t, now)}</span>
             </>
           }
