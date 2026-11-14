@@ -615,6 +615,97 @@ mod tests {
         assert!(f.cli.calls().is_empty());
     }
 
+    /// A link of the watcher whose result was reported and checked: `check_state` as given, and an
+    /// open Check entry when `entry` is true.
+    fn add_checked_link(db: &Path, n: i64, check_state: &str, entry: bool) {
+        add_watcher_link(db, n);
+        let c = Connection::open(db).unwrap();
+        c.execute(
+            "UPDATE task_agents SET check_state = ?1, reported_at = '2027-01-15 08:00:00' WHERE short_id = ?2",
+            params![check_state, format!("abc1234{n}")],
+        )
+        .unwrap();
+        if entry {
+            c.execute(
+                "INSERT INTO needs_you (kind, task_id, link_id, title)
+                 VALUES ('check', ?1, (SELECT id FROM task_agents WHERE short_id = ?2), 'Done')",
+                params![100 + n, format!("abc1234{n}")],
+            )
+            .unwrap();
+        }
+    }
+
+    fn worker_json(n: i64, status: &str) -> String {
+        format!(
+            r#"{{"sessionId":"s{n}","id":"abc1234{n}","name":"sm-w-task-{}","cwd":"/x","kind":"bg","status":"{status}"}}"#,
+            100 + n
+        )
+    }
+
+    #[test]
+    fn a_finished_worker_waiting_under_check_does_not_hold_a_slot() {
+        let f = fx("cap-waiting", vec![started("0a1b2c3d")]);
+        write_settings(&f.dir, &AgentsSettings { worker_cap: 1, ..on() }).unwrap();
+        add_checked_link(&f.db, 1, "passed", true);
+        let list = agents(&format!("[{}]", worker_json(1, "idle")));
+        let r = go(&f, &list, &mut Memory::default());
+        assert_eq!(f.cli.calls().first().map(|c| c[0].clone()), Some("--bg".to_string()), "the next task starts");
+        assert_ne!(r.outlook.paused, Some(Paused::Cap(2)));
+        assert_eq!(r.outlook.running, 1, "only the new link; the waiting one is not running");
+    }
+
+    #[test]
+    fn a_waiting_worker_with_an_empty_list_frees_only_its_own_slot() {
+        let f = fx("cap-waiting-empty", vec![]);
+        write_settings(&f.dir, &AgentsSettings { worker_cap: 1, ..on() }).unwrap();
+        add_checked_link(&f.db, 1, "passed", true);
+        add_checked_link(&f.db, 2, "none", false);
+        let r = go(&f, &[], &mut Memory::default());
+        assert_eq!(r.outlook.paused, Some(Paused::Cap(1)));
+        assert_eq!(r.outlook.running, 1);
+        assert!(f.cli.calls().is_empty());
+    }
+
+    #[test]
+    fn only_a_link_with_a_finished_check_and_an_open_check_entry_is_waiting() {
+        for (state, entry) in [("running", true), ("passed", false)] {
+            let f = fx(&format!("cap-not-waiting-{state}-{entry}"), vec![]);
+            write_settings(&f.dir, &AgentsSettings { worker_cap: 1, ..on() }).unwrap();
+            add_checked_link(&f.db, 1, state, entry);
+            let r = go(&f, &agents(&format!("[{}]", worker_json(1, "idle"))), &mut Memory::default());
+            assert_eq!(r.outlook.paused, Some(Paused::Cap(1)), "{state} {entry}");
+            assert!(f.cli.calls().is_empty());
+        }
+        // A dismissed entry is not open.
+        let f = fx("cap-dismissed", vec![]);
+        write_settings(&f.dir, &AgentsSettings { worker_cap: 1, ..on() }).unwrap();
+        add_checked_link(&f.db, 1, "passed", true);
+        Connection::open(&f.db).unwrap().execute("UPDATE needs_you SET status = 'dismissed'", []).unwrap();
+        let r = go(&f, &agents(&format!("[{}]", worker_json(1, "idle"))), &mut Memory::default());
+        assert_eq!(r.outlook.paused, Some(Paused::Cap(1)));
+    }
+
+    #[test]
+    fn a_waiting_workers_agent_is_left_out_of_the_listed_count_but_other_sm_w_agents_and_a_busy_one_count() {
+        let f = fx("cap-waiting-list", vec![]);
+        write_settings(&f.dir, &AgentsSettings { worker_cap: 1, ..on() }).unwrap();
+        add_checked_link(&f.db, 1, "passed", true);
+        // The waiting worker is idle; another build's worker (no link here) is busy.
+        let list = agents(&format!(
+            "[{},{}]",
+            worker_json(1, "idle"),
+            r#"{"sessionId":"s9","id":"eeee0009","name":"sm-w-task-9","cwd":"/x","kind":"bg","status":"busy"}"#
+        ));
+        let r = go(&f, &list, &mut Memory::default());
+        assert_eq!(r.outlook.paused, Some(Paused::Cap(1)), "the other build's worker holds the slot");
+        // The waiting worker itself is busy again (the owner typed into it): it counts.
+        let g = fx("cap-waiting-busy", vec![]);
+        write_settings(&g.dir, &AgentsSettings { worker_cap: 1, ..on() }).unwrap();
+        add_checked_link(&g.db, 1, "passed", true);
+        let r = go(&g, &agents(&format!("[{}]", worker_json(1, "busy"))), &mut Memory::default());
+        assert_eq!(r.outlook.paused, Some(Paused::Cap(1)));
+    }
+
     #[test]
     fn a_links_read_error_in_one_organisation_starts_nothing_and_acts_on_nothing() {
         // Organisation b's database cannot be read (its open links are unknown); a has a Ready

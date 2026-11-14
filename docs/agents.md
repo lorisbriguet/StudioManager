@@ -241,7 +241,7 @@ A worker:
 - may edit files without asking (`acceptEdits`) and use six StudioManager tools without a prompt: read its tasks, project and wiki, `ask` and `report_result`. Other permission prompts are Claude Code's own;
 - is told to do the work of the brief, push the branch, open a pull request, and write its result with `report_result`.
 
-The item goes to Running. The cap counts the workers whose work is not settled yet: running ones, and finished ones waiting for you in Needs you. A worker stops counting when its work is accepted or dismissed. Agents you start yourself are never counted, and the watcher never types into, stops or resumes an agent it did not start.
+The item goes to Running. The cap counts the workers with work in progress. A worker that handed in its result and now waits for your decision under Check no longer counts, so the next task can start. If you send its work back while the cap is full, the count goes one over the cap until a worker finishes, and nothing new starts meanwhile. Agents you start yourself are never counted, and the watcher never types into, stops or resumes an agent it did not start.
 
 ### The Stop hook
 
@@ -265,7 +265,7 @@ Each of these Check entries is read by a lead session when the budget allows, wh
 - **Idle for 30 minutes without a result or a question:** a Decide entry.
 - **Stopped without a result or a question** (you ran `claude stop`, or the session died): a Decide entry at the next pass, with no 30-minute wait. A server error at the end of its conversation is still resumed first. Typing an instruction into it restarts the same session.
 - **Started more than a day ago, idle, no result:** asked once to write its result, then stopped 30 minutes later if it still has none; the work comes to you under Check ("Wrapped up after a day"). If the request cannot be typed, it is listed under Decide and the worker is not stopped.
-- **Its work was accepted or dismissed:** the worker is stopped if it still runs and its link is closed, so it no longer counts in the cap.
+- **Its work was accepted or dismissed:** the worker is stopped if it still runs and its link is closed, (it stopped counting in the cap as soon as it waited for you under Check).
 
 ### Lead sessions
 

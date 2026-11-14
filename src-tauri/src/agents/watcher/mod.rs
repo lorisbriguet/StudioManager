@@ -164,7 +164,7 @@ pub struct Deps<'a> {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Outlook {
     pub paused: Option<Paused>,
-    /// `start::running_workers` of the open watcher links and the list, plus a start waiting to
+    /// `start::running_workers` of the open watcher links and the list (a worker waiting under Check holds no slot), plus a start waiting to
     /// show up.
     pub running: usize,
     pub cap: u32,
@@ -244,6 +244,7 @@ fn read_pass(d: &Deps, lock: LockState, pending: usize) -> Pass {
     let access = read_access(d.app_dir);
     let mut ranked: Vec<(usize, Candidate)> = Vec::new();
     let mut any_allowed = false;
+    let mut waiting_ids: HashSet<(String, i64)> = HashSet::new();
     for (index, (org, db)) in org_dbs(d.app_dir).into_iter().enumerate() {
         if !db.exists() || in_mode(&db) {
             continue;
@@ -251,8 +252,11 @@ fn read_pass(d: &Deps, lock: LockState, pending: usize) -> Pass {
         let allowed = access.enabled && access.orgs.get(&org) == Some(&true);
         any_allowed |= allowed;
         let _shared = crate::org_shared();
-        match open_watcher_links(&db, &org) {
-            Ok(links) => pass.links.extend(links.into_iter().map(|l| (db.clone(), l))),
+        match open_watcher_links(&db, &org).and_then(|links| Ok((links, store::waiting_link_ids(&db)?))) {
+            Ok((links, waiting)) => {
+                waiting_ids.extend(waiting.into_iter().map(|id| (org.clone(), id)));
+                pass.links.extend(links.into_iter().map(|l| (db.clone(), l)));
+            }
             Err(e) => {
                 // Without its links the pass cannot tell what runs (the cap) or what to act on:
                 // it starts nothing and acts on nothing until the next read works.
@@ -279,7 +283,17 @@ fn read_pass(d: &Deps, lock: LockState, pending: usize) -> Pass {
     ranked.sort_by(|a, b| store::order(&a.1.item, &b.1.item).then(a.0.cmp(&b.0)));
     pass.candidates = ranked.into_iter().map(|(_, c)| c).collect();
     pass.access = any_allowed;
-    pass.running = start::running_workers(pass.links.len(), d.agents) + pending;
+    // A worker that handed in its result and waits for the owner under Check holds no slot: its
+    // link and its (listed, not busy) agent are left out of the count. The rest counts as before.
+    let waiting: Vec<&WatcherLink> = pass.links.iter().map(|(_, l)| l).filter(|l| waiting_ids.contains(&(l.org.clone(), l.id))).collect();
+    let left_out: HashSet<&str> = waiting
+        .iter()
+        .filter_map(|l| check::find_agent(d.agents, l))
+        .filter(|a| a.group != Group::Working)
+        .map(|a| a.session_id.as_str())
+        .collect();
+    let counted: Vec<Agent> = d.agents.iter().filter(|a| !left_out.contains(a.session_id.as_str())).cloned().collect();
+    pass.running = start::running_workers(pass.links.len() - waiting.len(), &counted) + pending;
     // Read only: in the dev build `limits_dir` is the installed app's folder.
     pass.budget = budget::budget(limits::load_dated(d.limits_dir, d.now), d.now);
     pass
