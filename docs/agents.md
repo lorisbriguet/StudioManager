@@ -39,7 +39,7 @@ Pick a folder, write the task, choose a model (haiku, sonnet, opus or fable) and
 
 The folder list shows the folders you already trusted in Claude first (linked project folders first), then folders you may want that Claude does not trust yet: your home folder, your linked project folders, and the folders that hold them (where a code folder such as `~/Documents/GitHub` sits). **Choose…** opens any other folder.
 
-Trust follows Claude Code's own rule: a trusted folder covers every folder inside it. Starting an agent in a folder that is not trusted yet asks first ("Trust … for Claude Code?"). On **Trust and start**, StudioManager sets `hasTrustDialogAccepted` for that folder in `~/.claude.json`, the same thing answering Yes to Claude's own question does: it takes Claude's lock (`~/.claude.json.lock`), changes only that flag and keeps the file private. The home folder gets a stronger warning, since trusting it trusts everything in it. Nothing is trusted without that yes.
+Trust follows Claude Code's own rule: a trusted folder covers every folder inside it, except a git repository. Inside a repository Claude looks no higher than the repository's root, so a trusted folder above it (your home folder, or a code folder such as `~/Documents/GitHub`) does not cover it: the repository itself has to be trusted. A worktree inside its repository is covered by the repository. Starting an agent in a folder that is not trusted yet asks first ("Trust … for Claude Code?"). On **Trust and start**, StudioManager sets `hasTrustDialogAccepted` for that folder in `~/.claude.json`, the same thing answering Yes to Claude's own question does: it takes Claude's lock (`~/.claude.json.lock`), changes only that flag and keeps the file private. The home folder gets a stronger warning, since trusting it trusts everything in it. Nothing is trusted without that yes.
 
 ## Start from a task
 
@@ -58,7 +58,7 @@ Design: [the design spec](superpowers/specs/2026-11-05-agent-from-task-design.md
 A task or subtask that has a brief or an agent shows a small **stage** next to its title. It tells you where the work stands without opening the agent. The stages are:
 
 - **Briefed:** the item has a brief. The brief session sets it when a capture needs your word. You can set it yourself.
-- **Ready:** the brief is complete. The brief session sets it when the capture is clear. You can set it yourself. For now it changes nothing else: no agent starts by itself.
+- **Ready:** the brief is complete. The brief session sets it when the capture is clear. You can set it yourself. While [the watcher](#the-watcher-and-the-lead) is on, an agent starts on a Ready item by itself; otherwise nothing starts.
 - **Running:** an agent works on it. Only the app sets it, the moment an agent starts from the item.
 - **To check:** the agent has finished and its work waits for you. Only the app sets it.
 
@@ -66,7 +66,7 @@ The stage is hidden once the item is done, and while Agents is off.
 
 ### The link
 
-When you use **Start work with agent** on a task or a subtask ([Start from a task](#start-from-a-task)), the app also writes a **link** between the item and that agent, and sets the stage to Running. The link is written only then. An agent started from a project, from the **New agent** form, from a [review report](#start-from-a-review-report) or in a terminal has no task to link to, so it gets none. A link is kept with its task: delete the task and its links go too.
+When you use **Start work with agent** on a task or a subtask ([Start from a task](#start-from-a-task)), the app also writes a **link** between the item and that agent, and sets the stage to Running. The link is written only then. An agent started from a project, from the **New agent** form, from a [review report](#start-from-a-review-report) or in a terminal has no task to link to, so it gets none. A worker started by [the watcher](#the-watcher-and-the-lead) gets a link too, marked as the watcher's. A link is kept with its task: delete the task and its links go too.
 
 A Running item says **waiting on you** next to its stage when its agent asks you a question or needs a permission.
 
@@ -76,7 +76,7 @@ The agent started from a task is asked to call `report_result` when it is done, 
 
 ### When an item goes to To check
 
-Every 30 seconds the app looks at the agents linked to your items. An item goes from Running to **To check** when one of these holds:
+Every 30 seconds the app looks at the agents you started from your items. (A worker the watcher started is followed by the watcher instead: see [When a worker stops](#when-a-worker-stops).) An item goes from Running to **To check** when one of these holds:
 
 - the agent has reported a result and is no longer working;
 - the agent shows as done;
@@ -104,7 +104,7 @@ On an item in To check, **Accept** marks the task or subtask done the usual way 
 
 ### The dev build
 
-In the dev build (`npm run dev:test`, see the [README](../README.md)), an agent started from a task uses the dev build's own StudioManager server and data folder, not the installed app's. This lets you try the whole flow on fictional data. Release builds start agents as they always did.
+In the dev build (`npm run dev:test`, see the [README](../README.md)), an agent started from a task uses the dev build's own StudioManager server and data folder, not the installed app's. This lets you try the whole flow on fictional data. Release builds start agents as they always did. The dev build has its own watcher switch, and its [budget](#the-budget) reads the installed app's usage reading, since the status line writes only there.
 
 Design and reasons: [agent orchestrator design](superpowers/specs/2026-11-12-agent-orchestrator-design.md). Plan: [orchestrator part 2](superpowers/plans/2026-11-13-agent-orchestrator-2-task-agent.md).
 
@@ -163,7 +163,7 @@ Turn on **Capture from Reminders** in Settings › Agents and name a list (**Inb
 
 ## Inbox and briefs
 
-The Agents page has three tabs: **Needs you**, **Inbox** and **All agents** (the list described above). The first two show a count when something waits.
+The Agents page has three tabs: **Needs you**, **Inbox** and **All agents** (the list described above). The first two show a count when something waits. Needs you is the first tab.
 
 ### Inbox
 
@@ -182,14 +182,127 @@ Off by default. In Settings › Agents, switch on **Brief new captures with an a
 - **The session.** At most every 15 minutes, when new captures wait, the app starts one background agent on Opus in that folder. It takes up to 20 captures of one organisation, the one whose oldest capture is oldest. Organisations in test or presentation mode are skipped.
 - **What it may do.** It starts with only the StudioManager server and seven tools: read captures, projects, tasks and wiki articles, and file a capture with its brief. The server itself lists and allows only those seven for this session (the `STUDIOMANAGER_TOOLS` setting in the folder's config), and the session may not read files, search, start other agents, use skills or the browser, run a shell, edit files or use the web. It never creates projects or clients.
 - **What it writes.** For each capture it finds the project, reads the wiki, decisions and open tasks, then files the capture as a task, or as a subtask of an open task that already covers it. It writes a short brief (what to do, done when, unclear) and sets an outcome: a note, ready, or needs your word. With no clear project it leaves the capture in the Inbox with a reason.
-- **Limits.** It pauses while the 5-hour plan limit is at 80% or more (see [plan limits](menu-bar.md#plan-limits)). A session that runs over 20 minutes, or waits for an answer for over 2 minutes, is stopped. The app gives a session 60 seconds to appear in the list before it counts it as ended.
+- **Limits.** It starts only while [the budget](#the-budget) allows: it pauses while the 5-hour plan limit is at 80% or more, while the week is ahead of its pace, and when there is no usage reading from the last 30 minutes. A session that runs over 20 minutes, or waits for an answer for over 2 minutes, is stopped. The app gives a session 60 seconds to appear in the list before it counts it as ended.
 - **After it.** When everything is filed, the session is stopped and removed. Each capture sent gets one try counted when the session starts (a start that fails before it began counts none and is shown as the last failure; the next slot tries again). After 3 tries a capture that is still waiting shows **Briefing failed** in the Inbox. Settings shows the last failure, the next session time and why a session is paused. The app only trusts "not in the list" after the Agents list has been read again following the start. Switching Agents off stops a running brief session.
 
 ### Needs you
 
-The **Briefs** group lists captures filed with the outcome "needs your word": the project, your original words and the brief. From there you can **Start an agent** on the task, **Keep as a task** (it leaves the list and stays a task), or open the brief.
+Everything that waits on you, in four groups. The tab, the sidebar's Agents entry and the menu bar icon show how many entries wait (Decide, Check and Briefs together).
+
+- **Decide:** a question from a worker that the lead could not answer from what is written, or something the app could not settle: a worker that could not start, one waiting at a permission prompt, one that stopped without a result or a question, one still stuck after three restarts. A question shows the recommendation, a button per option and **Answer in words**. Your answer is typed into the waiting agent, and saved as a decision in the project's wiki when the lead marked the question as one. A permission prompt has **Open the agent** and **Dismiss**. A worker that could not start has **Dismiss**. A worker that stopped or is stuck has **Open the agent** and **Answer in words**, typed into it. A question from an agent you started yourself comes here without a lead's reading.
+- **Check:** finished work. Each entry shows the result, the number of changed lines, whether the check command passed, and what the change touches (migrations, dependencies, deletions). **Accept** marks the item done, as in [the panel](#the-panel); it does not merge: use **Open the pull request** and merge on GitHub. **Send back** types your note into the worker, and its next result is checked again.
+- **Briefs:** captures filed with the outcome "needs your word": the project, your original words and the brief. From there you can **Start an agent** on the task, **Keep as a task** (it leaves the list and stays a task), or open the brief.
+- **Decided alone:** what the lead or the app did without you in the last 7 days, each with its reason: a question answered from the wiki, work sent back, a worker restarted or wrapped up, a pull request merged. **Reopen** puts the entry back in its group. Reopening a merged entry does not undo the merge; the item goes back to To check.
+
+An agent of the watcher that has an open entry here is left out of the Needs you group of **All agents**, so nothing is listed twice.
 
 Design and reasons: [agent orchestrator design](superpowers/specs/2026-11-12-agent-orchestrator-design.md). Plan: [orchestrator part 1](superpowers/plans/2026-11-12-agent-orchestrator-1-capture.md).
+
+## The watcher and the lead
+
+The **watcher** is plain code in the app, not a model. While it is on, it starts an agent (a **worker**) on the next Ready task, follows the workers it started, and lists what waits on you under [Needs you](#needs-you). The **lead** is a short Opus session the watcher starts for one event at a time: a worker's question, or finished work to read. Nothing runs all day.
+
+Design and reasons: [agent orchestrator design](superpowers/specs/2026-11-12-agent-orchestrator-design.md). Plan, with what changed while it was built: [orchestrator part 3](superpowers/plans/2026-11-13-agent-orchestrator-3-watcher-lead.md).
+
+### Turning it on
+
+In Settings › Agents, switch on **Start work on Ready tasks by itself** and set **Workers at once** (3 by default, 1 to 5). It is off by default and needs the Agents switch; switching Agents off pauses it. Turning it on asks you to trust the lead's folder in Claude Code, once.
+
+The watcher makes a pass every 30 seconds, and right after the Mac wakes, only while StudioManager is open. A line on the Needs you tab says which task it would start next, or why it waits. It does nothing:
+
+- in the demo build;
+- while any organisation is in test or presentation mode (the whole watcher pauses, not only that organisation);
+- when another copy of the same build already runs the watcher (one per data folder).
+
+For an organisation whose [Agent access](agent-access.md) is off, it starts no worker and no lead session; workers already started there are still checked, wrapped up and closed.
+
+The dev build has its own switch, off by default, with a warning: its workers use your real Claude plan and the repositories of the projects in its data.
+
+### The budget
+
+Before it starts a worker, a lead session or a brief session, the app reads your plan usage ([plan limits](menu-bar.md#plan-limits)). Nothing starts when:
+
+- the week's use is ahead of its pace: above a straight line from 0% when the week began to 85% at the reset (the last 15% is kept for work you start yourself);
+- the 5-hour window is at 80% or more;
+- there is no usage reading, the reading is more than 30 minutes old, or its week has already reset.
+
+The reading is written by the status line while Claude Code runs. So without plan limits set up, or when Claude Code has not been used for 30 minutes, the watcher waits. The Agents page says why ("Paused: ahead of the week's pace…").
+
+Paused does not mean unseen: questions and finished work are listed for you without the lead's reading. Two things still happen over the budget, so that work already started is not left half done, and both make a worker spend some usage: the check command runs and a first failure is typed back to the worker, and a worker a day old is asked to wrap up. A stuck worker is restarted only while the budget allows. Agents you start yourself never read the budget.
+
+### Workers
+
+On each pass the watcher starts at most one worker, on the first Ready task or subtask it can start, across the organisations agents may use: highest priority first (a deadline today or past counts as high, tomorrow as at least medium; a subtask takes its task's priority), then the nearest deadline, then the oldest. An item is skipped when its project has no linked folder or the folder is not a git repository; the reason shows when it is the first in line and nothing else can start. A repository that is not trusted in Claude Code gives one "Could not start" entry under Decide (see [New agent](#new-agent) for the trust rule); the item is not tried again while that entry is open.
+
+A worker:
+
+- runs on Opus, in the background, named `sm-w-task-<id>` or `sm-w-subtask-<id>`;
+- works in its own git worktree, `<project folder>/.claude/worktrees/sm-task-<id>`, on a new branch `sm/task-<id>` cut from the default branch of `origin` (after a fetch), or from the local `main` or `master` when there is no `origin` or its default branch is not known. A branch or folder of that name that already exists is refused, never reused;
+- may edit files without asking (`acceptEdits`) and use six StudioManager tools without a prompt: read its tasks, project and wiki, `ask` and `report_result`. Other permission prompts are Claude Code's own;
+- is told to do the work of the brief, push the branch, open a pull request, and write its result with `report_result`.
+
+The item goes to Running. The cap counts the workers whose work is not settled yet: running ones, and finished ones waiting for you in Needs you. A worker stops counting when its work is accepted or dismissed. Agents you start yourself are never counted, and the watcher never types into, stops or resumes an agent it did not start.
+
+### The Stop hook
+
+A worker gets a Stop hook (`studiomanager-mcp --stop-hook`, passed in a settings file for that session only). It keeps a worker from ending unseen: it sends the worker on once when it stops without having called `report_result`, and once when it ends on a question it did not send through `ask`. Each reason at most once per session.
+
+### The check command
+
+A project can have one **check command** (its test command, for example `npm test`, 500 characters at most), in the **Agents** section of the project's page, shown while Agents is on. Only you can set it, in the app: no tool writes it. When a worker has reported its result, the app runs the command in the worker's worktree, through `/bin/sh`, for 10 minutes at most.
+
+- **Passed, or no command set:** a Check entry is written.
+- **Failed the first time:** the end of the output (8 KB at most) is typed back to the worker with the command, once.
+- **Failed again, or the worker can no longer be reached:** a Check entry marked "Check failed".
+
+Each of these Check entries is read by a lead session when the budget allows, whatever the check said. Some ends skip the lead and come straight to you: a worker that ended without a result, a worktree that is gone, and a worker wrapped up after a day.
+
+### When a worker stops
+
+- **Asks a question** (`ask`): a Decide entry. The lead answers it when the answer is written in the brief, the wiki or the decisions, naming where; otherwise it is yours, with the lead's recommendation.
+- **Stuck on a connection error** (the Mac slept mid-answer; the worker has been idle for 2 minutes with a server error at the end of its conversation): told to continue, at most three times and at least 5 minutes apart, then listed under Decide. A worker whose process is gone is resumed as a new agent with the same conversation. A rate limit or an ended sign-in is never retried: the worker stays idle and comes to Decide after 30 minutes.
+- **Waiting at a permission prompt** for more than 2 minutes: a Decide entry that opens the agent. The lead never answers a prompt.
+- **Idle for 30 minutes without a result or a question:** a Decide entry.
+- **Started more than a day ago, idle, no result:** asked once to write its result, then stopped 30 minutes later if it still has none; the work comes to you under Check ("Wrapped up after a day"). If the request cannot be typed, it is listed under Decide and the worker is not stopped.
+- **Its work was accepted or dismissed:** the worker is stopped if it still runs and its link is closed, so it no longer counts in the cap.
+
+### Lead sessions
+
+One lead session runs at a time, on Opus, for 20 minutes at most, in a `lead` folder in the app data folder. It starts with only the StudioManager server and seven tools: read the entry it is given, the project, its tasks and wiki, and write its answer with `resolve` or `hand_over` ([Agent access](agent-access.md#limiting-a-session-to-some-tools)). It has no shell and no file tools: it cannot delete, release or touch money. For one worker there are at most three question sessions and two check sessions; after that, entries come straight to you.
+
+- **A question:** it answers from what is written and says where, or hands the question to you with a recommendation. The answer is typed into the worker by the app.
+- **Finished work:** it reads the result and the diff, then accepts, sends the work back once with a note, or hands it to you with a summary.
+
+When the lead accepts, the entry comes back to you as "The lead would accept: …" unless [merging alone](#merging-alone) is on for the project. A finished lead session is stopped and kept in the agent list (`sm-lead-…`) until you remove it: the watcher never deletes an agent.
+
+### Merging alone
+
+Off by default, per project: **The lead may merge small changes alone**, in the project's agent settings. A project marked **Belongs to a hub** can never have it on. With it on, a change is merged without you only when all of these hold; the app works each one out itself, and the lead's accept is only one of them:
+
+- the lead accepted the work, the budget allowed the pass, agent access is on for the organisation, and the watcher is still allowed to run after the check;
+- a check command is set, passed the first time, and passes again, run a second time by the app on the very commit that is merged;
+- the change is between 1 and 99 lines (added plus removed), with no binary file, and the worktree is clean;
+- the worker reported the pull request link, the pull request is at the commit the app checked, and its base is the branch the worktree was cut from on `origin` (a project with no remote never merges alone);
+- nothing it touches always asks: migrations and SQL files, package and lock files, version and release files, anything under `.github`, security and machine settings (`.claude`, permissions, entitlements, `.env`, `CLAUDE.md`…), anything about money (a path with a word such as `invoice`, `price` or `tax`; `syntax` matches too, on purpose), a deleted file, a symlink, a submodule, a changed file mode, or a path with unusual characters;
+- the pull request is on github.com, in the repository the project folder points to, open, not a draft, mergeable, and GitHub reports the same lines, files and paths as the app measured.
+
+The app then runs `gh pr merge --squash` pinned to that commit, once. It never deletes the branch or the worktree. Afterwards the item is done, and "Merged: check passed, N lines" is listed under Decided alone with the lead's reason. Anything that fails sends the entry back to you with the reason ("The lead would accept; not merged: …"); a refused or failed merge is never tried again. When GitHub's answer is unclear (a merge queue, a timeout), the entry says to look at the pull request and the item is not marked done.
+
+### What it never does
+
+- Start a session in the demo build, in test or presentation mode, or over the budget.
+- Touch an agent you started yourself.
+- Delete an agent, a branch, a worktree or a file. It stops the agents it started; you remove them.
+- Merge a hub's project, or any project where you did not switch merging alone on.
+- Answer a permission prompt, release, or change money data.
+
+### To know before switching it on
+
+- Worktrees go under `<project folder>/.claude/worktrees/`. A project that does not ignore that folder sees it as untracked files. They stay after the work is done: remove them yourself (`git worktree remove`).
+- A project folder that is a subfolder of a larger repository gets a worktree of the whole repository.
+- The repository itself must be trusted in Claude Code, not only a folder above it.
+- Merging alone needs a check command that leaves the worktree clean (build output must be git-ignored), `gh` signed in, and a repository whose rules allow a squash merge without a review. Turn off "Automatically delete head branches" on GitHub if the branch should stay.
+- A task you typed by hand shows no brief box and no stage menu until it has a brief.
 
 ## Morning brief comments
 

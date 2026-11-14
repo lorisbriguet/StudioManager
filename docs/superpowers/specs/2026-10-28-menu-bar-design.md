@@ -14,12 +14,12 @@ and plan-usage numbers. StudioManager now has an Agents page with the same agent
 the menu bar becomes part of StudioManager, shipped with the app, so there is one app to install and keep up to date,
 and AgentBar can be retired.
 
-StudioManager is meant for other users too. Everything generic ships in the app; what is personal to Loris (Art
-Basel, his briefs) stays his, as configuration and his own scripts, never as app code — so StudioManager updates never
+StudioManager is meant for other users too. Everything generic ships in the app; what is personal to Loris (a client's
+hub, his briefs) stays his, as configuration and his own scripts, never as app code — so StudioManager updates never
 touch it and there is no private fork.
 
 **Success:** with "Show in menu bar" on, Loris uninstalls AgentBar and does not miss it day to day: he sees and
-answers his agents, reads his plan usage, and runs his day (start and end of day, personal and Art Basel) from
+answers his agents, reads his plan usage, and runs his day (start and end of day, personal and for a client) from
 StudioManager's menu bar icon.
 
 ## 2. The whole picture, and what this document covers
@@ -61,7 +61,7 @@ Each later project gets its own brainstorm. Agent time stays a guide; turning it
       ("Mostly Opus 5.5 (92%), Sonnet 5.5 (8%)").
     - **Agent time:** per client and project, Today / Week, labelled "A guide from agent activity, not a timesheet",
       with "Copy as text".
-  - **Day tab:** sections the user names (Loris: "Personal", "Art Basel"), each a list of **routines**. A routine row
+  - **Day tab:** sections the user names (Loris: "Personal" and one for a client), each a list of **routines**. A routine row
     shows its title, a status line (idle hint / "Running" / "Done at 08:12" / "Failed: …"), a main button ("Run" /
     "Open result") and a "…" menu (Run now, Edit, Open folder or link). Two kinds of routine:
     - **Agent prompt:** folder, model, name, and the prompt (text, or a prompt file whose content is read at run time).
@@ -69,8 +69,8 @@ Each later project gets its own brainstorm. Agent time stays a guide; turning it
       plus an optional result link (a file path or URL the routine names, e.g. today's brief). Comments on a brief
       become messages to that agent from the Agents page, so no brief server is needed. *[call]*
     - **Command:** a program and its arguments that the user sets up, run in a chosen folder, never through a shell.
-      The status line is the last non-empty line of its output; the exit code decides done or failed. Loris's Art
-      Basel day buttons become a small script of his own (in his Art Basel tooling, not in StudioManager) that calls the
+      The status line is the last non-empty line of its output; the exit code decides done or failed. Loris's client
+      day buttons become a small script of his own (in his own tooling for that client, not in StudioManager) that calls the
       control room with its key and prints what to show (hours, a missing end time). *[call: a command routine,
       not a "call this URL" routine, keeps control-room details out of the app]*
     - **Schedule:** optional, per routine: a time, on weekdays or every day. A missed run (Mac asleep) catches up on wake
@@ -96,9 +96,9 @@ Each later project gets its own brainstorm. Agent time stays a guide; turning it
 ## 4. Non-goals (version 1)
 
 - The launcher, the results inbox, wrap up, routines outside the Day tab (later projects, §2).
-- The Art Basel hub push check (dropped; Loris's own script may print it if he wants).
+- The client hub's push check (dropped; Loris's own script may print it if he wants).
 - A "call this URL" routine kind.
-- Anything Art Basel or brief-specific in the app.
+- Anything client- or brief-specific in the app.
 - Writing time entries from agent time.
 - A separate helper process or daemon: the menu bar lives inside the StudioManager process.
 
@@ -130,13 +130,13 @@ Loris retires AgentBar as soon as version 1 works. With the Day tab in version 1
 
 - His **start and end of day** (personal) become Agent prompt routines pointing at his prompt files in
   `~/Documents/Briefs`, with start of day scheduled at 08:00.
-- His **Art Basel day buttons** become Command routines running his own script that talks to the control room.
+- His **client day buttons** become Command routines running his own script that talks to the control room.
 - Retirement steps on his machine, as a short checklist in `docs/` *[call]*:
   - remove AgentBar's login item and its 08:00 launchd job (`ch.lorisbriguet.agentbar.sod`), then the app;
   - switch the status line to StudioManager's (its setup step does this with a preview and backup);
   - remove the safety-events settings (`OTEL_*` keys pointing at AgentBar's brief server, port 47480) from
     `~/.claude/settings.json`, with a backup, since nothing listens there any more *[call]*;
-  - write the Art Basel day script and set up the routines.
+  - write the client day script and set up the routines.
 - Brief comments are replaced by messaging the start-of-day agent from StudioManager.
 - Lost until later projects: the launcher, the results inbox, wrap up, the saved-tasks window (Loris accepted this).
 

@@ -23,7 +23,7 @@
 - Groups: `needs-you | working | idle | done`. A needs-you agent goes quiet (shown under idle) after 2 h (7 200 000 ms) with no transcript change, or when dismissed.
 - Never accept Claude's folder-trust prompt. Untrusted folders are not offered and are refused by `agents_start`.
 - Never send a bare Enter to answer a prompt: `\r` is written only after re-reading the screen and confirming the chosen option is highlighted.
-- Never write to `~/.claude`, `~/.claude.json` or the Art Basel hub; only the `claude` CLI does.
+- Never write to `~/.claude`, `~/.claude.json` or a client hub; only the `claude` CLI does.
 - Labels: `Organisation › Client › Project`, longest matching `folder_path` prefix across all organisations, including those hidden from Agent access. No match → folder name.
 - Interactive (non-`--bg`) agents: list, read, stop, attach. No send, no model switch, no answer buttons.
 - The repo is public: no personal paths, names or real session ids in tests or fixtures.

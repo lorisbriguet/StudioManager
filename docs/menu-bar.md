@@ -15,7 +15,7 @@ With it on:
 - Closing the window keeps StudioManager running. The Dock icon stays, as the [design spec](superpowers/specs/2026-10-28-menu-bar-design.md) asks: clicking it, **Open StudioManager** in the panel, or opening the app again from Finder or Spotlight shows the window again.
 - Cmd+Q quits the app and removes the icon. A command routine still running is stopped with it, along with anything it started (see [Routines](#routines)).
 
-The icon turns amber while any agent needs you.
+The icon turns amber while any agent needs you. A number beside it says how many entries wait in [Needs you](agents.md#needs-you) (questions to decide, work to check, briefs); it is hidden at zero.
 
 ## The panel
 
