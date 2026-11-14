@@ -238,7 +238,7 @@ A worker:
 
 - runs on Opus, in the background, named `sm-w-task-<id>` or `sm-w-subtask-<id>`;
 - works in its own git worktree, `<project folder>/.claude/worktrees/sm-task-<id>`, on a new branch `sm/task-<id>` cut from the default branch of `origin` (after a fetch), or from the local `main` or `master` when there is no `origin` or its default branch is not known. A branch or folder of that name that already exists is refused, never reused;
-- may edit files without asking (`acceptEdits`) and use six StudioManager tools without a prompt: read its tasks, project and wiki, `ask` and `report_result`. Other permission prompts are Claude Code's own;
+- may edit files without asking (`acceptEdits`) and use six StudioManager tools without a prompt: read its tasks, project and wiki, `ask` and `report_result`. Other permission prompts are Claude Code's own: pushing the branch and opening the pull request wait for your answer unless your own Claude Code settings allow those commands. The worker is told to run each of these commands on its own, so a prompt names one plain command;
 - is told to do the work of the brief, push the branch, open a pull request, and write its result with `report_result`.
 
 The item goes to Running. The cap counts the workers with work in progress. A worker that handed in its result and now waits for your decision under Check no longer counts, so the next task can start. If you send its work back while the cap is full, the count goes one over the cap until a worker finishes, and nothing new starts meanwhile. Agents you start yourself are never counted, and the watcher never types into, stops or resumes an agent it did not start.
