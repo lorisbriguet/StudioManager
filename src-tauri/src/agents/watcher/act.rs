@@ -846,7 +846,7 @@ mod tests {
     }
 
     #[test]
-    fn a_stopped_worker_that_reported_or_asked_gets_no_stopped_entry_and_a_server_error_still_resumes() {
+    fn a_stopped_worker_that_reported_gets_no_stopped_entry_and_a_server_error_still_resumes() {
         // Reported: `check`'s path, no decide entry.
         let f = watcher("stopped-reported");
         Connection::open(&f.db).unwrap().execute("UPDATE task_agents SET reported_at = 1", []).unwrap();
