@@ -327,6 +327,19 @@ fn a_small_checked_change_is_merged_once_and_the_item_is_done() {
 }
 
 #[test]
+fn a_one_line_change_is_listed_as_1_line_not_1_lines() {
+    let scene = Scene {
+        numstat: "1\t0\tsrc/poster.ts\n",
+        view: view_of("OPEN", false, SHA, "main", "MERGEABLE", 1, 0, &["src/poster.ts"], 1),
+        ..Scene::default()
+    };
+    let (f, _id, mut mem) = merging("one-line", &scene, "true");
+    pass(&f, &mut mem, 1);
+    assert_eq!(f.merges(), 1);
+    assert_eq!(f.alone_rows()[0].0, "Merged: check passed, 1 line");
+}
+
+#[test]
 fn a_subtask_is_merged_and_done_the_same_way() {
     let mut f = fx("happy-sub", vec![started(), reply("stopped abc12345\n")]);
     f.git = scene_git(&Scene::default());

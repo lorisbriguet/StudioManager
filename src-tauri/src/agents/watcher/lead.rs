@@ -691,7 +691,7 @@ fn accept_steps(
     }
     let recorded = {
         let _shared = crate::org_shared();
-        store::finish_merged(db, link.kind, link.item_id, link.id, alone, &format!("Merged: check passed, {lines} lines"), &why)
+        store::finish_merged(db, link.kind, link.item_id, link.id, alone, &format!("Merged: check passed, {lines} {}", if lines == 1 { "line" } else { "lines" }), &why)
     };
     // The merge happened: a failed write is a warning, never a reason to merge again. The owner is
     // told once (a reopened entry is `open`, so `carry_out` never takes it again); when that write
