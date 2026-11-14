@@ -12,6 +12,8 @@ import { formatDisplayDateTime } from "../../utils/formatDate";
 import { Badge, Button, EmptyState, ICONS, ICON_SIZE, SECTION_LABEL, Textarea } from "../ui";
 import { CheckEntry } from "./CheckEntry";
 import { DecideEntry } from "./DecideEntry";
+import { HubLine } from "./HubLine";
+import { useHubList } from "../../hooks/useHubs";
 
 /**
  * The Needs you tab: everything waiting on you, in four groups. Decide (questions agents asked),
@@ -23,10 +25,11 @@ export function NeedsYouTab() {
   const { data: briefs = [] } = useBriefEntries();
   const { data: open = [] } = useOpenEntries();
   const { data: alone = [] } = useAloneEntries();
+  const hubs = useHubList();
   const decide = open.filter((e) => e.kind === "decide");
   const check = open.filter((e) => e.kind !== "decide");
 
-  if (open.length === 0 && briefs.length === 0 && alone.length === 0) {
+  if (open.length === 0 && briefs.length === 0 && alone.length === 0 && hubs.length === 0) {
     return (
       <>
         <WatcherLine />
@@ -63,6 +66,13 @@ export function NeedsYouTab() {
         <Group label={t.needs_alone_group} count={alone.length}>
           {alone.map((e) => (
             <AloneItem key={e.id} entry={e} />
+          ))}
+        </Group>
+      )}
+      {hubs.length > 0 && (
+        <Group label={t.needs_hubs_group} count={hubs.length}>
+          {hubs.map((h) => (
+            <HubLine key={h.id} hub={h} />
           ))}
         </Group>
       )}

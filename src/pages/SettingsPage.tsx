@@ -25,6 +25,7 @@ import { logError } from "../lib/log";
 import { UpkeepSettingsCard } from "../components/settings/UpkeepSettingsCard";
 import { AgentAccessCard } from "../components/settings/AgentAccessCard";
 import { AgentsCard } from "../components/settings/AgentsCard";
+import { HubsCard } from "../components/settings/HubsCard";
 import { RoutinesCard } from "../components/settings/RoutinesCard";
 import { OrganisationsCard } from "../components/settings/OrganisationsCard";
 import { DemoDataCard } from "../components/settings/DemoDataCard";
@@ -55,6 +56,7 @@ export function SettingsPage() {
   const showTasksPage = useAppStore((s) => s.showTasksPage);
   const setShowTasksPage = useAppStore((s) => s.setShowTasksPage);
   const showNetworkPage = useAppStore((s) => s.showNetworkPage);
+  const agentsEnabled = useAppStore((s) => s.agentsEnabled);
   const setShowNetworkPage = useAppStore((s) => s.setShowNetworkPage);
   const showIncome = useAppStore((s) => s.showIncome);
   const setShowIncome = useAppStore((s) => s.setShowIncome);
@@ -539,6 +541,7 @@ export function SettingsPage() {
           {activeCategory === "agents" && (
             <div className="space-y-4">
               <AgentsCard />
+              {agentsEnabled && !isDemoBuild() && <HubsCard />}
               <RoutinesCard />
               <AgentAccessCard />
             </div>

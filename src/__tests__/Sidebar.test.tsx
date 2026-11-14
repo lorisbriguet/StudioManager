@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { invokedCommands, clearInvokedCommands } from "../__mocks__/tauri-api";
+import { invokedCommands, clearInvokedCommands, setInvokeHandler } from "../__mocks__/tauri-api";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Sidebar } from "../components/layout/Sidebar";
@@ -17,9 +17,11 @@ vi.mock("../db/hooks/useUpkeep", () => ({
 }));
 
 let needsYouCount = 0;
-vi.mock("../db/hooks/useNeedsYou", () => ({
-  useNeedsYouCount: () => needsYouCount,
-}));
+// The entries and briefs are the stub's number; the hubs' part is the real hook.
+vi.mock("../db/hooks/useNeedsYou", async () => {
+  const { useHubWaiting } = await import("../hooks/useHubs");
+  return { useNeedsYouCount: () => needsYouCount + useHubWaiting() };
+});
 
 let inboxStates: ("new" | "dismissed")[] = [];
 vi.mock("../db/hooks/usePaperlessInbox", () => ({
@@ -130,6 +132,26 @@ describe("Sidebar", () => {
     clearInvokedCommands();
     renderSidebar();
     await waitFor(() => expect(invokedCommands).toContainEqual({ cmd: "menubar_set_needs_count", args: { n: 4 } }));
+    useAppStore.setState({ agentsEnabled: false });
+    needsYouCount = 0;
+  });
+
+  it("adds the fresh hub count to the badge and to the menu bar number", async () => {
+    useAppStore.setState({ agentsEnabled: true });
+    needsYouCount = 4;
+    clearInvokedCommands();
+    setInvokeHandler((cmd) =>
+      cmd === "hubs_counts"
+        ? [
+            { id: "h1", name: "Demo hub", colour: "purple", folder: "/data/hub", approved: true, waiting: 3, fresh: true, checkedAt: 1, problem: null, nextTryAt: null, paused: false, busy: false, offers: [] },
+            { id: "h2", name: "Old hub", colour: "teal", folder: "/data/old", approved: true, waiting: 5, fresh: false, checkedAt: 1, problem: null, nextTryAt: null, paused: false, busy: false, offers: [] },
+          ]
+        : null,
+    );
+    renderSidebar();
+    await waitFor(() => expect(screen.getByRole("link", { name: /Agents/ })).toHaveTextContent("7"));
+    await waitFor(() => expect(invokedCommands).toContainEqual({ cmd: "menubar_set_needs_count", args: { n: 7 } }));
+    setInvokeHandler(null);
     useAppStore.setState({ agentsEnabled: false });
     needsYouCount = 0;
   });

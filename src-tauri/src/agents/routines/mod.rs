@@ -128,7 +128,7 @@ fn command_allowed(app: &AppHandle, routine: &Routine, by_hand: bool) -> bool {
 
 /// Shows control characters (and the marks that reorder text) as escapes, so an argument can't
 /// fake extra lines or hide what follows; everything else is shown as typed.
-fn shown(v: &str) -> String {
+pub(crate) fn shown(v: &str) -> String {
     if v.is_empty() {
         return "\"\"".into();
     }

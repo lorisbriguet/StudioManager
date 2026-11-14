@@ -55,6 +55,7 @@ vi.mock("../db/hooks/useCaptures", () => ({
 vi.mock("../hooks/useStartAgentOn", () => ({
   useStartAgentOn: () => ({ enabled: true, start: vi.fn(async () => false) }),
 }));
+vi.mock("../hooks/useHubs", () => ({ useHubList: () => [] }));
 vi.mock("../db/hooks/useProjects", () => ({ useProjects: () => ({ data: [] }) }));
 vi.mock("../db/hooks/useTasks", () => ({ useTasksByProject: () => ({ data: [] }) }));
 

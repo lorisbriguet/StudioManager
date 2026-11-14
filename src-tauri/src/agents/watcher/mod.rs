@@ -172,7 +172,7 @@ pub struct Outlook {
     pub would_start: Option<(String, ReadyItem)>,
 }
 
-fn org_dbs(app_dir: &Path) -> Vec<(String, PathBuf)> {
+pub(crate) fn org_dbs(app_dir: &Path) -> Vec<(String, PathBuf)> {
     let Ok(Some(reg)) = Registry::load(app_dir) else { return vec![] };
     reg.organisations.into_iter().map(|o| (o.id.clone(), org_dir(app_dir, &o.id).join(DB_FILE))).collect()
 }

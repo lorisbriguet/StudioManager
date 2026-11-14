@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Input, Toggle } from "../ui";
 import { useT } from "../../i18n/useT";
 import { useSetProjectAgentSettings } from "../../db/hooks/useNeedsYou";
+import { useHubList } from "../../hooks/useHubs";
+import { hubForFolder } from "../../lib/hubs";
 import type { Project } from "../../types/project";
 
 const MAX_CHECK_COMMAND = 500;
@@ -16,7 +18,9 @@ export function ProjectAgentSettings({ project }: { project: Project }) {
   const set = useSetProjectAgentSettings();
   const saved = project.check_command ?? "";
   const [command, setCommand] = useState(saved);
-  const hub = project.hub_project === 1;
+  // A project whose folder is inside a hub's folder belongs to it: shown on and fixed (Rust decides the merge).
+  const inHub = hubForFolder(project.folder_path, useHubList());
+  const hub = project.hub_project === 1 || inHub !== null;
 
   return (
     <section aria-label={t.project_agent_settings} className="mb-4 space-y-3">
@@ -47,10 +51,11 @@ export function ProjectAgentSettings({ project }: { project: Project }) {
       />
       <Toggle
         checked={hub}
+        disabled={inHub !== null}
         ariaLabel={t.project_hub}
         onChange={(on) => set.mutate({ id: project.id, settings: { hub_project: on ? 1 : 0 } })}
         label={t.project_hub}
-        description={t.project_hub_desc}
+        description={inHub ? t.project_hub_in_folder.replace("{name}", inHub.name) : t.project_hub_desc}
       />
     </section>
   );
