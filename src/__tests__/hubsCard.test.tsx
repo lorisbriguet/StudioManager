@@ -118,6 +118,14 @@ describe("HubsCard", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Essayé il y a moins de 30 secondes. Réessayez dans un instant.");
   });
 
+  it("the folder path wraps at slashes and only breaks inside a word when one segment is too long", async () => {
+    hubs = [view({ folder: "/data/Studio A/demo-hub" })];
+    show();
+    const path = await screen.findByText("/data/Studio A/demo-hub");
+    expect(path).toHaveClass("break-words");
+    expect(path).not.toHaveClass("break-all");
+  });
+
   it("Edit prefills the program and the arguments, and sends them back as they are", async () => {
     hubs = [view()];
     show();
