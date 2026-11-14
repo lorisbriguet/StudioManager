@@ -91,8 +91,15 @@ pub fn notice(
     }
     match agent.group {
         Group::NeedsYou if agent.status == "waiting" && now - since >= AT_PROMPT_MS => Some(Event::AtPrompt { since }),
-        // A stopped session will not do anything by itself: its entry needs no wait.
-        Group::Idle if !link.reported && is_stopped(agent) => Some(Event::IdleNoResult { since, stopped: true }),
+        // A worker already asked to wrap up stays `Old`: `act::old` stops it after the wait and
+        // writes the "Wrapped up" entry, and retries that write on the next pass.
+        Group::Idle if link.wrap_asked_at.is_some() && now - link.started_at >= OLD_MS => Some(Event::Old),
+        // A stopped session will not do anything by itself: its entry needs no wait. Only the
+        // link's own agent counts: right after a resume the lookup can still find the stopped
+        // original (by session id) before the copy the link now points to is listed.
+        Group::Idle if !link.reported && is_stopped(agent) && agent.short_id.as_deref() == Some(link.short_id.as_str()) => {
+            Some(Event::IdleNoResult { since, stopped: true })
+        }
         Group::Idle if now - link.started_at >= OLD_MS => Some(Event::Old),
         Group::Idle if !link.reported && now - since >= IDLE_NO_RESULT_MS => {
             Some(Event::IdleNoResult { since, stopped: false })
@@ -211,6 +218,28 @@ mod tests {
         // A working agent is never old.
         let busy = agent("busy", None);
         assert_eq!(notice(&l, Some(&busy), false, None, T0 + OLD_MS, None), None);
+    }
+
+    #[test]
+    fn a_stopped_agent_that_is_not_the_links_current_one_is_not_a_stopped_worker() {
+        let l = WatcherLink { seen_since: Some(T0), short_id: "ffff0002".into(), ..link() };
+        // The stopped original (id 0a1b2c3d) found by session id while the link moved to a copy.
+        let original = agent("idle", Some("stopped"));
+        assert_eq!(notice(&l, Some(&original), false, None, T0, None), None);
+        assert_eq!(notice(&l, Some(&original), false, None, T0 + IDLE_NO_RESULT_MS, None), Some(Event::IdleNoResult { since: T0, stopped: false }));
+    }
+
+    #[test]
+    fn a_stopped_worker_asked_to_wrap_up_stays_old_after_a_day() {
+        let l = WatcherLink { seen_since: Some(T0), wrap_asked_at: Some(T0 + OLD_MS), ..link() };
+        let stopped = agent("idle", Some("stopped"));
+        assert_eq!(notice(&l, Some(&stopped), false, None, T0 + OLD_MS + MIN, None), Some(Event::Old));
+        // Not asked: the stopped worker is the Decide entry, also after a day.
+        let unasked = WatcherLink { wrap_asked_at: None, ..l };
+        assert_eq!(
+            notice(&unasked, Some(&stopped), false, None, T0 + OLD_MS + MIN, None),
+            Some(Event::IdleNoResult { since: T0, stopped: true })
+        );
     }
 
     #[test]
