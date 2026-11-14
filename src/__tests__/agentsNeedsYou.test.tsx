@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { setInvokeHandler, invokedCommands, clearInvokedCommands } from "../__mocks__/tauri-api";
 import { NeedsYouTab } from "../components/agents/NeedsYouTab";
 import { useAppStore } from "../stores/app-store";
 import type { BriefEntry } from "../db/queries/captures";
@@ -63,10 +65,22 @@ const entry = (over: Partial<BriefEntry> = {}): BriefEntry => ({
 function setup(entries: BriefEntry[]) {
   hooks.entries = entries;
   return render(
-    <MemoryRouter>
-      <NeedsYouTab />
-    </MemoryRouter>,
+    <QueryClientProvider client={new QueryClient()}>
+      <MemoryRouter>
+        <NeedsYouTab />
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
+}
+
+const hub = (over: Record<string, unknown> = {}) => ({
+  id: "h1", name: "Demo hub", colour: "purple", folder: "/data/demo-hub", approved: true, waiting: 3, fresh: true,
+  checkedAt: Date.now() - 120_000, problem: null, nextTryAt: null, paused: false, busy: false, offers: ["counts"], ...over,
+});
+
+function withHubs(handler: (cmd: string, args: Record<string, unknown>) => unknown) {
+  useAppStore.setState({ agentsEnabled: true });
+  setInvokeHandler(handler);
 }
 
 describe("NeedsYouTab", () => {
@@ -76,7 +90,9 @@ describe("NeedsYouTab", () => {
     hooks.alone = [];
     hooks.send.mockImplementation(async () => {});
     hooks.start.mockImplementation(async () => true);
-    useAppStore.setState({ language: "EN" });
+    useAppStore.setState({ language: "EN", agentsEnabled: false });
+    setInvokeHandler(null);
+    clearInvokedCommands();
   });
 
   it("shows the Briefs group with its count and one entry with project, words and brief", () => {
@@ -538,5 +554,74 @@ describe("Needs you: groups and Decided alone", () => {
     setup([]);
     expect(screen.queryByText("Nothing waits for you.")).not.toBeInTheDocument();
     expect(screen.getByText("Restarted after a connection error")).toBeInTheDocument();
+  });
+});
+
+describe("NeedsYouTab, connected hubs", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    hooks.open = [];
+    hooks.alone = [];
+    hooks.entries = [];
+    useAppStore.setState({ language: "EN", agentsEnabled: false });
+    clearInvokedCommands();
+  });
+
+  it("shows the Connected hubs group last, with the count and the way into the hub", async () => {
+    hooks.alone = [row({ id: 20, kind: "alone", status: "answered", decided_by: "app", title: "Restarted", reason: null })];
+    withHubs((cmd) => (cmd === "hubs_counts" ? [hub()] : null));
+    setup([]);
+    expect(await screen.findByText("Demo hub")).toBeInTheDocument();
+    expect(screen.getByText("3 waiting")).toBeInTheDocument();
+    const names = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
+    expect(names).toEqual(["Decided alone1", "Connected hubs1"]);
+    fireEvent.click(screen.getByRole("button", { name: "Open in the hub" }));
+    await waitFor(() => expect(invokedCommands).toContainEqual({ cmd: "hubs_open", args: { id: "h1" } }));
+  });
+
+  it("shows no badge at 0 waiting", async () => {
+    withHubs((cmd) => (cmd === "hubs_counts" ? [hub({ waiting: 0 })] : null));
+    setup([]);
+    expect(await screen.findByText("Demo hub")).toBeInTheDocument();
+    expect(screen.queryByText(/waiting/)).not.toBeInTheDocument();
+  });
+
+  it("a stale hub shows Not reached and Try again, which refreshes it", async () => {
+    withHubs((cmd) =>
+      cmd === "hubs_counts"
+        ? [hub({ fresh: false, problem: "The connector timed out after 10 seconds.", nextTryAt: null })]
+        : cmd === "hubs_refresh"
+          ? hub()
+          : null,
+    );
+    setup([]);
+    expect(await screen.findByText(/Not reached: The connector timed out after 10 seconds\./)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await waitFor(() => expect(invokedCommands).toContainEqual({ cmd: "hubs_refresh", args: { id: "h1" } }));
+  });
+
+  it("with no entries but one hub it shows the group, not the empty state", async () => {
+    withHubs((cmd) => (cmd === "hubs_counts" ? [hub()] : null));
+    setup([]);
+    expect(await screen.findByText("Demo hub")).toBeInTheDocument();
+    expect(screen.queryByText("Nothing waits for you.")).not.toBeInTheDocument();
+  });
+
+  it("shows an error of Open in the hub under the line, as plain text", async () => {
+    withHubs((cmd) => {
+      if (cmd === "hubs_counts") return [hub()];
+      if (cmd === "hubs_open") throw "<b>nothing to open</b>";
+      return null;
+    });
+    setup([]);
+    fireEvent.click(await screen.findByRole("button", { name: "Open in the hub" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("<b>nothing to open</b>");
+  });
+
+  it("does not invoke while Agents is off", async () => {
+    setInvokeHandler((cmd) => (cmd === "hubs_counts" ? [hub()] : null));
+    setup([]);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(invokedCommands.some((c) => c.cmd === "hubs_counts")).toBe(false);
   });
 });

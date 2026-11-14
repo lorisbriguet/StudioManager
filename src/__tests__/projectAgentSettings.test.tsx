@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ProjectAgentSettings } from "../components/project/ProjectAgentSettings";
 import { useAppStore } from "../stores/app-store";
 import type { Project } from "../types/project";
+import { setInvokeHandler, invokedCommands } from "../__mocks__/tauri-api";
 
 const setSettings = vi.fn(async (..._a: unknown[]) => {});
 vi.mock("../db/queries/projects", async (orig) => ({
@@ -39,6 +40,36 @@ describe("ProjectAgentSettings", () => {
     renderIt(project({ hub_project: 1 }));
     expect(screen.getByRole("switch", { name: "The lead may merge small changes alone" })).toBeDisabled();
     expect(screen.getByText(/Not available: this is a hub's project/)).toBeTruthy();
+  });
+
+  it("shows Belongs to a hub on and disabled, with the hub's name, when the folder is in a hub's folder", async () => {
+    useAppStore.setState({ agentsEnabled: true });
+    setInvokeHandler((cmd) =>
+      cmd === "hubs_counts"
+        ? [{ id: "h1", name: "Demo hub", colour: "purple", folder: "/data/Demo-Hub/", approved: true, waiting: 0, fresh: true, checkedAt: 1, problem: null, nextTryAt: null, paused: false, busy: false, offers: [] }]
+        : null,
+    );
+    renderIt(project({ folder_path: "/data/demo-hub/poster" }));
+    await waitFor(() => expect(screen.getByRole("switch", { name: "Belongs to a hub" })).toBeDisabled());
+    expect(screen.getByRole("switch", { name: "Belongs to a hub" })).toBeChecked();
+    expect(screen.getByText("In the folder of Demo hub")).toBeTruthy();
+    expect(screen.getByRole("switch", { name: "The lead may merge small changes alone" })).toBeDisabled();
+    useAppStore.setState({ agentsEnabled: false });
+    setInvokeHandler(null);
+  });
+
+  it("leaves the switch free for a folder beside a hub's, with the same prefix", async () => {
+    useAppStore.setState({ agentsEnabled: true });
+    setInvokeHandler((cmd) =>
+      cmd === "hubs_counts"
+        ? [{ id: "h1", name: "Demo hub", colour: "purple", folder: "/data/hub", approved: true, waiting: 0, fresh: true, checkedAt: 1, problem: null, nextTryAt: null, paused: false, busy: false, offers: [] }]
+        : null,
+    );
+    renderIt(project({ folder_path: "/data/hub-old" }));
+    await waitFor(() => expect(invokedCommands.some((c) => c.cmd === "hubs_counts")).toBe(true));
+    expect(screen.getByRole("switch", { name: "Belongs to a hub" })).not.toBeDisabled();
+    useAppStore.setState({ agentsEnabled: false });
+    setInvokeHandler(null);
   });
 
   it("switches merge_alone and hub_project through the query", async () => {
