@@ -6,7 +6,7 @@ import { useNow } from "../../hooks/useNow";
 import { qk } from "../../db/queryKeys";
 import { formatAgo } from "../../lib/network/format";
 import { getStoredTagColor } from "../../lib/tagColors";
-import { HUB_MAX_FAILS, hubErrorText, openInHub, refreshHub, type HubView } from "../../lib/hubs";
+import { HUB_MAX_FAILS, hubErrorText, isHubTooSoon, openInHub, refreshHub, type HubView } from "../../lib/hubs";
 import { Badge, Button, ICONS } from "../ui";
 
 type T = ReturnType<typeof useT>;
@@ -43,12 +43,13 @@ export const hubIsUnreached = (h: HubView) => !h.approved || h.paused || !!h.pro
 /** Refreshes one hub, then lets the lists read again. Resolves to an error text or null. */
 export function useHubRefresh() {
   const qc = useQueryClient();
+  const t = useT();
   return async (id: string): Promise<string | null> => {
     try {
       await refreshHub(id);
       return null;
     } catch (e) {
-      return hubErrorText(e);
+      return isHubTooSoon(e) ? t.hubs_too_soon : hubErrorText(e);
     } finally {
       void qc.invalidateQueries({ queryKey: qk.hubs.all });
     }

@@ -101,6 +101,23 @@ describe("HubsCard", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
+  it("Try again inside the gap after a run says why nothing ran, in both languages", async () => {
+    hubs = [view({ fresh: false, problem: "It stopped.", problemKind: "failed" })];
+    setInvokeHandler((cmd) => {
+      if (cmd === "hubs_counts") return hubs;
+      if (cmd === "hubs_refresh") throw "Wait 12 seconds before trying again.";
+      return null;
+    });
+    show();
+    fireEvent.click(await screen.findByRole("button", { name: "Try again" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Tried less than 30 seconds ago. Try again in a moment.");
+    cleanup();
+    useAppStore.setState({ language: "FR" });
+    show();
+    fireEvent.click(await screen.findByRole("button", { name: "Réessayer" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Essayé il y a moins de 30 secondes. Réessayez dans un instant.");
+  });
+
   it("Edit prefills the program and the arguments, and sends them back as they are", async () => {
     hubs = [view()];
     show();

@@ -600,6 +600,18 @@ describe("NeedsYouTab, connected hubs", () => {
     await waitFor(() => expect(invokedCommands).toContainEqual({ cmd: "hubs_refresh", args: { id: "h1" } }));
   });
 
+  it("Try again inside the gap says why nothing ran", async () => {
+    withHubs((cmd) => {
+      if (cmd === "hubs_counts") return [hub({ fresh: false, problem: "The connector timed out after 10 seconds.", nextTryAt: null })];
+      if (cmd === "hubs_refresh") throw "Wait 12 seconds before trying again.";
+      return null;
+    });
+    setup([]);
+    await screen.findByText(/Not reached/);
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Tried less than 30 seconds ago. Try again in a moment.");
+  });
+
   it("with no entries but one hub it shows the group, not the empty state", async () => {
     withHubs((cmd) => (cmd === "hubs_counts" ? [hub()] : null));
     setup([]);
