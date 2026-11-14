@@ -87,6 +87,20 @@ describe("HubsCard", () => {
     await waitFor(() => expect(invokedCommands).toContainEqual({ cmd: "hubs_refresh", args: { id: "h1" } }));
   });
 
+  it("the message of a refused Try again goes away when the hub is opened", async () => {
+    hubs = [view({ approved: false })];
+    setInvokeHandler((cmd) => {
+      if (cmd === "hubs_counts") return hubs;
+      if (cmd === "hubs_refresh") throw "Needs allowing: save the hub again to allow its connector.";
+      return null;
+    });
+    show();
+    fireEvent.click(await screen.findByRole("button", { name: "Try again" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Needs allowing: save the hub again to allow its connector.");
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
   it("Edit prefills the program and the arguments, and sends them back as they are", async () => {
     hubs = [view()];
     show();

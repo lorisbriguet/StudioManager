@@ -26,6 +26,11 @@ export function HubsCard() {
   const [form, setForm] = useState<{ hub: HubView | null } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const hubs = q.isError ? [] : (q.data ?? []);
+  // Opening the form drops the message of an earlier Try again or Remove: it would outlive the save that answers it.
+  const openForm = (hub: HubView | null) => {
+    setError(null);
+    setForm({ hub });
+  };
 
   const remove = async (h: HubView) => {
     if (!(await confirm({ title: t.hubs_remove_confirm.replace("{name}", h.name), confirmLabel: t.remove, tone: "danger" }))) return;
@@ -60,7 +65,7 @@ export function HubsCard() {
           }
         >
           <div className="flex items-center gap-2">
-            <Button variant="secondary" icon={ICONS.edit} onClick={() => setForm({ hub: h })}>
+            <Button variant="secondary" icon={ICONS.edit} onClick={() => openForm(h)}>
               {t.edit}
             </Button>
             <Button variant="secondary" loading={h.busy} onClick={() => void refresh(h.id).then(setError)}>
@@ -78,7 +83,7 @@ export function HubsCard() {
         </p>
       )}
       <div className="pt-2 pb-3">
-        <Button variant="outline" icon={ICONS.add} onClick={() => setForm({ hub: null })}>
+        <Button variant="outline" icon={ICONS.add} onClick={() => openForm(null)}>
           {t.hubs_add}
         </Button>
       </div>
