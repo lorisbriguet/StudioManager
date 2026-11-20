@@ -481,6 +481,16 @@ Follow-ups to [the Studio upkeep spec](docs/superpowers/specs/2026-10-28-studio-
 
 - [ ] Several dashboard pages as tabs under the title, each its own widget grid, stored per organisation (also fixes the dashboard layout being shared between organisations through global localStorage keys). Mocked up and chosen during the [Network page](docs/superpowers/specs/2026-11-02-network-page-design.md) brainstorm, then replaced by that page.
 
+## UI behaviors on Vercel's UI SDK (set aside 2026-11-20)
+
+[UI SDK](https://github.com/vercel-labs/ui) (`@ui-sdk/react` + `@ui-sdk/core`) is a library of behaviors with no styles: keyboard navigation, focus, selection, dismissal, popups and their ARIA. Adopting it keeps the look and [DESIGN-SYSTEM.md](DESIGN-SYSTEM.md); only the hand-written behavior inside `src/components/ui/` is replaced.
+
+- Worth it: Modal, Popover, Dropdown, Select, ContextMenu, Tooltip and DatePicker (about 2,000 lines, mostly keyboard and focus code) map to its dialog, popover, menu, select, tooltip and date-picker. Checkbox, Toggle, SegmentedControl and tabs map too.
+- Not worth it: Button, Badge, Card, Table, StatTile and the other purely visual blocks. dnd-kit and cmdk stay.
+- Keep each component's name and props so the pages that import them don't change. The cost is the visual and keyboard check of every page, not the code: a few days for the overlays.
+- Blocked: still in beta (`0.1.0-beta.13` on 2026-11-19, repo four weeks old, near-daily releases), untested in a Tauri WebKit webview.
+- [ ] Revisit at 1.0. First step: a one-day trial swapping Dropdown (647 lines) on a branch, same props, checked against the dropdown spec.
+
 ## Low Priority
 
 - [ ] Resizable side peek snap positions
