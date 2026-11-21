@@ -323,13 +323,13 @@ pub fn head_of(g: &dyn Git, worktree: &str) -> Result<String, String> {
     }
 }
 
-fn gh(g: &dyn Git, folder: &str, a: &[&str]) -> CommandOutcome {
+pub(super) fn gh(g: &dyn Git, folder: &str, a: &[&str]) -> CommandOutcome {
     let args: Vec<String> = a.iter().map(|s| s.to_string()).collect();
     g.run("gh", &args, folder)
 }
 
 /// Why a `gh` call failed, from its first line.
-fn gh_failure(o: &CommandOutcome, fallback: &str) -> String {
+pub(super) fn gh_failure(o: &CommandOutcome, fallback: &str) -> String {
     if o.timed_out {
         return "gh took too long".to_string();
     }

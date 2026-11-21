@@ -18,7 +18,7 @@ pub struct ReportedResult {
 }
 
 /// Write the result of a task or subtask, and, when the item has exactly one open agent link,
-/// the branch and pull request link on it. With none or several, only the result is written.
+/// the branch and pull request link on it (a pull request link the app already stored stays). With none or several, only the result is written.
 /// Never writes the stage, the status or `ended_at`.
 pub fn report_result(
     dir: &Path,
@@ -76,7 +76,7 @@ pub fn report_result(
         if let [link] = open[..] {
             db(tx.execute(
                 "UPDATE task_agents SET reported_at = datetime('now'), \
-                 branch = COALESCE(?2, branch), pr_url = COALESCE(?3, pr_url) WHERE id = ?1",
+                 branch = COALESCE(?2, branch), pr_url = COALESCE(pr_url, ?3) WHERE id = ?1",
                 params![link, branch, pr_url],
             ))?;
         } else if !open.is_empty() {
@@ -173,6 +173,19 @@ mod tests {
         assert_eq!(lines[0]["tool"], "report_result");
         assert_eq!(lines[0]["summary"], "Reported the result of task \"Logo variants\" (id 1)");
         assert!(dir.join("backups").join("agent").exists());
+    }
+
+    #[test]
+    fn a_pull_request_url_already_stored_is_not_replaced() {
+        let (dir, org, conn) = fixture();
+        let l = link(&conn, "task_id", 1, "2026-11-13 09:00:00", None);
+        let app = "https://github.com/studio-a/poster-tool/pull/12";
+        conn.execute("UPDATE task_agents SET pr_url = ?1 WHERE id = ?2", params![app, l]).unwrap();
+        report_result(&dir, &org, Some(1), None, "Done", Some("work"), Some("https://example.test/pr/7")).unwrap();
+        let (reported, branch, pr) = link_row(&conn, l);
+        assert!(reported.is_some());
+        assert_eq!(branch.as_deref(), Some("work"));
+        assert_eq!(pr.as_deref(), Some(app));
     }
 
     #[test]

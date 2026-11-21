@@ -31,6 +31,13 @@ The Demo build registers itself under the name `studiomanager-demo` so both can 
 
 To check which data folder a bundle will use, run `studiomanager-mcp --print-data-dir`.
 
+## The modes of the program
+
+Besides the server, `studiomanager-mcp` has modes that the app gives to the Claude Code sessions it starts itself (see [Workers](agents.md#workers)). They read Claude Code's hook input on stdin, never use the network, and are not tools:
+
+- `--stop-hook` is the `Stop` hook of a worker. It sends the worker on once when it stops without having called `report_result`, and once when it ends on a question it did not send through `ask` ([the Stop hook](agents.md#the-stop-hook)). It never blocks twice and always exits 0.
+- `--worker-guard` is the `PreToolUse` hook of a worker. It gets the worker's worktree, branch and settings file as arguments and answers every shell command and file edit: exit code 0 lets it go on to Claude Code's own permission rules, exit code 2 refuses it with one line on stderr that tells the worker what to do instead. It refuses anything but `git commit -m "…"` and the push of the worker's own branch to `origin`, anything that names `.git` or the settings file, and `gh pr create`. It never touches the database, and it refuses when its input or its arguments are wrong. The app sets it to block when it fails, which needs Claude Code 2.1.295 or newer. What it refuses is spelled out in [Workers](agents.md#workers).
+
 ## Tools
 
 Organisation and folders: `list_organisations`, `find_project_for_folder`, `link_folder`.
@@ -68,7 +75,7 @@ Three tools are for the lead session only: `get_needs_you` (one entry with its t
 - **No deletes.** No tool removes or drops anything. Task and subtask status can only be set to `todo` or `done`.
 - **Backups.** Before the first write per organisation in a session, the server takes a full copy of the database to `<data folder>/backups/agent/`. The 20 most recent per organisation are kept.
 - **Change log.** Every write adds a line to `<data folder>/agent-log.jsonl` (time, organisation, tool, summary); once it passes 1,000 lines it is cut back to the newest 500. Settings > Agents (Agent access card) shows the recent entries. The app watches this file: when an agent writes, open pages refresh within a couple of seconds.
-- **Captures.** `file_capture` only creates a task or a subtask (or leaves the capture in the inbox) and never changes an existing one. `set_brief` writes only the brief of the task or subtask it names (the brief session does not use it: `file_capture` carries the brief). `report_result` writes only the result of the task or subtask it names (text, at most 4,000 characters) and, the branch and pull request link on that item's open agent link when it has exactly one; it never writes a stage or a status.
+- **Captures.** `file_capture` only creates a task or a subtask (or leaves the capture in the inbox) and never changes an existing one. `set_brief` writes only the brief of the task or subtask it names (the brief session does not use it: `file_capture` carries the brief). `report_result` writes only the result of the task or subtask it names (text, at most 4,000 characters) and, the branch and pull request link on that item's open agent link when it has exactly one (a pull request link the app already stored there is kept); it never writes a stage or a status.
 - **Needs you.** `ask` only adds a question (a Decide entry) for an item an agent started from StudioManager is working on; it never changes the item. `resolve` and `hand_over` write only the entry they are given, in `needs_you`: no task, stage, status or project. What follows from a lead's answer (typing it into the worker, marking an item done, a merge) is done by the app under its own rules, never by a tool: see [The watcher and the lead](agents.md#the-watcher-and-the-lead). No tool sets a project's check command, its "merge alone" switch or its "Belongs to a hub" flag: those are set in the app only.
 - **Project folders.** `link_folder` and `update_project` accept only an existing folder inside Documents, Desktop, Downloads or `~/Library/CloudStorage` (not one of those places itself), and never an app or other bundle (`.app`, `.bundle`, `.framework`…).
 - **Size.** A title, name, note, link or article over 1 MB is refused.

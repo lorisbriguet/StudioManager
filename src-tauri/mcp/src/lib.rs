@@ -31,6 +31,7 @@ pub mod statusline;
 pub mod stophook;
 pub mod text;
 pub mod upkeep;
+pub mod workerguard;
 pub mod write;
 
 #[cfg(test)]

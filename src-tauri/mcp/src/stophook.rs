@@ -14,7 +14,7 @@ pub const ASK_TOOL: &str = "mcp__studiomanager__ask";
 /// Only the end of a transcript is read, so a huge one cannot stall the hook.
 pub const TRANSCRIPT_CAP: u64 = 2 * 1024 * 1024;
 
-const RESULT_REASON: &str = "Before you stop: call report_result with what was done, what is left open, how to check it, and the branch and pull request link.";
+const RESULT_REASON: &str = "Before you stop: call report_result with what was done, what is left open, how to check it, and the branch.";
 const QUESTION_REASON: &str =
     "If you are asking the user something, send it with the ask tool, then stop.";
 
