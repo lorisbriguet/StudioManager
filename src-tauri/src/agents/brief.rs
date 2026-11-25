@@ -8,6 +8,12 @@
 //!   POST   /review/agent                 {id, title, folder, prompt, report?} -> {agent}
 //!   GET    /review/status/<report>       -> {findings: {<id>: {status, at, agent?, agent_state?}}}
 //!   POST   /review/status/<report>       {id, status}  -> {finding}
+//!   POST   /routines/run                 {id}  -> {run}
+//!
+//! `/routines/run` runs a saved routine by its id, as its Run button in the Day tab does: for a
+//! launcher outside the app (a Stream Deck key, a script). Only routines already saved in
+//! Settings run, and a command routine still needs to have been allowed there; an agent
+//! routine answers once the agent has started, a command routine at once with a running run.
 //!
 //! `/review/agent` is the review report's "Start work with agent" (right-click on a finding): the
 //! same start as on a task (Opus, in a folder Claude Code trusts; the agent reads first and asks
@@ -199,6 +205,9 @@ pub trait Backend {
     fn agent_groups(&self) -> Vec<(String, String)>;
     /// Local date and time, `2026-11-06 09:40`.
     fn now_stamp(&self) -> String;
+    /// Runs the saved routine `id` as the Day tab's Run button does; Ok is the run as JSON,
+    /// Err the reason (no such routine, Agents off, already running).
+    fn run_routine(&self, id: &str) -> Result<Value, String>;
 }
 
 /// What the agent receives: where the passage is, the passage quoted, then the note.
@@ -252,6 +261,9 @@ pub fn route(b: &dyn Backend, r: &Request) -> Response {
     if parts == ["review", "agent"] {
         return if r.method == "POST" { review_agent(b, &r.body) } else { error(404, "Not found") };
     }
+    if parts == ["routines", "run"] {
+        return if r.method == "POST" { run_routine(b, &r.body) } else { error(404, "Not found") };
+    }
     if parts.len() == 3 && parts[0] == "review" && parts[1] == "status" {
         if !valid_report(parts[2]) {
             return error(404, "Not found");
@@ -303,6 +315,29 @@ pub fn route(b: &dyn Backend, r: &Request) -> Response {
             }
         }
         _ => error(404, "Not found"),
+    }
+}
+
+// ---------------------------------------------------------------- routines
+
+const ROUTINE_ID_MAX: usize = 64;
+
+fn valid_routine_id(id: &str) -> bool {
+    !id.is_empty() && id.len() <= ROUTINE_ID_MAX && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+}
+
+/// `POST /routines/run {id}`: what runs comes from `routines.json`, never from the request.
+fn run_routine(b: &dyn Backend, body: &[u8]) -> Response {
+    let id = serde_json::from_slice::<Value>(body)
+        .ok()
+        .and_then(|v| v.get("id").and_then(Value::as_str).map(str::to_string))
+        .unwrap_or_default();
+    if !valid_routine_id(&id) {
+        return error(400, "id is required");
+    }
+    match b.run_routine(&id) {
+        Ok(run) => ok(json!({ "run": run })),
+        Err(e) => error(409, &e),
     }
 }
 
@@ -552,6 +587,12 @@ impl Backend for AppBackend {
     fn now_stamp(&self) -> String {
         chrono::Local::now().format("%Y-%m-%d %H:%M").to_string()
     }
+    fn run_routine(&self, id: &str) -> Result<Value, String> {
+        let state = self.app.try_state::<super::AgentsState>().ok_or("StudioManager is starting")?;
+        let login = super::actions::ready(&state)?;
+        let run = super::routines::launch(&self.app, state.app_dir.clone(), login, id, None)?;
+        serde_json::to_value(run).map_err(|e| e.to_string())
+    }
 }
 
 fn serve(b: &dyn Backend, mut s: TcpStream) {
@@ -647,6 +688,13 @@ mod tests {
         fn now_stamp(&self) -> String {
             "2026-11-06 09:40".into()
         }
+        fn run_routine(&self, id: &str) -> Result<Value, String> {
+            self.sent.borrow_mut().push(("routine".into(), id.into()));
+            match id {
+                "personal-sod" => Ok(json!({ "routineId": id, "status": "done" })),
+                _ => Err("No such routine".into()),
+            }
+        }
     }
 
     fn fake(name: &str, result: Result<(), String>) -> Fake {
@@ -706,6 +754,31 @@ mod tests {
         assert_eq!(route(&b, &r).status, 403);
         // the preflight carries no token
         assert_eq!(route(&b, &req("OPTIONS", "/brief/2026-11-01/comments", None, "")).status, 200);
+        assert!(b.sent.borrow().is_empty());
+    }
+
+    #[test]
+    fn runs_a_saved_routine_by_id() {
+        let b = fake("routine", Ok(()));
+        let r = route(&b, &req("POST", "/routines/run", T, r#"{"id":"personal-sod"}"#));
+        assert_eq!(r.status, 200);
+        assert_eq!(r.body["run"]["routineId"], "personal-sod");
+        assert_eq!(b.sent.borrow()[0], ("routine".into(), "personal-sod".into()));
+        let unknown = route(&b, &req("POST", "/routines/run", T, r#"{"id":"nope"}"#));
+        assert_eq!(unknown.status, 409);
+        assert_eq!(unknown.body["error"], "No such routine");
+    }
+
+    #[test]
+    fn a_routine_run_needs_the_token_post_and_a_plain_id() {
+        let b = fake("routine-bad", Ok(()));
+        assert_eq!(route(&b, &req("POST", "/routines/run", None, r#"{"id":"personal-sod"}"#)).status, 401);
+        assert_eq!(route(&b, &req("GET", "/routines/run", T, "")).status, 404);
+        for body in [r#"{}"#, r#"{"id":""}"#, r#"{"id":"../x"}"#, r#"{"id":"a b"}"#, "not json"] {
+            assert_eq!(route(&b, &req("POST", "/routines/run", T, body)).status, 400, "{body}");
+        }
+        let long = format!(r#"{{"id":"{}"}}"#, "a".repeat(65));
+        assert_eq!(route(&b, &req("POST", "/routines/run", T, &long)).status, 400);
         assert!(b.sent.borrow().is_empty());
     }
 
