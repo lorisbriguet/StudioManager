@@ -315,6 +315,14 @@ The personal morning brief (the page the Start of day routine opens) lets you se
 
 If the page says comments stay in the browser and its button reads **Keep**, StudioManager isn't answering: open it and check that Agents is on.
 
+## Run a routine from outside the app
+
+A launcher outside StudioManager (a Stream Deck key, a script) can run a saved routine, the same as its **Run** button in the Day tab: `POST /routines/run` with `{"id": "<routine id>"}` to the same local server as the morning brief, with the same token in the `x-brief-token` header.
+
+- Only routines saved in Settings run: the request names an id, and what runs comes from the saved routines. A command routine that was never allowed asks in the usual dialog.
+- The answer is the run (`{"run": …}`), as the Day tab shows it. An agent routine answers once its agent has started; a command routine answers at once, still running.
+- An unknown id, Agents being off, or a run of that routine already going is refused with the reason (`409`).
+
 ## Start from a review report
 
 A studio review report (a local HTML page of findings) can start agents the same way as [Start from a task](#start-from-a-task): right-click a finding and choose **Start work with agent**. The report sends the finding to the same local server as the morning brief (`POST /review/agent`, with the same token), and StudioManager:
